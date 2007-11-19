@@ -33,6 +33,9 @@ struct OsWindowData;
 // Os class definition
 class Os {
  public:
+   // TODO(jwills): discuss with darthur about how this should be handled.
+   static void Init();
+   
   // Logic functions
   // ===============
 
@@ -60,13 +63,18 @@ class Os {
   // be returned. On failure, NULL should be returned. Notes:
   //  - icon may be NULL, in which case a default icon should be used.
   //  - is_resizable only applies in the case of a non-fullscreen window.
-  static OsWindowData *CreateWindow(const string &title, int x, int y, int width, int height,
+  static OsWindowData* CreateWindow(const string &title, int x, int y, int width, int height,
                                     bool full_screen, short stencil_bits, const Image *icon,
                                     bool is_resizable);
 
   // Destroys the given window. Note the window could be created later with a call to CreateWindow.
   // The OsWindowData object should be deleted.
   static void DestroyWindow(OsWindowData *window);
+
+  // Sets the window as the current OpenGL context.  All rendering done after this call will be
+  // applied to this window
+  // TODO(jwills): SetCurrentContext isn't implemented yet on Win32Glop
+  static void SetCurrentContext(OsWindowData* window);
 
   // Returns whether the given window has been minimized.
   static bool IsWindowMinimized(const OsWindowData *window);
@@ -178,9 +186,6 @@ class Os {
 
   // Switches Open Gl buffers so that all rendering to the back buffer now appears on the screen.
   static void SwapBuffers(OsWindowData *window);
-
-  // TODO(jwills): SetCurrentContext isn't implemented yet on Win32Glop
-  static void SetCurrentContext(OsWindowData* window);
 };
 
 #endif // GLOP_Os_H__
