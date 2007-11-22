@@ -35,7 +35,10 @@ class Os {
  public:
    // TODO(jwills): discuss with darthur about how this should be handled.
    static void Init();
-   
+
+   // Destroys all glop state, closes any open files, returns screen to original resolution.
+   static void Terminate();
+
   // Logic functions
   // ===============
 
@@ -59,6 +62,8 @@ class Os {
   // Window functions
   // ================
 
+  // TODO(jwills): Should it be possible, for resizable windows, to have a flag that will maintain
+  // the ratio between width and height?
   // Creates an Open Gl window with the given properties. On success, a new OsWindowObject should
   // be returned. On failure, NULL should be returned. Notes:
   //  - icon may be NULL, in which case a default icon should be used.
@@ -176,7 +181,7 @@ class Os {
 
   // Returns a list of all 32 bpp fullscreen video modes that are supported by this computer. The
   // modes should be listed in increasing lexicographical order of pixel size: (width, height).
-  static vector<pair<int, int> > GetFullScreenModes();
+  static vector<pair<int,int> > GetFullScreenModes();
 
   // Gives up context for the current thread for t milliseconds.
   static void Sleep(int t);
@@ -185,6 +190,7 @@ class Os {
   static int GetTime();
 
   // Switches Open Gl buffers so that all rendering to the back buffer now appears on the screen.
+  // TODO(jwills): Should this just be done in the Think() method?
   static void SwapBuffers(OsWindowData *window);
 };
 
