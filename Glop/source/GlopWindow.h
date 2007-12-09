@@ -28,8 +28,8 @@ struct GlopWindowSettings {
   bool is_resizable;  // Only affects windowed mode
 };
 
-// Static accessor convenience method
-GlopWindow *window();
+// Globals
+extern GlopWindow *gWindow;
 
 // GlopWindow class definition
 class GlopWindow {
@@ -119,7 +119,7 @@ class GlopWindow {
   void MoveFrame(LightSetId id, float rel_x, float rel_y, int depth);
   void SetFrameJustify(LightSetId id, float horz_justify, float vert_justify);
   GlopFrame *RemoveFrameNoDelete(LightSetId id);
-  LightSetId RemoveFrame(LightSetId id);
+  void RemoveFrame(LightSetId id);
   void ClearFrames();
   
   // See GlopFrameBase.h
@@ -146,7 +146,7 @@ class GlopWindow {
   friend class FocusFrame;
   int RegisterFocusFrame(FocusFrame *frame);
   void UnregisterFocusFrame(int layer, FocusFrame *frame);
-  void DemandFocus(int layer, FocusFrame *frame);
+  void DemandFocus(int layer, FocusFrame *frame, bool update_is_gaining_focus);
   
   // Configuration data
   OsWindowData *os_data_;        // OS handle on this window - needed for all OS calls

@@ -53,8 +53,8 @@ void LogToStdErr();
 #define LOG(message) __Log(__FILE__, __LINE__, message)
 #define LOGF __LogfObject(__FILE__, __LINE__).__Logf
 
-// Error-handling utilities. Display message outputs a highly visible message to the user - the
-// exact form depends on the operating system. Fatal error generates such a message and then quits.
+// Error-handling utilities. DisplayMessage outputs a highly visible message to the user - the
+// exact form depends on the operating system. FatalError generates such a message and then quits.
 // ASSERT generates a fatal error unless some expression evaluates to true.
 // __AssertionFailure is just more macro magic, and should not be used directly.
 void DisplayMessage(const string &title, const string &message);

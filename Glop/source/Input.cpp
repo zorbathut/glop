@@ -8,7 +8,6 @@
 // Constants
 const float kBaseMouseSensitivity = 3.0f;
 const float kJoystickAxisThreshold = 0.2f;
-const int kMouseMotionReleaseDelay = 50;
 const int kDoublePressThreshold = 200;
 const int kJoystickRefreshDelay = 250;
 const char *const kKeyNames[] = {
@@ -372,7 +371,7 @@ const GlopKey &Input::GetKeyPress(bool accept_clicks, bool accept_modifiers, boo
   for (int i = 0; i < (int)pressed_keys_frame_.size(); i++) {
     const GlopKey &key = pressed_keys_frame_[i];
     if ((accept_clicks || key.IsMotionKey() || !key.IsMouseKey()) &&
-        (accept_modifiers || !key.IsModifierKey()) ||
+        (accept_modifiers || !key.IsModifierKey()) &&
         (accept_motion || !key.IsMotionKey()))
       return key;
   }
@@ -471,7 +470,7 @@ void Input::Think(bool lost_focus, int frame_dt) {
         KeyInfo *info = LocateKeyInfo(GlopKey(i, j));
         if (info->is_down_now) {
           info->press_amount_now = 0;
-          OnKeyEvent(KeyEvent(GlopKey(i, j), KeyEvent::ReleaseDefocus), 0);
+          OnKeyEvent(KeyEvent(GlopKey(i, j), KeyEvent::Release), 0);
         }
       }
     }
@@ -554,34 +553,39 @@ void Input::Think(bool lost_focus, int frame_dt) {
           }
         }
         if (opposite_key == kNoKey || !LocateKeyInfo(opposite_key)->is_down_now) {
-          if (info->is_press_time_valid && info->press_time + kDoublePressThreshold <= time[i]) {
-            info->is_press_time_valid = true;
-            info->press_time = time[i];
+          if (info->is_press_time_valid && info->press_time + kDoublePressThreshold >= time[i]) {
             OnKeyEvent(KeyEvent(os_events[i][j].key, KeyEvent::DoublePress), 0);
+            info->is_press_time_valid = false;
           } else {
             OnKeyEvent(KeyEvent(os_events[i][j].key, KeyEvent::Press), 0);
+            info->is_press_time_valid = true;
+            info->press_time = time[i];
           }
         }
       }
 
       // Handle key releases for keys that do not have a min down-time
-      if (amt == 0 && info->is_down_now && !os_events[i][j].key.IsMouseMotion()) {
+      if (amt == 0 && info->is_down_now && GetMinDownTime(os_events[i][j].key) == 0)
         OnKeyEvent(KeyEvent(os_events[i][j].key, KeyEvent::Release), 0);
-      }
     }
 
-    // Update the min down-time on mouse motion keys
-    for (int j = kFirstMouseKeyIndex; j < kNumKeys; j++)
-      if (GlopKey(j).IsMouseMotion()) {
-        KeyInfo *info = LocateKeyInfo(j);
-        if (info->press_amount_now > 0) {
-          info->release_delay = kMouseMotionReleaseDelay;
-        } else if (info->is_down_now) {
-          info->release_delay -= this_dt;
-          if (info->release_delay <= 0)
-            OnKeyEvent(KeyEvent(j, KeyEvent::Release), 0);
+    // Update the min down-time on keys
+    for (int i = -1; i < GetNumJoysticks(); i++) {
+      int num_keys = (i == -1? kNumKeys : kJoystickNumKeys);
+      for (int j = 0; j < num_keys; j++) {
+        KeyInfo *info = LocateKeyInfo(GlopKey(i, j));
+        int delay = GetMinDownTime(GlopKey(i, j));
+        if (delay > 0) {
+          if (info->press_amount_now > 0) {
+            info->release_delay = delay;
+          } else if (info->is_down_now) {
+            info->release_delay -= this_dt;
+            if (info->release_delay <= 0)
+              OnKeyEvent(KeyEvent(GlopKey(i, j), KeyEvent::Release), 0);
+          }
         }
       }
+    }
 
     // Handle repeat events. Note that repeat events will be generated while we step through
     // this list (and earlier during this phase). We do not update the time on any of these.
@@ -682,4 +686,14 @@ void Input::UpdateOsCursorVisibility() {
     Os::ShowMouseCursor(os_is_visible);
     os_is_cursor_visible_ = os_is_visible;
   }
+}
+
+// Returns the number of milliseconds that we force a key to stay marked as down after being
+// pressed. This is useful for mouse motion so we do not continuously generate press and release
+// events.
+int Input::GetMinDownTime(const GlopKey &key) {
+  if (key == kMouseLeft || key == kMouseUp || key == kMouseRight || key == kMouseDown)
+    return 50;
+  else
+    return 0;
 }

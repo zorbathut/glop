@@ -5,12 +5,11 @@
 //   - Iterate through the elements in the order they were added, getting each
 //     element in O(1) time.
 //
-// The underlying data structure is essentially a doubly linked list, but the class
-// does its own memory management, similar to vector, so as to minimize the number
-// of new and delete calls.
+// The underlying data structure is essentially a doubly linked list, but the class does its own
+// memory management, similar to vector, so as to minimize the number of new and delete calls.
 //
 // Templating is used to allow any kind of data to be stored while maintaining a reasonable
-// interface. However, to avoid code bloat, this just delegates to BaseLightSet for much of
+// interface. However, to minimize code bloat, this just delegates to BaseLightSet for much of
 // the work.
 //
 // LightSetId is defined in Base.h

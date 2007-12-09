@@ -67,9 +67,7 @@ void GlUtils2d::RenderImage(int x1, int y1, int x2, int y2, LightSetId texture_i
 void GlUtils2d::Print(int x, int y, const string &text, LightSetId font_id) {
   if (text.size() > 0) {
     glPushMatrix();
-    int x_offset = gSystem->GetCharWidth(font_id, text[0], true) -
-                   gSystem->GetCharWidth(font_id, text[0], false);
-    glTranslatef(float(x + x_offset), float(y), 0);
+    glTranslatef(float(x - gSystem->GetCharX1(font_id, text[0])), float(y), 0);
     glListBase(gSystem->GetFontDisplayList(font_id));
     glCallLists((int)text.size(), GL_BYTE, text.c_str());
     glPopMatrix();

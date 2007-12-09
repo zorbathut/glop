@@ -13,22 +13,32 @@
 //  - Repeat.
 //
 // Overview of focus: A frame is said to be "in focus" if it should be responding to user input.
-//   By default, a frame will never be in focus. To change this behavior, it should be wrapped
-//   inside a FocusFrame. The GlopWindow maintains a circular list of FocusFrames, and controls
-//   which one has focus, taking into account the tab key and mouse clicking. This focus is then
-//   immediately propogated down to descendants of the FocusFrame. Also:
+//   All focus is handled within the context of FocusFrames. A Focus Frame and anything descended
+//   from it is considered an autonomous unit of focus. If the FocusFrame gains focus, so do all
+//   of its children. One exception to this is if a FocusFrame contains another FocusFrame, they
+//   are considered different. For example, a scrolling window might control a button. 
+//   A frame will only ever be given focus if it is wrapped inside a FocusFrame. The GlopWindow
+//   maintains a list of FocusFrames, and controls which one has focus (possibly none of them, if
+//   the entire GlopWindow is out of focus), taking into account the tab key and mouse clicking.
+//   This focus is then immediately propogated down to descendants of the FocusFrame. Also:
 //     - Whenever a KeyEvent occurs, a FocusFrame queries its children. If any of them call this a
 //       "magnet" KeyEvent, and no child of the active FocusFrame calls it a "focus keeper"
 //       KeyEvent, the FocusFrame immediately takes focus. This occurs before the children receive
 //       the KeyEvent, so they can now process the event normally.
-//     - At any point, a frame may DemandFocus. This propogates up to the FocusFrame and then to
-//       the GlopWindow, which will try to grant the request. This could fail because:
+//     - A GlopFrame is notified via OnFocusChange whenever its focus changed. It can use this
+//       opportunity to respond.
 //     - A GlopWindow may PushFocus. If this happens, all current FocusFrames lose focus, and will
 //       never gain it back again until PopFocus is called. In the meantime, a new circular queue
 //       of FocusFrames is formed.
 //   Note that ALL input frames should be inside a FocusFrame. Thus, if we have a scrolling menu,
 //   it should be encapsulated as FocusFrame -> ScrollingFrame -> MenuFrame, because the
-//   ScrollingFrame needs to receive input.
+//   ScrollingFrame needs to receive input. An individual frame may find it's encapsulating focus
+//   frame. This can be useful for various purposes: using it to demand focus, finding it's size
+//   so as to know what clicks are part of the same "object" as seen by the user, etc.
+//   Frames all track what FocusFrame, if any, owns them. The primary use of this is so they can
+//   determine what exactly is in focus. For example, if a button is directly encapsulated in a
+//   focus frame, it responds differently from a button owned by a slider frame, which is then
+//   encapsulated in a focus frame.
 //
 // Overview of sizing: A frame's size is limited in two ways: its logical size, and its clipping
 //   rectangle (stored in WINDOW coordinates). The clipping coordinates are propogated via
@@ -55,11 +65,11 @@
 //   makes the object visible (or, if requested, also centers the object on the screen).
 //
 //   A ping is resolved after a frame is resized, which means the coordinates it uses will be
-//   completely up-to-date. However, it can be useful to first register a ping even when an object's
-//   size is dirty, which makes it difficult to specify exact coordinates. Therefore, a "ping" is
-//   actually an abstract class with GetX1(), GetY1(), GetX2(), and GetY2() functions that only
-//   will be called when a ping resolves. Thus, we have things like a RelativePing where a user
-//   can ping the bottom-right corner of a frame, even if its size is currently unknown.
+//   completely up-to-date. However, it can be useful to first register a ping even when an
+//   object's size is dirty, which makes it difficult to specify exact coordinates. Therefore, a
+//   "ping" is actually an abstract class with GetX1(), GetY1(), GetX2(), and GetY2() functions
+//   that only will be called when a ping resolves. Thus, we have things like a RelativePing where
+//   a user can ping the bottom-right corner of a frame, even if its size is currently unknown.
 //
 // In GlopFrameBase.h, we define a set of "support" frames. As a rule of thumb, these do not render
 // anything, but they help organize other frames.
@@ -75,6 +85,10 @@
 using namespace std;
 
 // Class declarations
+class ButtonRenderer;
+class SliderRenderer;
+class WindowRenderer;
+class FocusFrame;
 struct GlopKey;
 struct KeyEvent;
 
@@ -83,30 +97,25 @@ struct KeyEvent;
 //
 // This specifies various constants that are used for constructing GUI frames (e.g. font color &
 // size). A new FrameStyle can be created to override existing settings. If a FrameStyle is already
-// in use, changing it may or may not affect existing frames.
+// in use, changing it may or may not affect existing frames. The results are undefined.
 struct FrameStyle {
-  FrameStyle();
+  FrameStyle(LightSetId _font_outline_id = 0);
+  ~FrameStyle();
 
   // General style
-  Color font_color;                   // Default color for plain text
-  float font_height;                  // Default size for all text
+  LightSetId font_outline_id;         // Default font for plain text
+  Color text_color;                   // Default color for plain text
+  float text_height;                  // Default size for all text
+  Color prompt_highlight_color;        // Background color of text we highlight in a TextPrompt
 
-  // Button style
-  float button_border_size;           // Given as a fraction of min(window_width, window_height)
-  Color button_selection_color;       // Color of the stippled box marking a button as selected
-  Color button_border_color;          // Color of the box around a button
-  Color button_highlight_color;       // Color of the top & left borders of an unpressed button
-  Color button_lowlight_color;        // Color of all other button borders
-  Color button_unpressed_inner_color; // Color of the interior button background when unpressed
-  Color button_pressed_inner_color;   // Color of the interior button background when pressed
-
-  // Window style
-  Color window_border_highlight_color; // Bright part of the window border
-  Color window_border_lowlight_color;  // Dark part of the window border
-  Color window_inner_color;            // Window interior background color
-  Color window_title_color;            // Color of the window title text
+  // Renderers
+  ButtonRenderer *button_renderer;
+  SliderRenderer *slider_renderer;
+  WindowRenderer *window_renderer;
 };
 extern FrameStyle *gDefaultStyle;
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
 
 // GlopFrame
 // =========
@@ -117,11 +126,15 @@ class GlopFrame {
   GlopFrame();
   virtual ~GlopFrame();
 
+  // All frames except unused frames and the topmost tableau frame have a parent.
+  const GlopFrame *GetParent() const {return parent_;}
+  GlopFrame *GetParent() {return parent_;}
+
   // Main GlopFrame functions. OnKeyEvent is the most accurate way to respond to key presses
   // (see discussion in Input.h). Think will be called after all OnKeyEvent calls, and it is
   // suitable for all other logic.
   virtual void Render() {}
-  virtual void OnKeyEvent(const KeyEvent &event, int dt) {}
+  virtual bool OnKeyEvent(const KeyEvent &event, int dt) {return false;}
   virtual void Think(int dt) {}
   
   // Size and position accessors. All values are in pixels, and x, y are relative to the top-left
@@ -142,17 +155,15 @@ class GlopFrame {
   void UpdateSize(int rec_width, int rec_height);
   virtual void SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2);
 
-  // Pinging. This indicates a region that the user should see, which is important for scrolling.
-  //  x1, y1, x2, y2: A rectangular region to be made visible to the user. All coordinates are
-  //                  local to this frame.
-  //  is_centered: If true, we attempt to make this rectangle in the center of the visible area.
-  //               Otherwise, we move the minimal amount to make the region visible.
+  // Pinging. A Ping object returns a location to ping. We do not pass the location directly so
+  // that it can be computed at the last second with all information available (see discussion at
+  // the top of the file).
   class Ping {
    public:
     Ping(GlopFrame *frame, bool center): frame_(frame), is_centered_(center) {}
     GlopFrame *GetFrame() const {return frame_;}
     virtual void GetCoords(int *x1, int *y1, int *x2, int *y2) = 0;
-    bool GetIsCentered() const {return is_centered_;}
+    bool IsCentered() const {return is_centered_;}
    private:
     GlopFrame *frame_;
     bool is_centered_;
@@ -175,17 +186,16 @@ class GlopFrame {
     AddPing(new RelativePing(this, x1, y1, x2, y2, center));
   }
   
-  // Focus tracking. See discussion at the top of the file.
+  // Focus tracking. See discussion at the top of the file. PrimaryFocus is used to determine
+  // whether this object is the entire thing in focus (e.g. a regular button) or whether it is
+  // merely inheriting focus from something that owns in it (e.g. a button in a slider).
   virtual bool IsFocusMagnet(const KeyEvent &event) const {return false;}
-  virtual bool IsFocusKeeper(const KeyEvent &event) const {return false;}
   bool IsInFocus() const {return is_in_focus_;}
-  virtual void DemandFocus();
-
-  // Frame context. Except for a topmost TableauFrame that is owned directly by the GlopWindow,
-  // all frames have a parent frame.
-  GlopFrame *GetParent() {return parent_;}
-  const GlopFrame *GetParent() const {return parent_;}
-   
+  bool IsPrimaryFocus() const;
+  bool IsFocusFrame() const {return ((GlopFrame*)GetFocusFrame()) == this;}
+  const FocusFrame *GetFocusFrame() const {return focus_frame_;}
+  FocusFrame *GetFocusFrame() {return focus_frame_;}
+  
   // Returns whether a point (given in WINDOW coordinates) is over this frame, accounting for both
   // clipping and logical size. This is useful for focus tracking due to mouse clicks for example.
   // It can be overridden if the frame's visible extent is not the same as its size.
@@ -195,9 +205,7 @@ class GlopFrame {
   // Resizing and repositioning utilities.
   //  - See above for RecomputeSize.
   //  - SetToMaxSize sets width_ and height_ to be as large as possible while respecting the
-  //    size limits and an optional aspect ratio. Like SetSize, this should only be used within
-  //    UpdateSize.
-  //  - See above for OnSetPosition.
+  //    size limits and an aspect ratio. Like SetSize, this should only be used within UpdateSize.
   virtual void RecomputeSize(int rec_width, int rec_height) {SetSize(rec_width, rec_height);}
   void SetSize(int width, int height) {
     width_ = width;
@@ -205,16 +213,16 @@ class GlopFrame {
   }
   void SetToMaxSize(int width_bound, int height_bound, float aspect_ratio);
   
-  // Recursively sets the focus for this frame and its children.
-  virtual void SetIsInFocus(bool is_in_focus) {is_in_focus_ = is_in_focus;}
-
-  // Internal pinging functions. AddPing registers a new ping with the GlopWindow who propogates
-  // it up to the parent frame. OnChildPing is called by GlopWindow when resolving child pings. By
-  // default, it registers the ping and propogates it further upwards.
+  // Internal pinging functions. AddPing registers a new ping with the GlopWindow who will
+  // eventually propogate it up to the parent frame. OnChildPing is called by GlopWindow when
+  // resolving child pings. By default, it registers the ping and propogates it further upwards.
   void AddPing(Ping *ping);
   virtual void OnChildPing(int x1, int y1, int x2, int y2, bool center) {
     NewAbsolutePing(x1, y1, x2, y2, center);
   }
+
+  // Handles the fact that our focus has changed.
+  virtual void OnFocusChange() {}
 
  private:
   // Ping types. See above.
@@ -257,14 +265,27 @@ class GlopFrame {
   // window size.
   virtual void OnWindowResize(int width, int height) {DirtySize();}
   
+  // Changes our current parent frame, and inherits any appropriate settings from our parent.
+  virtual void SetParent(GlopFrame *parent);
+
+  // Updates our focus setting, and calls OnFocusChange if it changed. It propogates down to
+  // children via OnFocusChange.
+  void SetFocusInfo(FocusFrame *focus_frame, bool is_in_focus) {
+    if (is_in_focus != is_in_focus_ || focus_frame != focus_frame_) {
+      is_in_focus_ = is_in_focus;
+      focus_frame_ = focus_frame;
+      OnFocusChange();
+    }
+  }
+
   // Data
   GlopFrame *parent_;
-  int screen_x_, screen_y_, clip_x1_, clip_y1_, clip_x2_, clip_y2_;
-  int width_, height_;
-  bool is_in_focus_;
-  
-  // If our recommended size changes, we should RecomputeSize.
   int old_rec_width_, old_rec_height_;
+  int width_, height_;
+  int screen_x_, screen_y_, clip_x1_, clip_y1_, clip_x2_, clip_y2_;
+  bool is_in_focus_;
+  FocusFrame *focus_frame_;
+  
   friend class GlopWindow;
   friend class SingleParentFrame;
   friend class MultiParentFrame;
@@ -272,14 +293,16 @@ class GlopFrame {
   DISALLOW_EVIL_CONSTRUCTORS(GlopFrame);
 };
 
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
 // SingleParentFrame
 // =================
 //
-// This is a specialization of GlopFrame for any frame that has 0 or 1 children of its own. Default
-// implementations of RecomputeSize and OnSetPosition are provided, but they just position the child
-// at our position, and set our size to be the child's size (we use the recommended size if we have
-// no child). A MultiParentFrame can handle any number of children, but this implementation is more
-// efficient both time and space-wise where it applies.
+// This is a specialization of GlopFrame for any frame that has 0 or 1 children of its own.
+// Default implementations of RecomputeSize and OnSetPosition are provided, but they just position
+// the child at our position, and set our size to be the child's size (we use the recommended size
+// if we have no child). A MultiParentFrame can handle any number of children, but this
+// implementation is more efficient both time and space-wise where it applies.
 class SingleParentFrame: public GlopFrame {
  public:
   SingleParentFrame(): child_(0) {}
@@ -288,19 +311,16 @@ class SingleParentFrame: public GlopFrame {
 
   // Child delegation functions
   virtual void Render() {if (child_ != 0) child_->Render();}
-  virtual void OnKeyEvent(const KeyEvent &event, int dt) {
-    if (child_ != 0) child_->OnKeyEvent(event, dt);
+  virtual bool OnKeyEvent(const KeyEvent &event, int dt) {
+    return (child_ != 0 && !child_->IsFocusFrame() && child_->OnKeyEvent(event, dt));
   }
   virtual void Think(int dt) {if (child_ != 0) child_->Think(dt);}
   virtual void SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2) {
     GlopFrame::SetPosition(screen_x, screen_y, cx1, cy1, cx2, cy2);
     if (child_ != 0) child_->SetPosition(screen_x, screen_y, cx1, cy1, cx2, cy2);
   }
-  virtual bool IsFocusKeeper(const KeyEvent &event) const {
-    return (child_ != 0? child_->IsFocusKeeper(event) : false);
-  }
   virtual bool IsFocusMagnet(const KeyEvent &event) const {
-    return (child_ != 0? child_->IsFocusMagnet(event) : false);
+    return (child_ != 0 && !child_->IsFocusFrame() && child_->IsFocusMagnet(event));
   }
 
  protected:
@@ -312,13 +332,12 @@ class SingleParentFrame: public GlopFrame {
       GlopFrame::RecomputeSize(rec_width, rec_height);
     }
   }
-  void SetIsInFocus(bool is_in_focus) {
-    if (is_in_focus != is_in_focus_ && child_ != 0) child_->SetIsInFocus(is_in_focus);
-    is_in_focus_ = is_in_focus;
+  virtual void OnFocusChange() {
+    if (child_ != 0 && !child_->IsFocusFrame()) child_->SetFocusInfo(focus_frame_, is_in_focus_);
   }
 
   // Child manipulation. Note that any child added to a parent frame becomes owned by the
-  // parent, and will be deleted on removal from the parent unless SetChildNoDelete is called.
+  // parent, and will be deleted on removal from the parent unless RemoveChildNoDelete is called.
   const GlopFrame *GetChild() const {return child_;}
   GlopFrame *GetChild() {return child_;}
   GlopFrame *RemoveChildNoDelete();
@@ -351,15 +370,14 @@ class MultiParentFrame: public GlopFrame {
   
   // Child delegation functions
   virtual void Render();
-  virtual void OnKeyEvent(const KeyEvent &event, int dt);
+  virtual bool OnKeyEvent(const KeyEvent &event, int dt);
   virtual void Think(int dt);
   virtual void SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2);
-  virtual bool IsFocusKeeper(const KeyEvent &event) const;
   virtual bool IsFocusMagnet(const KeyEvent &event) const;
 
  protected:
   virtual void RecomputeSize(int rec_width, int rec_height);
-  virtual void SetIsInFocus(bool is_in_focus);
+  virtual void OnFocusChange();
 
   // Child manipulation. Note that any child added to a parent frame becomes owned by the
   // parent, and will be deleted on removal from the parent unless RemoveChildNoDelete is
@@ -381,6 +399,30 @@ class MultiParentFrame: public GlopFrame {
   friend class GlopWindow;
   LightSet<GlopFrame*> children_;
   DISALLOW_EVIL_CONSTRUCTORS(MultiParentFrame);
+};
+
+// ClippedFrame
+// ============
+
+class ClippedFrame: public SingleParentFrame {
+ public:
+  ClippedFrame(GlopFrame *frame): SingleParentFrame(frame), is_standard_clipping_(true) {}
+
+  void Render();
+  void SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2);
+  void SetStandardClipping() {is_standard_clipping_ = true;}
+  void SetClipping(int x1, int y1, int x2, int y2) {
+    is_standard_clipping_ = false;
+    req_clip_x1_ = x1;
+    req_clip_y1_ = y1;
+    req_clip_x2_ = x2;
+    req_clip_y2_ = y2;
+  }
+
+ private:
+  bool is_standard_clipping_;
+  int req_clip_x1_, req_clip_y1_, req_clip_x2_, req_clip_y2_;
+  DISALLOW_EVIL_CONSTRUCTORS(ClippedFrame);
 };
 
 // PaddedFrame
@@ -437,6 +479,8 @@ class ScalingPaddedFrame: public PaddedFrame {
   DISALLOW_EVIL_CONSTRUCTORS(ScalingPaddedFrame);
 };
 
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
 // FocusFrame
 // ==========
 //
@@ -445,29 +489,71 @@ class FocusFrame: public SingleParentFrame {
  public:
   FocusFrame(GlopFrame *frame);
   ~FocusFrame();
+
+  // Returns whether we are descended from the given focus frame.
+  bool IsSubFocusFrame(const FocusFrame *frame) const;
+
+  // Returns whether a KeyEvent is being processed which just gave us focus. This is useful if we
+  // do not want that event to be processed. For example, a GlopKeyPromptFrame should not process
+  // the tab or mouse click event that gave it focus.
+  bool IsGainingFocus() const {return is_gaining_focus_;}
+
+  // Immediately makes this FocusFrame in focus (for it's level).
   void DemandFocus();
 
-  // Sometimes it is useful to manually force a frame to stop tracking focus. To do this, use
-  // RemoveChildNoDelete. This clears the focus on the child and disassociates from the
-  // FocusFrame.
-  GlopFrame *RemoveChildNoDelete() {
-    GetChild()->SetIsInFocus(false);
-    return SingleParentFrame::RemoveChildNoDelete();
-  }
-
- protected:
-  // Overloads SetIsInFocus to ping our entire location.
-  void SetIsInFocus(bool is_in_focus) {
-    if (is_in_focus)
-      NewRelativePing(0, 0, 1, 1);
-    SingleParentFrame::SetIsInFocus(is_in_focus);
-  }
-
  private:
+  // Overload SetParent to not overwrite our focus information.
+  virtual void SetParent(GlopFrame *parent) {parent_ = parent;}
+
+  // GlopWindow interface
   friend class GlopWindow;
-  int layer_;                 // See GlopWindow::PushFocus and PopFocus
-  FocusFrame *next_, *prev_;  // Links in the circular queue of this layer's FocusFrames
+  void SetIsInFocus(bool is_in_focus) {
+    if (is_in_focus && !IsInFocus()) NewRelativePing(0, 0, 1, 1);
+    SetFocusInfo(this, is_in_focus);
+  }
+
+  bool is_gaining_focus_;
+  int layer_;
+  FocusFrame *next_, *prev_;
   DISALLOW_EVIL_CONSTRUCTORS(FocusFrame);
+};
+
+// RecSizeFrame
+// ============
+//
+// This overrides the recommended size for its child frame to be the given fraction of the window
+// size. RecWidthFrame and RecHeightFrame override the recommended width and height only.
+class RecWidthFrame: public SingleParentFrame {
+ public:
+  RecWidthFrame(GlopFrame *frame, float rec_width)
+  : SingleParentFrame(frame), rec_width_override_(rec_width) {}
+ protected:
+  void RecomputeSize(int rec_width, int rec_height);
+ private:
+  float rec_width_override_;
+  DISALLOW_EVIL_CONSTRUCTORS(RecWidthFrame);
+};
+
+class RecHeightFrame: public SingleParentFrame {
+ public:
+  RecHeightFrame(GlopFrame *frame, float rec_height)
+  : SingleParentFrame(frame), rec_height_override_(rec_height) {}
+ protected:
+  void RecomputeSize(int rec_width, int rec_height);
+ private:
+  float rec_height_override_;
+  DISALLOW_EVIL_CONSTRUCTORS(RecHeightFrame);
+};
+
+class RecSizeFrame: public SingleParentFrame {
+ public:
+  RecSizeFrame(GlopFrame *frame, float rec_width, float rec_height)
+  : SingleParentFrame(frame), rec_width_override_(rec_width), rec_height_override_(rec_height) {}
+ protected:
+  void RecomputeSize(int rec_width, int rec_height);
+ private:
+  float rec_width_override_, rec_height_override_;
+  DISALLOW_EVIL_CONSTRUCTORS(RecSizeFrame);
 };
 
 // TableauFrame
@@ -488,8 +574,6 @@ class TableauFrame: public MultiParentFrame {
   // Child accessors
   const GlopFrame *GetChild(LightSetId id) const {return MultiParentFrame::GetChild(id);}
   GlopFrame *GetChild(LightSetId id) {return MultiParentFrame::GetChild(id);}
-  LightSetId GetFirstChildId() const {return MultiParentFrame::GetFirstChildId();}
-  LightSetId GetNextChildId(LightSetId id) const {return MultiParentFrame::GetNextChildId(id);}
   float GetChildRelX(LightSetId id) const {return child_pos_[id].rel_x;}
   float GetChildRelY(LightSetId id) const {return child_pos_[id].rel_y;}
   int GetChildDepth(LightSetId id) const {return child_pos_[id].depth;}
@@ -508,7 +592,7 @@ class TableauFrame: public MultiParentFrame {
     MoveChild(id, rel_x, rel_y);
   }
   void SetChildJustify(LightSetId id, float horz_justify, float vert_justify);
-  LightSetId RemoveChild(LightSetId id);
+  void RemoveChild(LightSetId id);
   GlopFrame *RemoveChildNoDelete(LightSetId id);
   void ClearChildren();
   
@@ -589,7 +673,7 @@ class TableFrame: public MultiParentFrame {
   void SetDefaultVertJustify(float vert_justify) {default_vert_justify_ = vert_justify;}
 
   // Table size and position
-  void Resize(int num_rows, int num_cols);
+  void Resize(int num_cols, int num_rows);
   void InsertRow(int row);
   void InsertCol(int col);
   void DeleteRow(int row);
@@ -679,37 +763,31 @@ class RowFrame: public SingleParentFrame {
  public:
   // Constructors - a basic one and convenience constructors that initialize up to three cells
   RowFrame(int num_cells, float default_vert_justify = kJustifyCenter)
-  : SingleParentFrame(new TableFrame(num_cells, 1, kJustifyCenter, default_vert_justify)),
-    table_((TableFrame*)GetChild()) {}
+  : SingleParentFrame(new TableFrame(num_cells, 1, kJustifyCenter, default_vert_justify)) {}
   RowFrame(GlopFrame *frame, float default_vert_justify = kJustifyCenter)
-  : SingleParentFrame(new TableFrame(1, 1, kJustifyCenter, default_vert_justify)),
-    table_((TableFrame*)GetChild()) {
+  : SingleParentFrame(new TableFrame(1, 1, kJustifyCenter, default_vert_justify)) {
     SetCell(0, frame);
   }
   RowFrame(GlopFrame *frame, const CellSize &width, const CellSize &height,
            float default_vert_justify = kJustifyCenter)
-  : SingleParentFrame(new TableFrame(1, 1, kJustifyCenter, default_vert_justify)),
-    table_((TableFrame*)GetChild()) {
+  : SingleParentFrame(new TableFrame(1, 1, kJustifyCenter, default_vert_justify)) {
     SetCell(0, frame, width, height);
   }
   RowFrame(GlopFrame *frame1, GlopFrame *frame2, float default_vert_justify = kJustifyCenter)
-  : SingleParentFrame(new TableFrame(2, 1, kJustifyCenter, default_vert_justify)),
-    table_((TableFrame*)GetChild()) {
+  : SingleParentFrame(new TableFrame(2, 1, kJustifyCenter, default_vert_justify)) {
     SetCell(0, frame1);
     SetCell(1, frame2);
   }
   RowFrame(GlopFrame *frame1, const CellSize &width1, const CellSize &height1,
            GlopFrame *frame2, const CellSize &width2, const CellSize &height2,
            float default_vert_justify = kJustifyCenter)
-  : SingleParentFrame(new TableFrame(2, 1, kJustifyCenter, default_vert_justify)),
-    table_((TableFrame*)GetChild()) {
+  : SingleParentFrame(new TableFrame(2, 1, kJustifyCenter, default_vert_justify)) {
     SetCell(0, frame1, width1, height1);
     SetCell(1, frame2, width2, height2);
   }
   RowFrame(GlopFrame *frame1, GlopFrame *frame2, GlopFrame *frame3,
            float default_vert_justify = kJustifyCenter)
-  : SingleParentFrame(new TableFrame(3, 1, kJustifyCenter, default_vert_justify)),
-    table_((TableFrame*)GetChild()) {
+  : SingleParentFrame(new TableFrame(3, 1, kJustifyCenter, default_vert_justify)) {
     SetCell(0, frame1);
     SetCell(1, frame2);
     SetCell(2, frame3);
@@ -718,56 +796,56 @@ class RowFrame: public SingleParentFrame {
            GlopFrame *frame2, const CellSize &width2, const CellSize &height2,
            GlopFrame *frame3, const CellSize &width3, const CellSize &height3,
            float default_vert_justify = kJustifyCenter)
-  : SingleParentFrame(new TableFrame(3, 1, kJustifyCenter, default_vert_justify)),
-    table_((TableFrame*)GetChild()) {
+  : SingleParentFrame(new TableFrame(3, 1, kJustifyCenter, default_vert_justify)) {
     SetCell(0, frame1, width1, height1);
     SetCell(1, frame2, width2, height2);
     SetCell(2, frame3, width3, height3);
   }
-  float GetDefaultVertJustify() const {return table_->GetDefaultVertJustify();}
-  void SetDefaultVertJustify(float vert_justify) {table_->SetDefaultVertJustify(vert_justify);}
+  float GetDefaultVertJustify() const {return table()->GetDefaultVertJustify();}
+  void SetDefaultVertJustify(float vert_justify) {table()->SetDefaultVertJustify(vert_justify);}
 
   // Table size and position
-  void Resize(int num_cells) {table_->Resize(num_cells, 1);}
+  void Resize(int num_cells) {table()->Resize(num_cells, 1);}
   void InsertCell(int cell, GlopFrame *frame = 0) {
-    table_->InsertRow(cell);
-    table_->SetCell(cell, 0, frame);
+    table()->InsertRow(cell);
+    table()->SetCell(cell, 0, frame);
   }
-  void DeleteCell(int cell) {table_->DeleteRow(cell);}
-  int GetNumCells() const {return table_->GetNumCols();}
-  int GetCellPosition(int cell) const {return table_->GetColPosition(cell);}
-  int GetCellSize(int cell) const {return table_->GetColSize(cell);}
+  void DeleteCell(int cell) {table()->DeleteRow(cell);}
+  int GetNumCells() const {return table()->GetNumCols();}
+  int GetCellPosition(int cell) const {return table()->GetColPosition(cell);}
+  int GetCellSize(int cell) const {return table()->GetColSize(cell);}
 
   // Cell accessors
-  const GlopFrame *GetCell(int cell) const {return table_->GetCell(cell, 0);}
-  GlopFrame *GetCell(int cell) {return table_->GetCell(cell, 0);}
-  const CellSize &GetCellWidth(int cell) const {return table_->GetCellWidth(cell, 0);}
-  const CellSize &GetCellHeight(int cell) const {return table_->GetCellHeight(cell, 0);}
-  float GetCellHorzJustify(int cell) const {return table_->GetCellHorzJustify(cell, 0);}
-  float GetCellVertJustify(int cell) const {return table_->GetCellVertJustify(cell, 0);}
+  const GlopFrame *GetCell(int cell) const {return table()->GetCell(cell, 0);}
+  GlopFrame *GetCell(int cell) {return table()->GetCell(cell, 0);}
+  const CellSize &GetCellWidth(int cell) const {return table()->GetCellWidth(cell, 0);}
+  const CellSize &GetCellHeight(int cell) const {return table()->GetCellHeight(cell, 0);}
+  float GetCellHorzJustify(int cell) const {return table()->GetCellHorzJustify(cell, 0);}
+  float GetCellVertJustify(int cell) const {return table()->GetCellVertJustify(cell, 0);}
 
   // Cell mutators
-  GlopFrame *ClearCellNoDelete(int cell) {return table_->ClearCellNoDelete(cell, 0);}
-  void SetCell(int cell, GlopFrame *frame) {table_->SetCell(cell, 0, frame);}
+  GlopFrame *ClearCellNoDelete(int cell) {return table()->ClearCellNoDelete(cell, 0);}
+  void SetCell(int cell, GlopFrame *frame) {table()->SetCell(cell, 0, frame);}
   void SetCell(int cell, GlopFrame *frame, const CellSize &width, const CellSize &height) {
-    table_->SetCell(cell, 0, frame, width, height);
+    table()->SetCell(cell, 0, frame, width, height);
   }
   void SetCell(int cell, GlopFrame *frame, float horz_justify, float vert_justify) {
-    table_->SetCell(cell, 0, frame, horz_justify, vert_justify);
+    table()->SetCell(cell, 0, frame, horz_justify, vert_justify);
   }
   void SetCell(int cell, GlopFrame *frame, const CellSize &width, const CellSize &height,
                float vert_justify) {
-    table_->SetCell(cell, 0, frame, width, height, kJustifyCenter, vert_justify);
+    table()->SetCell(cell, 0, frame, width, height, kJustifyCenter, vert_justify);
   }
   void SetCellSize(int cell, const CellSize &width, const CellSize &height) {
-    table_->SetCellSize(cell, 0, width, height);
+    table()->SetCellSize(cell, 0, width, height);
   }
   void SetCellJustify(int cell, float vert_justify) {
-    table_->SetCellJustify(cell, 0, kJustifyCenter, vert_justify);
+    table()->SetCellJustify(cell, 0, kJustifyCenter, vert_justify);
   }
 
  private:
-  TableFrame *table_;
+  const TableFrame *table() const {return (TableFrame*)GetChild();}
+  TableFrame *table() {return (TableFrame*)GetChild();}
   DISALLOW_EVIL_CONSTRUCTORS(RowFrame);
 };
 
@@ -779,37 +857,31 @@ class ColFrame: public SingleParentFrame {
  public:
   // Constructors - a basic one and convenience constructors that initialize up to three cells
   ColFrame(int num_cells, float default_horz_justify = kJustifyCenter)
-  : SingleParentFrame(new TableFrame(1, num_cells, default_horz_justify, kJustifyCenter)),
-    table_((TableFrame*)GetChild()) {}
+  : SingleParentFrame(new TableFrame(1, num_cells, default_horz_justify, kJustifyCenter)) {}
   ColFrame(GlopFrame *frame, float default_horz_justify = kJustifyCenter)
-  : SingleParentFrame(new TableFrame(1, 1, default_horz_justify, kJustifyCenter)),
-    table_((TableFrame*)GetChild()) {
+  : SingleParentFrame(new TableFrame(1, 1, default_horz_justify, kJustifyCenter)) {
     SetCell(0, frame);
   }
   ColFrame(GlopFrame *frame, const CellSize &width, const CellSize &height,
            float default_horz_justify = kJustifyCenter)
-  : SingleParentFrame(new TableFrame(1, 1, default_horz_justify, kJustifyCenter)),
-    table_((TableFrame*)GetChild()) {
+  : SingleParentFrame(new TableFrame(1, 1, default_horz_justify, kJustifyCenter)) {
     SetCell(0, frame, width, height);
   }
   ColFrame(GlopFrame *frame1, GlopFrame *frame2, float default_horz_justify = kJustifyCenter)
-  : SingleParentFrame(new TableFrame(1, 2, default_horz_justify, kJustifyCenter)),
-    table_((TableFrame*)GetChild()) {
+  : SingleParentFrame(new TableFrame(1, 2, default_horz_justify, kJustifyCenter)) {
     SetCell(0, frame1);
     SetCell(1, frame2);
   }
   ColFrame(GlopFrame *frame1, const CellSize &width1, const CellSize &height1,
            GlopFrame *frame2, const CellSize &width2, const CellSize &height2,
            float default_horz_justify = kJustifyCenter)
-  : SingleParentFrame(new TableFrame(1, 2, default_horz_justify, kJustifyCenter)),
-    table_((TableFrame*)GetChild()) {
+  : SingleParentFrame(new TableFrame(1, 2, default_horz_justify, kJustifyCenter)) {
     SetCell(0, frame1, width1, height1);
     SetCell(1, frame2, width2, height2);
   }
   ColFrame(GlopFrame *frame1, GlopFrame *frame2, GlopFrame *frame3,
            float default_horz_justify = kJustifyCenter)
-  : SingleParentFrame(new TableFrame(1, 3, default_horz_justify, kJustifyCenter)),
-    table_((TableFrame*)GetChild()) {
+  : SingleParentFrame(new TableFrame(1, 3, default_horz_justify, kJustifyCenter)) {
     SetCell(0, frame1);
     SetCell(1, frame2);
     SetCell(2, frame3);
@@ -818,56 +890,56 @@ class ColFrame: public SingleParentFrame {
            GlopFrame *frame2, const CellSize &width2, const CellSize &height2,
            GlopFrame *frame3, const CellSize &width3, const CellSize &height3,
            float default_horz_justify = kJustifyCenter)
-  : SingleParentFrame(new TableFrame(1, 3, default_horz_justify, kJustifyCenter)),
-    table_((TableFrame*)GetChild()) {
+  : SingleParentFrame(new TableFrame(1, 3, default_horz_justify, kJustifyCenter)) {
     SetCell(0, frame1, width1, height1);
     SetCell(1, frame2, width2, height2);
     SetCell(2, frame3, width3, height3);
   }
-  float GetDefaultHorzJustify() const {return table_->GetDefaultHorzJustify();}
-  void SetDefaultHorzJustify(float horz_justify) {table_->SetDefaultHorzJustify(horz_justify);}
+  float GetDefaultHorzJustify() const {return table()->GetDefaultHorzJustify();}
+  void SetDefaultHorzJustify(float horz_justify) {table()->SetDefaultHorzJustify(horz_justify);}
   
   // Table size and position
-  void Resize(int num_cells) {table_->Resize(1, num_cells);}
+  void Resize(int num_cells) {table()->Resize(1, num_cells);}
   void InsertCell(int cell, GlopFrame *frame = 0) {
-    table_->InsertRow(cell);
-    table_->SetCell(0, cell, frame);
+    table()->InsertRow(cell);
+    table()->SetCell(0, cell, frame);
   }
-  void DeleteCell(int cell) {table_->DeleteRow(cell);}
-  int GetNumCells() const {return table_->GetNumRows();}
-  int GetCellPosition(int cell) const {return table_->GetRowPosition(cell);}
-  int GetCellSize(int cell) const {return table_->GetRowSize(cell);}
+  void DeleteCell(int cell) {table()->DeleteRow(cell);}
+  int GetNumCells() const {return table()->GetNumRows();}
+  int GetCellPosition(int cell) const {return table()->GetRowPosition(cell);}
+  int GetCellSize(int cell) const {return table()->GetRowSize(cell);}
 
   // Cell accessors
-  const GlopFrame *GetCell(int cell) const {return table_->GetCell(0, cell);}
-  GlopFrame *GetCell(int cell) {return table_->GetCell(0, cell);}
-  const CellSize &GetCellWidth(int cell) const {return table_->GetCellWidth(0, cell);}
-  const CellSize &GetCellHeight(int cell) const {return table_->GetCellHeight(0, cell);}
-  float GetCellHorzJustify(int cell) const {return table_->GetCellHorzJustify(0, cell);}
-  float GetCellVertJustify(int cell) const {return table_->GetCellVertJustify(0, cell);}
+  const GlopFrame *GetCell(int cell) const {return table()->GetCell(0, cell);}
+  GlopFrame *GetCell(int cell) {return table()->GetCell(0, cell);}
+  const CellSize &GetCellWidth(int cell) const {return table()->GetCellWidth(0, cell);}
+  const CellSize &GetCellHeight(int cell) const {return table()->GetCellHeight(0, cell);}
+  float GetCellHorzJustify(int cell) const {return table()->GetCellHorzJustify(0, cell);}
+  float GetCellVertJustify(int cell) const {return table()->GetCellVertJustify(0, cell);}
 
   // Cell mutators
-  GlopFrame *ClearCellNoDelete(int cell) {return table_->ClearCellNoDelete(0, cell);}
-  void SetCell(int cell, GlopFrame *frame) {table_->SetCell(0, cell, frame);}
+  GlopFrame *ClearCellNoDelete(int cell) {return table()->ClearCellNoDelete(0, cell);}
+  void SetCell(int cell, GlopFrame *frame) {table()->SetCell(0, cell, frame);}
   void SetCell(int cell, GlopFrame *frame, const CellSize &width, const CellSize &height) {
-    table_->SetCell(0, cell, frame, width, height);
+    table()->SetCell(0, cell, frame, width, height);
   }
   void SetCell(int cell, GlopFrame *frame, float horz_justify) {
-    table_->SetCell(0, cell, frame, horz_justify, kJustifyCenter);
+    table()->SetCell(0, cell, frame, horz_justify, kJustifyCenter);
   }
   void SetCell(int cell, GlopFrame *frame, const CellSize &width, const CellSize &height,
                float horz_justify) {
-    table_->SetCell(0, cell, frame, width, height, horz_justify, kJustifyCenter);
+    table()->SetCell(0, cell, frame, width, height, horz_justify, kJustifyCenter);
   }
   void SetCellSize(int cell, const CellSize &width, const CellSize &height) {
-    table_->SetCellSize(0, cell, width, height);
+    table()->SetCellSize(0, cell, width, height);
   }
   void SetCellJustify(int cell, float horz_justify) {
-    table_->SetCellJustify(0, cell, horz_justify, kJustifyCenter);
+    table()->SetCellJustify(0, cell, horz_justify, kJustifyCenter);
   }
 
  private:
-  TableFrame *table_;
+  const TableFrame *table() const {return (TableFrame*)GetChild();}
+  TableFrame *table() {return (TableFrame*)GetChild();}
   DISALLOW_EVIL_CONSTRUCTORS(ColFrame);
 };
 

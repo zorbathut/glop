@@ -1,7 +1,9 @@
 // Includes
 #include "GlopFrameBase.h"
+#include "GlopFrameWidgets.h"
 #include "GlopWindow.h"
 #include "LightSet.h"
+#include "OpenGl.h"
 #include <algorithm>
 using namespace std;
 
@@ -12,22 +14,22 @@ const int kClipMinusInfinity = -kClipInfinity;
 // FrameStyle
 // ==========
 
-FrameStyle::FrameStyle()
-: font_color(0, 0, 0),
-  font_height(0.025f),
-  button_border_size(0.003f),
-  button_selection_color(0.2f, 0, 0.8f),
-  button_border_color(0.2f, 0.2f, 0.2f),
-  button_highlight_color(0.95f, 0.95f, 0.95f),
-  button_lowlight_color(0.5f, 0.5f, 0.5f),
-  button_unpressed_inner_color(0.85f, 0.85f, 0.85f),
-  button_pressed_inner_color(0.65f, 0.65f, 0.65f),
-  window_border_highlight_color(0.8f, 0.8f, 0.95f),
-  window_border_lowlight_color(0.5f, 0.5f, 0.6f),
-  window_inner_color(0.75f, 0.75f, 0.83f),
-  window_title_color(0, 0, 0) {}
+FrameStyle::FrameStyle(LightSetId _font_outline_id)
+: font_outline_id(_font_outline_id),
+  text_color(0, 0, 0),
+  text_height(0.025f),
+  prompt_highlight_color(0.6f, 0.6f, 1.0f) {
+  button_renderer = new DefaultButtonRenderer();
+  slider_renderer = new DefaultSliderRenderer(button_renderer);
+  window_renderer = new DefaultWindowRenderer(_font_outline_id);
+}
 
-FrameStyle *gDefaultStyle = new FrameStyle();
+FrameStyle::~FrameStyle() {
+  delete button_renderer;
+  delete slider_renderer;
+  delete window_renderer;
+}
+FrameStyle *gDefaultStyle = 0;
 
 // GlopFrame
 // =========
@@ -35,34 +37,31 @@ FrameStyle *gDefaultStyle = new FrameStyle();
 // Constructor. Does nothing.
 GlopFrame::GlopFrame()
 : parent_(0),
+  width_(0),
+  height_(0),
   screen_x_(0),
   screen_y_(0),
   clip_x1_(kClipMinusInfinity),
   clip_y1_(kClipMinusInfinity),
   clip_x2_(kClipInfinity),
   clip_y2_(kClipInfinity),
-  width_(0),
-  height_(0),
-  is_in_focus_(false) {
+  is_in_focus_(false),
+  focus_frame_(0) {
   DirtySize();
 }
 
 // Destructor. Deletes all pings that have been queued up for this frame.
 GlopFrame::~GlopFrame() {
-  window()->UnregisterAllPings(this);
-}
-
-// Propogate focus demands up until we reach a FocusFrame.
-void GlopFrame::DemandFocus() {
-  if (parent_ != 0)
-    parent_->DemandFocus();
+  gWindow->UnregisterAllPings(this);
 }
 
 // Marks that this frame needs its size recomputed. The parent must also recompute its size
-// for this to happen, so the request is propogated upwards.
+// for this to happen, so the request is propogated upwards. We do not propogate up if the parent
+// is already dirty (the invariant that if you are dirty, your parent is dirty, guarantees that
+// is unnecessary).
 void GlopFrame::DirtySize() {
   old_rec_width_ = old_rec_height_ = -1;
-  if (parent_ != 0)
+  if (parent_ != 0 && parent_->old_rec_width_ != -1)
     parent_->DirtySize();
 }
 
@@ -74,12 +73,6 @@ void GlopFrame::UpdateSize(int rec_width, int rec_height) {
   old_rec_height_ = rec_height;
 }
 
-bool GlopFrame::IsPointVisible(int screen_x, int screen_y) const {
-  int x1 = max(screen_x_, clip_x1_), y1 = max(screen_y_, clip_y1_),
-      x2 = min(screen_x_+width_-1, clip_x2_), y2 = min(screen_y_+height_-1, clip_y2_);
-  return (screen_x >= x1 && screen_y >= y1 && screen_x <= x2 && screen_y <= y2);
-}
-
 void GlopFrame::SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2) {
   screen_x_ = screen_x;
   screen_y_ = screen_y;
@@ -87,6 +80,18 @@ void GlopFrame::SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx
   clip_y1_ = cy1;
   clip_x2_ = cx2;
   clip_y2_ = cy2;
+}
+
+bool GlopFrame::IsPrimaryFocus() const {
+  return is_in_focus_ && screen_x_ == GetFocusFrame()->GetX() &&
+    screen_y_ == GetFocusFrame()->GetY() && width_ == GetFocusFrame()->GetWidth() &&
+    height_ == GetFocusFrame()->GetHeight();
+}
+
+bool GlopFrame::IsPointVisible(int screen_x, int screen_y) const {
+  int x1 = max(screen_x_, clip_x1_), y1 = max(screen_y_, clip_y1_),
+      x2 = min(screen_x_+width_-1, clip_x2_), y2 = min(screen_y_+height_-1, clip_y2_);
+  return (screen_x >= x1 && screen_y >= y1 && screen_x <= x2 && screen_y <= y2);
 }
 
 void GlopFrame::SetToMaxSize(int width_bound, int height_bound, float aspect_ratio) {
@@ -99,7 +104,17 @@ void GlopFrame::SetToMaxSize(int width_bound, int height_bound, float aspect_rat
 }
 
 void GlopFrame::AddPing(Ping *ping) {
-  window()->RegisterPing(ping);
+  gWindow->RegisterPing(ping);
+}
+
+void GlopFrame::SetParent(GlopFrame *parent) {
+  if (parent == 0) {
+    if (!IsFocusFrame()) SetFocusInfo(0, false);
+    parent_ = 0;
+  } else {
+    parent_ = parent;
+    if (!IsFocusFrame()) SetFocusInfo(parent->focus_frame_, parent->is_in_focus_);
+  }
 }
 
 // SingleParentFrame
@@ -109,7 +124,7 @@ GlopFrame *SingleParentFrame::RemoveChildNoDelete() {
   DirtySize();
   GlopFrame *old_child = child_;
   child_ = 0;
-  if (old_child != 0) old_child->parent_ = 0;
+  if (old_child != 0) old_child->SetParent(0);
   return old_child;
 }
 
@@ -117,7 +132,7 @@ void SingleParentFrame::SetChild(GlopFrame *frame) {
   DirtySize();
   if (child_ != 0) delete child_;
   child_ = frame;
-  if (child_ != 0) child_->parent_ = this;
+  if (child_ != 0) child_->SetParent(this);
 }
 
 // MultiParentFrame
@@ -127,16 +142,18 @@ void SingleParentFrame::SetChild(GlopFrame *frame) {
 // the clipping rectangle.
 void MultiParentFrame::Render() {
   for (LightSetId id = children_.GetFirstId(); id != 0; id = children_.GetNextId(id)) {
-    int x = children_[id]->GetX(), y = children_[id]->GetY(), 
+    int x = children_[id]->GetX(), y = children_[id]->GetY(),
         w = children_[id]->GetWidth(), h = children_[id]->GetHeight();
     if (x+w > clip_x1_ && y+h > clip_y1_ && x <= clip_x2_ && y <= clip_y2_)
       children_[id]->Render();
   }
 }
 
-void MultiParentFrame::OnKeyEvent(const KeyEvent &event, int dt) {
+bool MultiParentFrame::OnKeyEvent(const KeyEvent &event, int dt) {
+  bool result = false;
   for (LightSetId id = children_.GetFirstId(); id != 0; id = children_.GetNextId(id))
-    children_[id]->OnKeyEvent(event, dt);
+    result |= (!children_[id]->IsFocusFrame() && children_[id]->OnKeyEvent(event, dt));
+  return result;
 }
 
 void MultiParentFrame::Think(int dt) {
@@ -144,7 +161,6 @@ void MultiParentFrame::Think(int dt) {
     children_[id]->Think(dt);
 }
 
-// Delegates to set all children to the same position as us.
 void MultiParentFrame::SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2) {
   GlopFrame::SetPosition(screen_x, screen_y, cx1, cy1, cx2, cy2);
   for (LightSetId id = children_.GetFirstId(); id != 0; id = children_.GetNextId(id))
@@ -153,20 +169,11 @@ void MultiParentFrame::SetPosition(int screen_x, int screen_y, int cx1, int cy1,
 
 bool MultiParentFrame::IsFocusMagnet(const KeyEvent &event) const {
   for (LightSetId id = children_.GetFirstId(); id != 0; id = children_.GetNextId(id))
-    if (children_[id]->IsFocusMagnet(event))
+    if (!children_[id]->IsFocusFrame() && children_[id]->IsFocusMagnet(event))
       return true;
   return false;
 }
 
-bool MultiParentFrame::IsFocusKeeper(const KeyEvent &event) const {
-  for (LightSetId id = children_.GetFirstId(); id != 0; id = children_.GetNextId(id))
-    if (children_[id]->IsFocusKeeper(event))
-      return true;
-  return false;
-}
-
-// Delegates to set our size to be our maximum child size - a default implementation that will
-// surely not be useful very often.
 void MultiParentFrame::RecomputeSize(int rec_width, int rec_height) {
   int new_width = 0, new_height = 0;
   for (LightSetId id = children_.GetFirstId(); id != 0; id = children_.GetNextId(id)) {
@@ -177,18 +184,16 @@ void MultiParentFrame::RecomputeSize(int rec_width, int rec_height) {
   SetSize(new_width, new_height);
 }
 
-void MultiParentFrame::SetIsInFocus(bool is_in_focus) {
-  if (is_in_focus != is_in_focus_) {
-    GlopFrame::SetIsInFocus(is_in_focus);
-    for (LightSetId id = children_.GetFirstId(); id != 0; id = children_.GetNextId(id))
-      children_[id]->SetIsInFocus(is_in_focus);
-  }
+void MultiParentFrame::OnFocusChange() {
+  for (LightSetId id = children_.GetFirstId(); id != 0; id = children_.GetNextId(id))
+  if (children_[id]->GetFocusFrame() != children_[id])
+    children_[id]->SetFocusInfo(focus_frame_, is_in_focus_);
 }
 
 LightSetId MultiParentFrame::AddChild(GlopFrame *frame) {
   DirtySize();
   LightSetId result = children_.InsertItem(frame);
-  frame->parent_ = this;
+  frame->SetParent(this);
   return result;
 }
 
@@ -200,7 +205,7 @@ LightSetId MultiParentFrame::RemoveChild(LightSetId id) {
 GlopFrame *MultiParentFrame::RemoveChildNoDelete(LightSetId id) {
   GlopFrame *old_child = children_[id];
   children_.RemoveItem(id);
-  old_child->parent_ = 0;
+  old_child->SetParent(0);
   return old_child;
 }
 
@@ -212,6 +217,39 @@ void MultiParentFrame::ClearChildren() {
 void MultiParentFrame::OnWindowResize(int width, int height) {
   for (LightSetId id = children_.GetFirstId(); id != 0; id = children_.GetNextId(id))
     children_[id]->OnWindowResize(width, height);
+}
+
+// ClippedFrame
+// ============
+
+void ClippedFrame::Render() {
+  int old_scissor_test[4];
+
+  // Adjust the clipping
+  int old_clipping_enabled = glIsEnabled(GL_SCISSOR_TEST);
+  if (old_clipping_enabled)
+    glGetIntegerv(GL_SCISSOR_BOX, old_scissor_test);
+  else
+    glEnable(GL_SCISSOR_TEST);
+  glScissor(GetClipX1(), gWindow->GetHeight() - 1 - GetClipY2(), GetClipX2() - GetClipX1() + 1,
+            GetClipY2() - GetClipY1() + 1);
+
+  // Render the child
+  SingleParentFrame::Render();
+
+  // Reset the clipping
+  if (old_clipping_enabled)
+    glScissor(old_scissor_test[0], old_scissor_test[1], old_scissor_test[2], old_scissor_test[3]);
+  else
+    glDisable(GL_SCISSOR_TEST);
+}
+
+void ClippedFrame::SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2) {
+  cx1 = max(cx1, is_standard_clipping_? screen_x : req_clip_x1_);
+  cy1 = max(cy1, is_standard_clipping_? screen_y : req_clip_y1_);
+  cx2 = min(cx2, is_standard_clipping_? screen_x + GetWidth() - 1: req_clip_x2_);
+  cy2 = min(cy2, is_standard_clipping_? screen_x + GetHeight() - 1: req_clip_y2_);
+  SingleParentFrame::SetPosition(screen_x, screen_y, cx1, cy1, cx2, cy2);
 }
 
 // PaddedFrame
@@ -251,27 +289,54 @@ void PaddedFrame::SetPadding(int left_padding, int top_padding, int right_paddin
 // ==================
 
 void ScalingPaddedFrame::RecomputeSize(int rec_width, int rec_height) {
-  SetPadding(int(scaled_left_padding_ * window()->GetWidth()),
-             int(scaled_top_padding_ * window()->GetHeight()),
-             int(scaled_right_padding_ * window()->GetWidth()),
-             int(scaled_bottom_padding_ * window()->GetHeight()));
+  SetPadding(int(scaled_left_padding_ * gWindow->GetWidth()),
+             int(scaled_top_padding_ * gWindow->GetHeight()),
+             int(scaled_right_padding_ * gWindow->GetWidth()),
+             int(scaled_bottom_padding_ * gWindow->GetHeight()));
   PaddedFrame::RecomputeSize(rec_width, rec_height);
 }
+
 // FocusFrame
 // ==========
 //
 // A FocusFrame does little logic on its own - it just passes requests onto the GlopWindow.
 
-FocusFrame::FocusFrame(GlopFrame *frame): SingleParentFrame(frame) {
-  layer_ = window()->RegisterFocusFrame(this);
+FocusFrame::FocusFrame(GlopFrame *frame)
+: SingleParentFrame(frame),
+  is_gaining_focus_(false) {
+  SetFocusInfo(this, false);
+  layer_ = gWindow->RegisterFocusFrame(this);
 }
 
 FocusFrame::~FocusFrame() {
-  window()->UnregisterFocusFrame(layer_, this);
+  gWindow->UnregisterFocusFrame(layer_, this);
+}
+
+bool FocusFrame::IsSubFocusFrame(const FocusFrame *frame) const {
+  for (const FocusFrame *temp = this; temp != 0; temp = temp->GetParent()->GetFocusFrame())
+  if (temp == frame)
+    return true;
+  return false;
 }
 
 void FocusFrame::DemandFocus() {
-  window()->DemandFocus(layer_, this);
+  gWindow->DemandFocus(layer_, this, false);
+}
+
+// RecSizeFrame
+// ============
+
+void RecWidthFrame::RecomputeSize(int rec_width, int rec_height) {
+  SingleParentFrame::RecomputeSize(int(gWindow->GetWidth() * rec_width_override_), rec_height);
+}
+
+void RecHeightFrame::RecomputeSize(int rec_width, int rec_height) {
+  SingleParentFrame::RecomputeSize(rec_width, int(gWindow->GetWidth() * rec_height_override_));
+}
+
+void RecSizeFrame::RecomputeSize(int rec_width, int rec_height) {
+  SingleParentFrame::RecomputeSize(int(gWindow->GetWidth() * rec_width_override_),
+                                   int(gWindow->GetHeight() * rec_height_override_));
 }
 
 // TableauFrame
@@ -323,8 +388,6 @@ LightSetId TableauFrame::AddChild(GlopFrame *frame, float rel_x, float rel_y,
   return result;
 }
 
-// Moves the given child to have the given depth.
-// It will always be rendered after any children at the same depth.
 void TableauFrame::MoveChild(LightSetId id, int depth) {
   ordered_children_[child_pos_[id].order_pos] = 0;
   child_pos_[id].depth = depth;
@@ -333,7 +396,6 @@ void TableauFrame::MoveChild(LightSetId id, int depth) {
   order_dirty_ = true;
 }
 
-// Move a child's position within the tableau. Calls DirtySize.
 void TableauFrame::MoveChild(LightSetId id, float rel_x, float rel_y) {
   ChildPosition *pos = &child_pos_[id];
   pos->rel_x = rel_x;
@@ -341,7 +403,6 @@ void TableauFrame::MoveChild(LightSetId id, float rel_x, float rel_y) {
   GetChild(id)->DirtySize();
 }
 
-// Changes a child's justification within the tableau. Calls DirtySize.
 void TableauFrame::SetChildJustify(LightSetId id, float horz_justify, float vert_justify) {
   ChildPosition *pos = &child_pos_[id];
   pos->horz_justify = horz_justify;
@@ -349,7 +410,6 @@ void TableauFrame::SetChildJustify(LightSetId id, float horz_justify, float vert
   GetChild(id)->DirtySize();
 }
 
-// Removes a child without deleting it.
 GlopFrame *TableauFrame::RemoveChildNoDelete(LightSetId id) {
   ordered_children_[child_pos_[id].order_pos] = 0;
   order_dirty_ = true;
@@ -357,21 +417,18 @@ GlopFrame *TableauFrame::RemoveChildNoDelete(LightSetId id) {
   return MultiParentFrame::RemoveChildNoDelete(id);
 }
 
-// Removes and deletes a child.
-LightSetId TableauFrame::RemoveChild(LightSetId id) {
+void TableauFrame::RemoveChild(LightSetId id) {
   ordered_children_[child_pos_[id].order_pos] = 0;
   order_dirty_ = true;
   child_pos_.RemoveItem(id);
-  return MultiParentFrame::RemoveChild(id);
+  MultiParentFrame::RemoveChild(id);
 }
 
-// Clears all children - overwritten because the ParentFrame version only calls the ParentFrame
-// version of RemoveChild.
 void TableauFrame::ClearChildren() {
-  for (LightSetId id = GetFirstChildId(); id != 0; id = GetNextChildId(id))
-    id = RemoveChild(id);
+  while (GetNumChildren())
+    RemoveChild(GetFirstChildId());
 }
-// Reposition the tableau and all children (according to child_pos_).
+
 void TableauFrame::SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2) {
   GlopFrame::SetPosition(screen_x, screen_y, cx1, cy1, cx2, cy2);
   for (LightSetId id = GetFirstChildId(); id != 0; id = GetNextChildId(id)) {
@@ -384,9 +441,6 @@ void TableauFrame::SetPosition(int screen_x, int screen_y, int cx1, int cy1, int
   }
 }
 
-// Recomputes the tableau size. Children are recommended to be the largest size that will keep
-// them within the tableau (accounting for position and justification). The tableau itself takes
-// the recommended size exactly.
 void TableauFrame::RecomputeSize(int rec_width, int rec_height) {
   SetSize(rec_width, rec_height);
   for (LightSetId id = GetFirstChildId(); id != 0; id = GetNextChildId(id)) {
@@ -630,8 +684,8 @@ void TableFrame::RecomputeSize(int rec_width, int rec_height) {
         
         // Make sure this is the right pass for this cell
         if (pass == 3) {
-          if (cell_info_[index].width.type == CellSize::kMaxDoublePass ||
-              cell_info_[index].height.type == CellSize::kMaxDoublePass)
+          if (cell_info_[index].width.type != CellSize::kMaxDoublePass &&
+              cell_info_[index].height.type != CellSize::kMaxDoublePass)
             continue;
         } else {
           int real_pass;
@@ -653,7 +707,7 @@ void TableFrame::RecomputeSize(int rec_width, int rec_height) {
                        htype = cell_info_[index].height.type;
         if (wtype == CellSize::kMatch)
           w = col_info_[x].size;
-        else if (htype == CellSize::kMax || htype == CellSize::kMaxDoublePass)
+        else if (wtype == CellSize::kMax || wtype == CellSize::kMaxDoublePass)
           w = rec_width - GetWidth() + col_info_[x].size;
         else {
           double mult = (wtype == CellSize::kDefault? 1.0 / num_cols_ :

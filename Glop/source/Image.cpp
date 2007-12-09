@@ -1,7 +1,7 @@
 #include "Image.h"
 #include "BinaryFileManager.h"
 #include "Color.h"
-#include "jpeglib/jpeglib.h"
+#include "third_party/jpeglib/jpeglib.h"
 #include <setjmp.h>  // For LoadJpg error handling
 
 // Constants
@@ -150,8 +150,6 @@ Image *Image::LoadBmp(BinaryFileReader reader, bool force_alpha) {
   unsigned char *palette = 0, *pixels = 0;  // Image data (palette is used if bpp <= 8)
   unsigned char *buffer = 0;                // A location to load a line of data into
   int start_offset = reader.Tell();         // Where does the file begin?
-  unsigned int rmask = 0, gmask = 0, bmask = 0, amask = 0;
-  unsigned int rshift = 1, gshift = 1, bshift = 1, ashift = 1;
 
   // Read the header
   char tag[2];
@@ -192,6 +190,8 @@ Image *Image::LoadBmp(BinaryFileReader reader, bool force_alpha) {
   int new_bpp = (bpp == 32? 32 : 24);
 
   // Read the color masks if they exist
+  unsigned int rmask = 0, gmask = 0, bmask = 0, amask = 0;
+  unsigned int rshift = 1, gshift = 1, bshift = 1, ashift = 1;
 	switch (compression) {
 		case kRgb:
 			// If there are no masks, use defaults
@@ -645,7 +645,7 @@ Image *Image::LoadJpg(BinaryFileReader reader, bool force_alpha) {
 	pixels = (unsigned char *)malloc(width * height * bpp / 8);
   for (int y = 0; y < height; y++) {
     unsigned char *row = pixels + y * width * bpp / 8;
-    jpeg_read_scanlines(&info, (JSAMPLE**)&row, 1);
+    jpeg_read_scanlines(&info, &row, 1);
   }
   jpeg_finish_decompress(&info);
   if (reader.Tell() > reader.GetLength())

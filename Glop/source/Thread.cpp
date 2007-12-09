@@ -49,8 +49,8 @@ PCQueue::~PCQueue() {
 
 void PCQueue::PushData(const void *data, int size) {
   // Wait until data is freed up. Note that this is safe since: we are the only producer thread
-  // which means GetSize() can only go down, and hence the safety condition can never asynchronously
-  // become false if it is ever true.
+  // which means GetSize() can only go down, and hence the safety condition can never
+  // asynchronously become false if it is ever true.
   while (GetSize() + size > GetCapacity())
     gSystem->Sleep();
 

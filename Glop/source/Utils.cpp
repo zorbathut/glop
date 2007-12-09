@@ -124,8 +124,8 @@ bool ToFloat(const string &s, float *result) {
 
 // Converts this string to an int. Method #1 assumes valid formatting, method #2 returns
 // whether the data is correctly formatted (and in range), and gives the value via *result.
-// *IntFormat* = 0 | (-) NonZeroDigit Digit*
-
+//  *IntFormat* = Digit* | - NonZeroDigit Digit*
+// Note this allows leading zeroes on positive numbers.
 int ToInt(const string &s, int base) {
   int result;
   ASSERT(ToInt(s, &result, base));

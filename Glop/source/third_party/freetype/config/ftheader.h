@@ -719,7 +719,7 @@
    */
 #ifdef FT2_BUILD_LIBRARY
 #define  FT_INTERNAL_INTERNAL_H  <freetype/internal/internal.h>
-#include FT_INTERNAL_INTERNAL_H
+#include "../internal/internal.h"
 #endif /* FT2_BUILD_LIBRARY */
 
 

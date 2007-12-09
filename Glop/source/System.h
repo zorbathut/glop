@@ -36,12 +36,12 @@ class System {
   // Returns the number of milliseconds that have elapsed since the program began.
   int GetTime();
 
-  // Returns the number of times Think has finished executed since the program began.
+  // Returns the number of times Think has finished executing since the program began.
   int GetFrameCount() const {return frame_count_;}
 
   // Causes the current thread to give up context and sleep for the given number of milliseconds.
-  // During this time, it will cause 0 load on the CPU. If no time is supplied for Sleep, it chooses
-  // one automatically that should be compatible with the current max frame rate.
+  // During this time, it will cause 0 load on the CPU. If no time is supplied for Sleep, it
+  // sleeps for a fraction of the desired frame speed.
   void Sleep(int t);
   void Sleep() {
     Sleep(max_fps_ == 0? 0 : (250 / max_fps_));
@@ -65,8 +65,8 @@ class System {
   // set to restrict the list to only contain resolutions with at least a certain size.
   vector<pair<int, int> > GetFullScreenModes(int min_width = 640, int min_height = 480);
 
-  // Returns the main window for this Glop program. This can also be gotten via the window() static
-  // method (see GlopWindow.h).
+  // Returns the main window for this Glop program. This can also be gotten via the gWindow global
+  // variable (see GlopWindow.h).
   GlopWindow *window() {return window_;}
   
   // Texture loading
@@ -130,14 +130,35 @@ class System {
   LightSetId AddFontRef(LightSetId outline_id, int height);
   void ReleaseFontRef(LightSetId font_id) {fonts_[font_id].ref_count--;}
 
-  // Returns the width of a single character in the given font. If count_offset == true, the width
-  // includes pixels that extends left of x = 0. Otherwise, these pixels are ignored.
-  int GetCharWidth(LightSetId font_id, char ch, bool count_offset) const;
+  // Font metrics.
+  //  - GetCharX1 and GetCharX1 return the leftmost and rightmost pixel location for the given
+  //    character relative to its "position". GetCharX1 can be negative.
+  //  - GetCharDx returns hows far right we move after printing the given character.
+  //  - GetCharWidth returns the pixel "width" of a single character - namely how many pixels across
+  //    are reserved for it. Since characters can essentially overlap horizontally (e.g. with
+  //    italics), this is not the same thing as GetCharX2 - GetCharX1 + 1. The result is
+  //    calculated differently for the first and last characters in a line of text, where we need to
+  //    ensure we capture overhang outside the normal reserved area.
+  //  - GetTextWidth reserves the amount of horizontal space reserved for a line of text. This is
+  //    equivalent to summing GetCharWidth with is_first_char and is_last_char set for the first
+  //    and last character respectively.
+  int GetCharX1(LightSetId font_id, char ch) const {
+    return fonts_[font_id].char_start_x[ch - kFirstFontCharacter];
+  }
+  int GetCharX2(LightSetId font_id, char ch) const {
+    return fonts_[font_id].char_start_x[ch - kFirstFontCharacter] +
+      fonts_[font_id].char_w[ch - kFirstFontCharacter] - 1;
+  }
+  int GetCharDx(LightSetId font_id, char ch) const {
+    return fonts_[font_id].char_dx[ch - kFirstFontCharacter];
+  }
+  int GetCharWidth(LightSetId font_id, char ch, bool is_first_char, bool is_last_char) const;
+  int GetTextWidth(LightSetId font_id, const string &text) const;
 
   // A convenience function that returns the width of a line of text in the given font. This is
   // equivalent to adding GetCharWidth for each character with count_offset true for the first
   // character, and false otherwise.
-  int GetTextWidth(LightSetId font_id, const string &text) const;
+  //int GetTextWidth(LightSetId font_id, const string &text) const;
 
   // Returns the height of a line of text in the given font. If count_overhang == true, the height
   // includes pixels that might be generated below the base-line (e.g. the bottom part of a 'p').

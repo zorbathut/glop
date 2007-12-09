@@ -13,11 +13,6 @@
 #undef CreateWindow  // Stupid Microsoft and its stupid macros
 #undef GetCharWidth
 #endif
-#ifdef MACOSX
-#include <OpenGl/gl.h>
-#include <OpenGl/glu.h>
-#endif
-
 
 // Other includes
 #include "Base.h"

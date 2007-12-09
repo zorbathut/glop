@@ -16,7 +16,7 @@ using namespace std;
 
 // Libraries
 #ifndef GLOP_LIB_DIR                                       // Overridable glop library location
-#define GLOP_LIB_DIR "../glop/winlib/"
+#define GLOP_LIB_DIR "../Glop/Win32/lib/"
 #endif
 #pragma comment(lib, "opengl32.lib")                       // OpenGl key functions
 #pragma comment(lib, "glu32.lib")                          // " "
@@ -155,6 +155,12 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
   // Pass on control to Glop
 	return GlopInternalMain(argnum, argv);
+}
+
+int main(int argnum, char **argv) {
+  timeBeginPeriod(1);
+  QueryPerformanceFrequency(&gTimerFrequency);
+  return GlopInternalMain(argnum, argv);
 }
 
 // Logic functions

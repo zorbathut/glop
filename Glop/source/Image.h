@@ -17,7 +17,7 @@
 class BinaryFileReader;
 class Color;
 
-// Texture class definition
+// Image class definition
 class Image {
  public:
   // Load an image from a file.
@@ -27,6 +27,8 @@ class Image {
   //           of bg_tolerance from bg_color are made transparent. Formally: each pixel is taken
   //           as (r,g,b) with r,g,b between 0 and 255. It's distance from bg_color is the sum of
   //           the red difference, the green difference, and the blue difference.
+  // Format 3: The image is a rescaled version of the given image. This is particularly useful for
+  //           icons.
   // On error, 0 is returned.
   static Image *Load(BinaryFileReader reader, bool force_alpha = false);
   static Image *Load(BinaryFileReader reader, const Color &bg_color, int bg_tolerance);

@@ -19,8 +19,8 @@
 #ifndef _FT_GASP_H_
 #define _FT_GASP_H_
 
-#include <ft2build.h>
-#include FT_FREETYPE_H
+#include "../ft2build.h"
+#include "freetype.h"
 
   /***************************************************************************
    *

@@ -22,8 +22,7 @@
 //   - KeyRepeat: A key has been held down for a long period of time, and a pseudo-key press is
 //                registered. Similar to text editors that detect key presses while a key is held
 //                down.
-//   - KeyRelease: A key has gone from down to up. See also KeyReleaseDefocus.
-//   - KeyReleaseDefocus: A key has been marked as up because the GlopWindow is no longer in focus.
+//   - KeyRelease: A key has gone from down to up.
 // The KeyListener can then perform any logic it desires, and during this time, the Input class can
 // be queried for the input state as of the keypress. Note: this mechanism is still potentially
 // imperfect. The Glop Os implementation is only required to synch up keyboard presses with each
@@ -258,13 +257,12 @@ inline GlopKey GetJoystickButton(int joystick, int button) {
 //
 // See comment at the top of the file.
 struct KeyEvent {
-  enum Type {Nothing, Release, ReleaseDefocus, Press, RepeatPress, DoublePress};
+  enum Type {Nothing, Release, Press, RepeatPress, DoublePress};
   KeyEvent(const GlopKey &_key, Type type): key(_key), type_(type) {}
 
   GlopKey key;
   bool IsNothing() const {return type_ == Nothing;}
-  bool IsRelease() const {return type_ == Release || type_ == ReleaseDefocus;}
-  bool IsReleaseDefocus() const {return type_ == ReleaseDefocus;}
+  bool IsRelease() const {return type_ == Release;}
   bool IsPress() const {return type_ != Release && type_ != Nothing;}
   bool IsNonRepeatPress() const {return type_ == Press || type_ == DoublePress;}
   bool IsRepeatPress() const {return type_ == RepeatPress;}
@@ -390,6 +388,8 @@ class Input {
                                  bool accept_motion = false);
 
  private:
+  int GetMinDownTime(const GlopKey &key);
+
   // Interface to GlopWindow
   friend class GlopWindow;
   Input(GlopWindow *window);

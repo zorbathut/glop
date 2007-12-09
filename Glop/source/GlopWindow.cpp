@@ -7,14 +7,13 @@
 #include "OpenGl.h"
 #include "Os.h"
 #include "System.h"
+#include <set>
 
 // Constants
 const char *const kDefaultTitle = "Glop Window";
 
-// Static accessor convenience method
-GlopWindow *window() {
-  return gSystem->window();
-}
+// Globals
+GlopWindow *gWindow = 0;
 
 // Window mutators
 // ===============
@@ -143,7 +142,7 @@ void GlopWindow::SetFrameJustify(LightSetId id, float horz_justify, float vert_j
 GlopFrame *GlopWindow::RemoveFrameNoDelete(LightSetId id) {
   return frame_->RemoveChildNoDelete(id);
 }
-LightSetId GlopWindow::RemoveFrame(LightSetId id) {return frame_->RemoveChild(id);}
+void GlopWindow::RemoveFrame(LightSetId id) {frame_->RemoveChild(id);}
 void GlopWindow::ClearFrames() {frame_->ClearChildren();}
 
 // Internal logic
@@ -209,8 +208,13 @@ void GlopWindow::Think(int dt) {
     glViewport(0, 0, width, height);
     frame_->OnWindowResize(width, height);
   }
+
+  // Handle focus
   bool focus_changed;
   Os::GetWindowFocusState(os_data_, &is_in_focus_, &focus_changed);
+  if (focus_stack_[focus_stack_.size() - 1] != 0 &&
+      focus_stack_[focus_stack_.size() - 1]->IsInFocus() != is_in_focus_)
+    focus_stack_[focus_stack_.size() - 1]->SetIsInFocus(is_in_focus_);
   is_minimized_ = Os::IsWindowMinimized(os_data_);
   if (!is_full_screen_)
     Os::GetWindowPosition(os_data_, &windowed_x_, &windowed_y_);
@@ -237,7 +241,7 @@ void GlopWindow::Think(int dt) {
                           ping->GetFrame()->GetY() - parent->GetY() + y1,
                           ping->GetFrame()->GetX() - parent->GetX() + x2,
                           ping->GetFrame()->GetY() - parent->GetY() + y2,
-                          ping->GetIsCentered());
+                          ping->IsCentered());
     }
     delete ping;
     id = ping_list_.RemoveItem(id);
@@ -276,47 +280,88 @@ void GlopWindow::UnregisterAllPings(GlopFrame *frame) {
 
 // Updates focus for the current layer based on a new key event.
 void GlopWindow::OnKeyEvent(const KeyEvent &event, int dt) {
-  // Make sure the layer is non-empty and the current focus frame might give up focus
-  FocusFrame *focus_frame = focus_stack_[focus_stack_.size() - 1];
-  if (focus_frame == 0 || (event.IsNonRepeatPress() && focus_frame->IsFocusKeeper(event)))
-    goto done;
-
-  // Handle focus magnets
-  FocusFrame *frame = focus_frame->next_;
-  if (event.IsNonRepeatPress())
-  while (frame != focus_frame) {
-    if (frame->IsFocusMagnet(event)) {
-      DemandFocus((int)focus_stack_.size() - 1, frame);
-      goto done;
-    }
-    frame = frame->next_;
-  }
-
-  // Handle tabbing
-  if (event.IsPress() && event.key == '\t' && !input()->IsKeyDownNow(kKeyLeftAlt) &&
-      !input()->IsKeyDownNow(kKeyRightAlt) && !input()->IsKeyDownNow(kKeyLeftControl) &&
-      !input()->IsKeyDownNow(kKeyRightControl)) {
-    if (input()->IsKeyDownNow(kKeyLeftShift) || input()->IsKeyDownNow(kKeyRightShift))
-      DemandFocus((int)focus_stack_.size() - 1, focus_frame->prev_);
-    else
-      DemandFocus((int)focus_stack_.size() - 1, focus_frame->next_);
-  }
+  int layer = int(focus_stack_.size()) - 1;
+  FocusFrame *focus_frame = focus_stack_[layer], *frame;
+  if (focus_frame == 0)
+    return;
 
   // Handle mouse clicks
   if (event.IsNonRepeatPress() && event.key.IsMouseKey() && !event.key.IsMouseMotion()) {
-    frame = focus_frame->next_;
+    // Find all clicked frames
+    vector<FocusFrame*> clicked_frames;
+    set<FocusFrame*> parent_frames;
+    frame = focus_frame;
     do {
       if (frame->IsPointVisible(input()->GetMouseX(), input()->GetMouseY())) {
-        DemandFocus((int)focus_stack_.size() - 1, frame);
-        goto done;
+        clicked_frames.push_back(frame);
+        parent_frames.insert(frame->GetParent()->GetFocusFrame());
       }
       frame = frame->next_;
     } while (frame != focus_frame);
+
+    // Remove frames that are parents of others
+    vector<FocusFrame*> candidates;
+    for (int i = 0; i < (int)clicked_frames.size(); i++)
+    if (!parent_frames.count(clicked_frames[i]))
+      candidates.push_back(clicked_frames[i]);
+
+    // Otherwise just take a generic candidate
+    if (candidates.size() > 0) {
+      DemandFocus(layer, candidates[0], true);
+      focus_frame = candidates[0];
+    }
+    focus_frame->OnKeyEvent(event, dt);
+    goto done;
   }
 
-  // Pass the key event onto our frames
+  // Pass the event to the focus frame, and see if it processes the event
+  frame = focus_frame;
+  for (frame = focus_frame; frame != 0; frame = frame->GetParent()->GetFocusFrame())
+  if (frame->OnKeyEvent(event, dt))
+    goto done;
+  
+  // Handle focus magnets - note that a frame might still have a key as a focus magnet even if it
+  // does not process it. We do not switch focus in this case.
+  if (event.IsNonRepeatPress()) {
+    for (frame = focus_frame; frame != 0; frame = frame->GetParent()->GetFocusFrame())
+    if (frame->IsFocusMagnet(event))
+      goto done;
+    for (frame = focus_frame->next_; frame != focus_frame; frame = frame->next_)
+    if (frame->IsFocusMagnet(event)) {
+      DemandFocus(layer, frame, true);
+      frame->OnKeyEvent(event, dt);
+      goto done;
+    }
+  }
+
+  // Handle tabbing - note that we prevent tabbing to focus frames that have other focus frames
+  // as children (e.g. a scrolling frame with a button child).
+  if (event.IsPress() && event.key == '\t' && !input()->IsKeyDownNow(kKeyLeftAlt) &&
+      !input()->IsKeyDownNow(kKeyRightAlt) && !input()->IsKeyDownNow(kKeyLeftControl) &&
+      !input()->IsKeyDownNow(kKeyRightControl)) {
+    frame = focus_frame;
+    while (1) {
+      if (input()->IsKeyDownNow(kKeyLeftShift) || input()->IsKeyDownNow(kKeyRightShift))
+        frame = frame->prev_;
+      else
+        frame = frame->next_;
+      bool is_parent = false;
+      for (FocusFrame *temp = frame->next_; temp != frame; temp = temp->next_)
+      if (temp->GetParent()->GetFocusFrame() == frame)
+        is_parent = true;
+      if (!is_parent)
+        break;
+    }
+    if (frame != focus_frame)
+      DemandFocus((int)focus_stack_.size() - 1, frame, true);
+  } else {
+    focus_frame->OnKeyEvent(event, dt);
+  }
+
+  // Mark the focus as no longer gained
 done:;
-  frame_->OnKeyEvent(event, dt);
+  if (focus_stack_[focus_stack_.size() - 1] != 0)
+    focus_stack_[focus_stack_.size() - 1]->is_gaining_focus_ = false;
 }
 
 // Adds or removes a FocusFrame to the topmost focus layer. This includes setting focus, and
@@ -326,7 +371,7 @@ int GlopWindow::RegisterFocusFrame(FocusFrame *frame) {
   if (cur_frame == 0) {
     focus_stack_[focus_stack_.size() - 1] = frame;
     frame->prev_ = frame->next_ = frame;
-    frame->SetIsInFocus(true);
+    frame->SetIsInFocus(is_in_focus_);
   } else {
     frame->next_ = cur_frame;
     frame->prev_ = cur_frame->prev_;
@@ -342,19 +387,22 @@ void GlopWindow::UnregisterFocusFrame(int layer, FocusFrame *frame) {
     FocusFrame *new_frame = (frame->prev_ == focus_stack_[layer]? 0 : frame->prev_);
     focus_stack_[layer] = new_frame;
     if (new_frame != 0)
-      new_frame->SetIsInFocus(true);
+      new_frame->SetIsInFocus(is_in_focus_);
   }
   frame->next_->prev_ = frame->prev_;
   frame->prev_->next_ = frame->next_;
 }
 
 // Sets the given frame to be the active frame on the given layer. Focus is updated if necessary.
-void GlopWindow::DemandFocus(int layer, FocusFrame *frame) {
+void GlopWindow::DemandFocus(int layer, FocusFrame *frame, bool update_is_gaining_focus) {
   if (focus_stack_[layer] == frame)
     return;
   if (layer == focus_stack_.size() - 1)
     focus_stack_[layer]->SetIsInFocus(false);
   focus_stack_[layer] = frame;
-  if (layer == focus_stack_.size() - 1)
-    frame->SetIsInFocus(true);
+  if (layer == focus_stack_.size() - 1) {
+    if (update_is_gaining_focus)
+      frame->is_gaining_focus_ = true;
+    frame->SetIsInFocus(is_in_focus_);
+  }
 }

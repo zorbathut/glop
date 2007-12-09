@@ -5,7 +5,7 @@
 #include "Input.h"
 #include "OpenGl.h"
 #include "Os.h"
-#include "freetype/ftglyph.h"
+#include "third_party/freetype/ftglyph.h"
 #include <algorithm>
 
 // Globals
@@ -13,13 +13,11 @@ System *gSystem = 0;
 
 // Main function. Registers an at-exit clause, and then transfers to GlopMain. This is called by
 // the real main function contained in Os___.cpp.
-//extern int GlopMain(int, char**);
-// TODO(jwills): Deal with this stuff
+extern int GlopMain(int, char**);
 int GlopInternalMain(int argc, char **argv) {
   gSystem = new System();
   atexit(System::ShutDown);
-  return 0;
-//  return GlopMain(argc, argv);
+  return GlopMain(argc, argv);
 }
 
 // Internal logic - see System.h.
@@ -200,7 +198,7 @@ LightSetId System::AddFontRef(LightSetId outline_id, int height) {
   result_font.gl_id = 0;
   result_font.display_list_base = 0;
   bool error = false;               // Has an error occurred?
-  int miny = 1000, maxy = -1000;    // What are the font vertical extents? Used to find its height
+  int max_y = -10000;               // What are the font vertical extents? Used to find its height
   FT_Face face = (FT_Face)font_outlines_[outline_id].face;
   FT_BitmapGlyph glyphs[kNumFontCharacters];
   memset(glyphs, 0, sizeof(FT_BitmapGlyph)*kNumFontCharacters);
@@ -227,14 +225,13 @@ LightSetId System::AddFontRef(LightSetId outline_id, int height) {
       glyphs[index] = (FT_BitmapGlyph)glyph;
       result_font.char_start_x[index] = glyphs[index]->left;
       result_font.char_start_y[index] = height - glyphs[index]->top;
-      miny = min(miny, (int)result_font.char_start_y[index]);
-      maxy = max(maxy, (int)result_font.char_start_y[index] + glyphs[index]->bitmap.rows);
+      max_y = max(max_y, (int)result_font.char_start_y[index] + glyphs[index]->bitmap.rows);
       result_font.char_dx[index] = (short)(face->glyph->advance.x / 64);
       result_font.char_w[index] = glyphs[index]->bitmap.width;
       result_font.char_h[index] = glyphs[index]->bitmap.rows;
     }
   }
-  result_font.full_height = maxy - miny;
+  result_font.full_height = max_y;
 
   // If everything worked create the font
   if (!error) {
@@ -308,18 +305,19 @@ restart:;
   }
 }
 
-int System::GetCharWidth(LightSetId font_id, char ch, bool count_offset) const {
-  int w = fonts_[font_id].char_dx[ch-kFirstFontCharacter];
-  if (count_offset)
-    return w + fonts_[font_id].char_start_x[ch-kFirstFontCharacter];
-  else
-    return w;
+int System::GetCharWidth(LightSetId font_id, char ch, bool is_first_char, bool is_last_char) const {
+  int offset = ch - kFirstFontCharacter, result = fonts_[font_id].char_dx[offset];
+  if (is_last_char)
+    result = max(result, fonts_[font_id].char_w[offset] + fonts_[font_id].char_start_x[offset]);
+  if (is_first_char)
+    result -= fonts_[font_id].char_start_x[offset];
+  return result;
 }
 
 int System::GetTextWidth(LightSetId font_id, const string &text) const {
-  int total_width = 0;
+  int total_width = 0, len = (int)text.size();
   for (int i = 0; i < (int)text.size(); i++)
-    total_width += GetCharWidth(font_id, text[i], i == 0);
+    total_width += GetCharWidth(font_id, text[i], i == 0, i == len - 1);
   return total_width;
 }
 
@@ -327,7 +325,7 @@ int System::GetTextWidth(LightSetId font_id, const string &text) const {
 // =============================
 
 System::System()
-: window_(new GlopWindow()),
+: window_(gWindow = new GlopWindow()),
   max_fps_(100),
   frame_count_(0),
   start_time_(Os::GetTime()),
@@ -385,7 +383,7 @@ void System::GlRegisterTexture(LightSetId id) {
 
   // Fix the texture settings
   glEnable(GL_TEXTURE_2D);
-  glGenTextures(1, (GLuint*)&textures_[id].gl_id);
+  glGenTextures(1, &textures_[id].gl_id);
   glBindTexture(GL_TEXTURE_2D, textures_[id].gl_id);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, 
                               kFilterType[textures_[id].mag_filter]);
@@ -408,7 +406,7 @@ void System::GlRegisterTexture(LightSetId id) {
 
 void System::GlUnregisterTexture(LightSetId id) {
   ASSERT(textures_[id].gl_id != 0);
-  glDeleteTextures(1, (GLuint*)&textures_[id].gl_id);
+  glDeleteTextures(1, &textures_[id].gl_id);
   textures_[id].gl_id = 0;
 }
 
@@ -416,15 +414,12 @@ void System::GlUnregisterTexture(LightSetId id) {
 // =======================
 // 
 // See Interface to GlopWindow above.
-
-int reg_count = 0;
 void System::GlRegisterFont(LightSetId id) {
-  reg_count++;
   ASSERT(fonts_[id].gl_id == 0);
 
   // Register the underlying texture
   glEnable(GL_TEXTURE_2D);
-  glGenTextures(1, (GLuint*)&fonts_[id].gl_id);
+  glGenTextures(1, &fonts_[id].gl_id);
   glBindTexture(GL_TEXTURE_2D, fonts_[id].gl_id);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
@@ -464,10 +459,9 @@ void System::GlRegisterFont(LightSetId id) {
 }
 
 void System::GlUnregisterFont(LightSetId id) {
-  reg_count--;
   ASSERT(fonts_[id].gl_id != 0);
   glDeleteLists(fonts_[id].display_list_base, kLastFontCharacter+1);
-  glDeleteTextures(1, (GLuint*)&fonts_[id].gl_id);
+  glDeleteTextures(1, &fonts_[id].gl_id);
   fonts_[id].gl_id = 0;
   fonts_[id].display_list_base = 0;
 }

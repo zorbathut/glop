@@ -61,6 +61,7 @@ void __LogfObject::__Logf(const char *message, ...) {
 
 // Error-handling utilities
 // ========================
+
 void DisplayMessage(const string &title, const string &message) {
   Os::DisplayMessage(title, message);
 }

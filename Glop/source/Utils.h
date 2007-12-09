@@ -7,6 +7,7 @@
 // Includes
 #include "Base.h"
 #include <stdarg.h>
+#include <vector>
 
 // Format function that takes a variable argument parameter. Functions that wish to use an
 // interface similar to printf should use this.
@@ -27,5 +28,29 @@ int ToInt(const string &s, int base = 10);
 bool ToInt(const string &s, int *result, int base = 10);
 inline short ToShort(const string &s, int base = 10) {return short(ToInt(s, base));}
 bool ToShort(const string &s, short *result, int base = 10);
+
+// Binary search utilities. Assumes that a list is ordered from least to greatest. BSFindLowerBound
+// finds the largest index i such that v[i] <= target, or -1 if there is no such index. BSFindMatch
+// finds the largest index i such that v[i] == target, or -1 if there is no such index.
+template<class T> int BSFindMatch(const vector<T> &v, const T &target) {
+  int i = BSFindLowerBound(v, target);
+  if (i == -1 || v[i] != target)
+    return -1;
+  else
+    return i;
+}
+template<class T> int BSFindLowerBound(const vector<T> &v, const T &target) {
+  int lb = 0, ub = (int)v.size() - 1;
+  if (v[lb] > target)
+    return -1;
+  while (lb < ub) {
+    int i = (lb + ub + 1) / 2;
+    if (v[i] > target)
+      ub = i - 1;
+    else
+      lb = i;
+  }
+  return lb;
+}
 
 #endif // GLOP_UTILS_H__
