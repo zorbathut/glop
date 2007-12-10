@@ -4,6 +4,8 @@
 #include "../OpenGl.h"
 #include <cmath>
 
+extern GlopWindow* gWindow;
+
 // ViewPoint
 // =========
 
@@ -104,7 +106,7 @@ void Camera::Activate(int x, int y, int w, int h) {
 	glMatrixMode(GL_PROJECTION);
 	glPushMatrix();
 	glLoadIdentity();
-  glViewport(x, window()->GetHeight() - y - h, w, h);
+  glViewport(x, gWindow->GetHeight() - y - h, w, h);
 	glFrustum(-near_width, near_width, -near_height, near_height, near_plane_, far_plane_);
 
 	// Push and set the modelview matrix (converted to right-hand coordinates)
@@ -150,7 +152,7 @@ void Camera::Deactivate() {
 	glDisable(GL_FOG);
 	glDepthMask(false);
 	glDisable(GL_DEPTH_TEST);
-	glViewport(0, 0, window()->GetWidth(), window()->GetHeight());   
+	glViewport(0, 0, gWindow->GetWidth(), gWindow->GetHeight());   
   front_normal_ = back_normal_ = top_normal_ = bottom_normal_
                 = right_normal_ = left_normal_ = Vec3();
 }

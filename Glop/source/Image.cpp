@@ -144,6 +144,8 @@ Image *Image::LoadBmp(BinaryFileReader reader, bool force_alpha) {
   const int kRgb = 0;
   const int kRle8 = 1;
   const int kRle4 = 2;
+  unsigned int rmask = 0, gmask = 0, bmask = 0, amask = 0;
+  unsigned int rshift = 1, gshift = 1, bshift = 1, ashift = 1;
 
   // Variables - these must all be defined up here so that we can goto error
   Image *result = 0;                        // The return value
@@ -190,8 +192,6 @@ Image *Image::LoadBmp(BinaryFileReader reader, bool force_alpha) {
   int new_bpp = (bpp == 32? 32 : 24);
 
   // Read the color masks if they exist
-  unsigned int rmask = 0, gmask = 0, bmask = 0, amask = 0;
-  unsigned int rshift = 1, gshift = 1, bshift = 1, ashift = 1;
 	switch (compression) {
 		case kRgb:
 			// If there are no masks, use defaults

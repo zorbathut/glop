@@ -76,11 +76,6 @@ class Os {
   // The OsWindowData object should be deleted.
   static void DestroyWindow(OsWindowData *window);
 
-  // Sets the window as the current OpenGL context.  All rendering done after this call will be
-  // applied to this window
-  // TODO(jwills): SetCurrentContext isn't implemented yet on Win32Glop
-  static void SetCurrentContext(OsWindowData* window);
-
   // Returns whether the given window has been minimized.
   static bool IsWindowMinimized(const OsWindowData *window);
 
@@ -116,7 +111,7 @@ class Os {
   //  - is_num_lock_set and is_caps_lock_set should be filled with the current keyboard settings.
   //  - cursor_x and cursor_y should be filled with the screen (i.e., not window) coordinates for
   //    the mouse cursor.
-  //  - mouse_dx and mouse_dx should be filled with the number of mickeys that the mouse has moved
+  //  - mouse_dx and mouse_dy should be filled with the number of mickeys that the mouse has moved
   //    since the last call in the x and y direction (right and down are considered positive). This
   //    should work even if the cursor is at the edge of the screen.
   //  - State changes for all keys other than mouse motion should be returned in the
@@ -137,6 +132,7 @@ class Os {
                                     int *mouse_dx, int *mouse_dy);
 
   // Warps the mouse cursor to the given screen coordinates (NOT window coordinates).
+  // TODO(jwills): Should this work even when the application does not have focus?
   static void SetMousePosition(int x, int y);
 
   // Switches the mouse cursor to be visible/invisible. Glop will ensure that if the cursor leaves
@@ -192,6 +188,12 @@ class Os {
   // Switches Open Gl buffers so that all rendering to the back buffer now appears on the screen.
   // TODO(jwills): Should this just be done in the Think() method?
   static void SwapBuffers(OsWindowData *window);
+
+  // Sets the window as the current OpenGL context.  All rendering done after this call will be
+  // applied to this window
+  // TODO(jwills): SetCurrentContext isn't implemented yet on Win32Glop
+  static void SetCurrentContext(OsWindowData* window);
+
 };
 
 #endif // GLOP_Os_H__

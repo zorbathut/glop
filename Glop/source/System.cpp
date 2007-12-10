@@ -11,14 +11,16 @@
 // Globals
 System *gSystem = 0;
 
+// TODO(anyone): This needs to change so that to use glop you call GlopInit() and periodically call
+// GlopThink().
 // Main function. Registers an at-exit clause, and then transfers to GlopMain. This is called by
 // the real main function contained in Os___.cpp.
-extern int GlopMain(int, char**);
-int GlopInternalMain(int argc, char **argv) {
-  gSystem = new System();
-  atexit(System::ShutDown);
-  return GlopMain(argc, argv);
-}
+//extern int GlopMain(int, char**);
+//int GlopInternalMain(int argc, char **argv) {
+//  gSystem = new System();
+//  atexit(System::ShutDown);
+//  return GlopMain(argc, argv);
+//}
 
 // Internal logic - see System.h.
 int System::Think() {

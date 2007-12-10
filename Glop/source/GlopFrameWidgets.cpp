@@ -272,7 +272,8 @@ bool FancyTextFrame::ParseNextCharacter(const string &s, ParseStatus *status, ch
   // Handle tags
   while (s[status->pos] == '\1') {
     // Read until the end of the tag
-    for (int pos2 = status->pos+1; s[pos2] != 0 && s[pos2] != '\1'; pos2++);
+    int pos2;
+    for (pos2 = status->pos+1; s[pos2] != 0 && s[pos2] != '\1'; pos2++);
     if (pos2 == status->pos+1 || s[status->pos] == 0)
       return false;
     string tag = s.substr(status->pos + 1, pos2 - status->pos -1);

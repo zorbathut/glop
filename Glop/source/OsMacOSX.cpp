@@ -4,6 +4,7 @@
 #include <vector>
 #include <string>
 #include <set>
+#include <map>
 using namespace std;
 
 #include <Carbon/Carbon.h>
@@ -17,6 +18,9 @@ const int kEventGlopBreak = 0;
 const int kEventGlopToggleFullScreen = 'Flsc';
 
 static set<OsWindowData*> all_windows;
+
+// BUG(jwills): With multiple windows open, you can get a gl context to draw onto the header bar of
+// a window by moving it around a bunch.  Why on earth does this happen?
 
 struct OsWindowData {
   OsWindowData() :
@@ -56,8 +60,10 @@ OSStatus GlopEventHandler(EventHandlerCallRef next_handler, EventRef the_event, 
     result = noErr;
   }
   if (event_class == kEventClassApplication && event_kind == kEventAppQuit) {
-    if (ok_to_exit)
+    if (ok_to_exit) {
       exit(0);
+      result = noErr;
+    }
   }
   if (event_class == kEventClassCommand) {
     if (event_kind == kEventProcessCommand) {
@@ -73,7 +79,49 @@ OSStatus GlopEventHandler(EventHandlerCallRef next_handler, EventRef the_event, 
       if (command.commandID == kEventGlopToggleFullScreen) {
         printf("Toggle\n");
         GlopToggleFullScreen();
+        result = noErr;
       }
+    }
+  }
+  if (event_class == kEventClassKeyboard) {
+    if (event_kind == kEventRawKeyDown) {
+      UInt32 key;
+    	GetEventParameter(
+    	    the_event,
+    	    kEventParamKeyCode,
+    	    typeUInt32,
+    	    NULL,
+    	    sizeof(key),
+    	    NULL,
+          &key);
+      printf("Key: %d\t%x\n", key, key);
+    }
+    if (event_kind == kEventRawKeyModifiersChanged) {
+      UInt32 modifiers;
+    	GetEventParameter(
+    	    the_event,
+    	    kEventParamKeyModifiers,
+    	    typeUInt32,
+    	    NULL,
+    	    sizeof(modifiers),
+    	    NULL,
+          &modifiers);
+      printf("Modifiers: %d\t%x\n", modifiers, modifiers);
+      printf("GetCurren: %d\t%x\n", GetCurrentEventKeyModifiers(), GetCurrentEventKeyModifiers());
+      printf("KeyModifs: %d\t%x\n", GetCurrentKeyModifiers(), GetCurrentKeyModifiers());
+    }
+  }
+  if (event_class == kEventClassMouse) {
+    if (event_kind == kEventMouseMoved) {
+      HIPoint point;
+      GetEventParameter(
+        the_event,
+        kEventParamMouseDelta,
+        typeHIPoint,
+        NULL,
+        sizeof(point),
+        NULL,
+        &point);
     }
   }
   return result;
@@ -85,38 +133,57 @@ OSStatus GlopWindowHandler(EventHandlerCallRef next_handler, EventRef the_event,
   int event_kind = GetEventKind(the_event);
   OsWindowData* data = (OsWindowData*)user_data;
   if (event_class == kEventClassWindow) {
-    if (event_kind == kEventWindowResizeCompleted) {
-      GetWindowPortBounds(data->window, &data->bounds);
+    if (event_kind == kEventWindowResizeCompleted || event_kind == kEventWindowBoundsChanged) {
+    	GetEventParameter(
+    	    the_event,
+    	    kEventParamCurrentBounds,
+    	    typeQDRectangle,
+    	    NULL,
+    	    sizeof(data->bounds),
+    	    NULL,
+          &data->bounds);
       Os::SetCurrentContext(data);
 			glViewport(
 			    0,
-			    0,
-			    data->bounds.right - data->bounds.left,
-			    data->bounds.bottom - data->bounds.top);
-        printf("%s: (%d,%d)\n",data->title.c_str(), data->bounds.right-data->bounds.left, data->bounds.bottom - data->bounds.top);
+          0,
+		      data->bounds.left - data->bounds.right,
+          data->bounds.top - data->bounds.bottom);
+      result = noErr;
     }
     if (event_kind == kEventWindowClosed) {
       printf("Destroying window %s\n", data->title.c_str());
       if (!data->full_screen) {
         Os::DestroyWindow(data);
       }
+      result = noErr;
     }
   }
   return result;
 }
 
+map<int,int> glop_key_map;
+
 static UnsignedWide glop_start_time;
 void Os::Init() {
   Microseconds(&glop_start_time);
   EventHandlerUPP handler_upp = NewEventHandlerUPP(GlopEventHandler);
-  EventTypeSpec event_types[3];
+  EventTypeSpec event_types[7];
   event_types[0].eventClass = kEventClassGlop;
   event_types[0].eventKind  = kEventGlopBreak;
   event_types[1].eventClass = kEventClassApplication;
   event_types[1].eventKind  = kEventAppQuit;
   event_types[2].eventClass = kEventClassCommand;
   event_types[2].eventKind  = kEventProcessCommand;
-  InstallApplicationEventHandler(handler_upp, 3, event_types, NULL, NULL);
+  event_types[3].eventClass = kEventClassKeyboard;
+  event_types[3].eventKind  = kEventRawKeyDown;
+  event_types[4].eventClass = kEventClassKeyboard;
+  event_types[4].eventKind  = kEventRawKeyUp;
+  event_types[5].eventClass = kEventClassKeyboard;
+  event_types[5].eventKind  = kEventRawKeyModifiersChanged;
+  event_types[6].eventClass = kEventClassMouse;
+  event_types[6].eventKind  = kEventMouseMoved;
+
+  InstallApplicationEventHandler(handler_upp, 7, event_types, NULL, NULL);
 
   OSStatus err;
   IBNibRef nib_ref = NULL;
@@ -125,6 +192,76 @@ void Os::Init() {
   err = CreateNibReferenceWithCFBundle(bundle, CFSTR("main"), &nib_ref);
   err = SetMenuBarFromNib(nib_ref, CFSTR("MainMenu"));
   DisposeNibReference(nib_ref);
+
+  if (glop_key_map.size() == 0) {
+/*    const GlopKey kKeyF1(129);122
+    const GlopKey kKeyF2(130);120
+    const GlopKey kKeyF3(131);99
+    const GlopKey kKeyF4(132);118
+    const GlopKey kKeyF5(133);96
+    const GlopKey kKeyF6(134);97
+    const GlopKey kKeyF7(135);98
+    const GlopKey kKeyF8(136);100
+    const GlopKey kKeyF9(137);101
+    const GlopKey kKeyF10(138);109
+    const GlopKey kKeyF11(139);103
+    const GlopKey kKeyF12(140);111
+    const GlopKey kKeyF13(133);105
+    const GlopKey kKeyF14(134);107
+    const GlopKey kKeyF15(135);113
+    const GlopKey kKeyF16(136);106
+    const GlopKey kKeyF17(137);64
+    const GlopKey kKeyF18(138);79
+    const GlopKey kKeyF19(139);80
+    const GlopKey kKeyCapsLock(150);
+    const GlopKey kKeyNumLock(151);
+    const GlopKey kKeyScrollLock(152);
+    const GlopKey kKeyPrintScreen(153);
+    const GlopKey kKeyPause(154);
+    const GlopKey kKeyLeftShift(155);
+    const GlopKey kKeyRightShift(156);
+    const GlopKey kKeyLeftControl(157);
+    const GlopKey kKeyRightControl(158);
+    const GlopKey kKeyLeftAlt(159);
+    const GlopKey kKeyRightAlt(160);
+    const GlopKey kKeyRight(166);
+    const GlopKey kKeyLeft(167);
+    const GlopKey kKeyUp(168);
+    const GlopKey kKeyDown(169);
+    const GlopKey kKeyPadDivide(170);75
+    const GlopKey kKeyPadMultiply(171);67
+    const GlopKey kKeyPadSubtract(172);78
+    const GlopKey kKeyPadAdd(173);69
+    const GlopKey kKeyPadEnter(174);76
+    const GlopKey kKeyPadDecimal(175);65
+    const GlopKey kKeyPadEquals(176);81
+    const GlopKey kKeyPad0(177);82
+    const GlopKey kKeyPad1(178);83
+    const GlopKey kKeyPad2(179);84
+    const GlopKey kKeyPad3(180);85
+    const GlopKey kKeyPad4(181);86
+    const GlopKey kKeyPad5(182);87
+    const GlopKey kKeyPad6(183);88
+    const GlopKey kKeyPad7(184);89
+    const GlopKey kKeyPad8(185);91
+    const GlopKey kKeyPad9(186);92
+    const GlopKey kKeyDelete(190);
+    const GlopKey kKeyHome(191);
+    const GlopKey kKeyInsert(192);
+    const GlopKey kKeyEnd(193);
+    const GlopKey kKeyPageUp(194);
+    const GlopKey kKeyPageDown(195);
+    const GlopKey kMouseUp(291);
+    const GlopKey kMouseRight(292);
+    const GlopKey kMouseDown(293);
+    const GlopKey kMouseLeft(294);
+    const GlopKey kMouseWheelUp(295);
+    const GlopKey kMouseWheelDown(296);
+    const GlopKey kMouseLButton(297);
+    const GlopKey kMouseMButton(298);
+    const GlopKey kMouseRButton(299);
+*/
+  }
 }
 
 void Os::Terminate() {
@@ -147,7 +284,6 @@ void Os::Think() {
 }
 
 void Os::WindowThink(OsWindowData* data) {
-//  CGLFlushDrawable(CGLGetCurrentContext());
   if (data->agl_context == NULL) {
     return;
   }
@@ -217,13 +353,15 @@ void GlopOpenWindow(OsWindowData* data) {
 		  &data->bounds,
 		  &data->window);
 
-  EventTypeSpec event_types[2];
+  EventTypeSpec event_types[3];
   event_types[0].eventClass = kEventClassWindow;
   event_types[0].eventKind  = kEventWindowResizeCompleted;
   event_types[1].eventClass = kEventClassWindow;
   event_types[1].eventKind  = kEventWindowClosed;
+  event_types[2].eventClass = kEventClassWindow;
+  event_types[2].eventKind  = kEventWindowBoundsChanged;
   EventHandlerUPP handler_upp = NewEventHandlerUPP(GlopWindowHandler);
-  InstallWindowEventHandler(data->window, handler_upp, 2, event_types, data, NULL);
+  InstallWindowEventHandler(data->window, handler_upp, 3, event_types, data, NULL);
   GlopCreateAGLContext(data);
 
   Os::SetTitle(data, data->title);
@@ -364,9 +502,22 @@ vector<Os::KeyEvent> Os::PollInput(OsWindowData *window, bool *is_num_lock_set,
 }
 
 void Os::SetMousePosition(int x, int y) {
+  CGPoint point;
+  point.x = x;
+  point.y = y;
+  CGWarpMouseCursorPosition(point);
 }
 
 void Os::ShowMouseCursor(bool is_shown) {
+  if (is_shown) {
+    while (!CGCursorIsVisible()) {
+      CGDisplayShowCursor(kCGDirectMainDisplay);
+    }
+  } else {
+    while (CGCursorIsVisible()) {
+      CGDisplayHideCursor(kCGDirectMainDisplay);
+    }
+  }
 }
 
 void Os::RefreshJoysticks(OsWindowData *window) {
@@ -379,26 +530,55 @@ int Os::GetNumJoysticks(OsWindowData *window) {
 // Threading functions
 // ===================
 
-void Os::StartThread(void(*thread_function)(void *), void *data) {
+#include <pthread.h>
+
+void Os::StartThread(void(*thread_function)(void*), void* data) {
+  pthread_t thread;
+  if (pthread_create(&thread, NULL, (void*(*)(void*))thread_function, data) != 0) {
+    printf("Error forking thread\n");
+  }
 }
 
-OsMutex *Os::NewMutex() {
-	return NULL;
+struct OsMutex {
+  pthread_mutex_t mutex;
+};
+
+OsMutex* Os::NewMutex() {
+  OsMutex* mutex = new OsMutex;
+  pthread_mutex_init(&mutex->mutex, NULL);
+  return mutex;
 }
 
-void Os::DeleteMutex(OsMutex *mutex) {
+void Os::DeleteMutex(OsMutex* mutex) {
+  pthread_mutex_destroy(&mutex->mutex);
+  delete mutex;
 }
 
-void Os::AcquireMutex(OsMutex *mutex) {
+void Os::AcquireMutex(OsMutex* mutex) {
+  pthread_mutex_lock(&mutex->mutex);
 }
 
-void Os::ReleaseMutex(OsMutex *mutex) {
+void Os::ReleaseMutex(OsMutex* mutex) {
+  pthread_mutex_unlock(&mutex->mutex);
 }
 
 // Miscellaneous functions
 // =======================
 
-void Os::DisplayMessage(const string &title, const string &message) {
+void Os::DisplayMessage(const string& title, const string& message) {
+  DialogRef the_item;
+  DialogItemIndex item_index;
+
+  CFStringRef cf_title;
+  cf_title = CFStringCreateWithCString(NULL, title.c_str(), kCFStringEncodingASCII);  
+  CFStringRef cf_message;
+  cf_message = CFStringCreateWithCString(NULL, message.c_str(), kCFStringEncodingASCII);  
+
+  CreateStandardAlert(kAlertStopAlert, cf_title, cf_message, NULL, &the_item);
+  RunStandardAlert(the_item, NULL, &item_index);
+
+  CFRelease(cf_title);
+  CFRelease(cf_message);
 }
 
 // TODO(jwills): Currently we only deal with the main display, decide whether or not we should be
@@ -420,7 +600,7 @@ vector<pair<int, int> > Os::GetFullScreenModes() {
 }
 
 void Os::Sleep(int t) {
-  sleep(t);
+  usleep(t*1000);
 }
 
 int Os::GetTime() {
@@ -430,7 +610,7 @@ int Os::GetTime() {
   return (((unsigned long long)current_time.hi << 32 | current_time.lo) - start_time) / 1000.0;
 }
 
-void Os::SwapBuffers(OsWindowData* window) {
+void Os::SwapBuffers(OsWindowData* data) {
 }
 
 #endif // MACOSX
