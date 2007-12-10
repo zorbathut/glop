@@ -1,8 +1,11 @@
-// TODO:
+// This file is designed as a kind of unit test for Glop. Run it and try the various tests to see
+// that Glop is working correctly.
+
+// TODO(darthur):
+//  - Get a reasonable version of this submitted
 //  - Test window focus tracking testing (minimization, mouse focus)
 //  - Onquit
 //  - LongTextFrame horizontal overhang fix
-//  - Recompute size twice a frame?
 //  - Boxed text prompt frames
 //  - Pinging on text prompt frames.
 //  - Investigate ToX utilities, and their place in PrettyString
@@ -15,6 +18,12 @@
 //  - Scrolling Window: FocusFrame(WindowFrame(ScrollingFrame(MinSizeFrame()))
 //  - Move ScrollingFrame to Base
 //  - Tidy up scrollingframe, buttonframe
+//  - Why does timer test not run at exactly 100fps?
+
+#define _WIN32_WINNT 0x0500
+#include <windows.h>
+#undef CreateWindow
+#include "../Glop/source/Os.h"
 
 // Includes
 #include "../Glop/source/Base.h"
@@ -25,6 +34,8 @@
 #include "../Glop/source/Input.h"
 #include "../Glop/source/System.h"
 #include "../Glop/source/Thread.h"
+
+#include "../Glop/source/OpenGl.h"
 
 // Globals
 Image *gIcon;
@@ -229,9 +240,6 @@ void BuildMainMenu() {
   column->SetCell(4, new TextFrame("5. Threading", kWhite));
   column->SetCell(5, new TextFrame("6. Quit", kWhite));
   gWindow->AddFrame(column, 0.5f, 0.4f, 0.5f, 0.4f);
-/*  gWindow->AddFrame(new ButtonWidget("Test Button Q", 'Q'), 0.5f, 0.4f, 0.5f, 0, 0);
-  gWindow->AddFrame(new ButtonWidget("Test Button W", 'W'), 0.5f, 0.6f, 0.5f, 0, 0);
-  gWindow->AddFrame(new FocusFrame(new SliderWidget(SliderWidget::Horizontal, 100, 1000, 50)), 0.5f, 0.7f, 0.5f, 0, 0);*/
   
   ColFrame *huge_col = new ColFrame(20, kJustifyLeft);
   for (int j = 0; j < 20; j++) {
@@ -249,15 +257,10 @@ void BuildMainMenu() {
   }
   GlopFrame *outer_frame = new ScrollingFrame(huge_col);
   gWindow->AddFrame(new RecSizeFrame(outer_frame, 0.6f, 0.9f), 0.5f, 0.5f, 0.5f, 0.5f);
-  /*StringPromptFrame *s = new StringPromptFrame("Thing #1", 100, kBlack);
-  FocusFrame *f1 = new FocusFrame(new SolidBoxFrame(s, kWhite, kRed));
-  gWindow->AddFrame(f1, 0.5f, 0.4f, 0.5f, 0, 0);
-  StringPromptFrame *s2 = new StringPromptFrame("Thing #2", 100, kBlack);
-  FocusFrame *f2 = new FocusFrame(new SolidBoxFrame(s2, kWhite, kRed));
-  gWindow->AddFrame(f2, 0.5f, 0.6f, 0.5f, 0, 0);*/
 }
 
-int GlopMain(int argc, char **argv) {
+int main(int argc, char **argv) {
+  System::Init();
   gDefaultStyle = new FrameStyle(gSystem->LoadFontOutline("thames.ttf"));
   gIcon = Image::Load("Icon.bmp", kRed, 1);
   BuildMainMenu();
@@ -291,6 +294,5 @@ int GlopMain(int argc, char **argv) {
     }
     gSystem->Think();
   }
-
   return 0;
 }

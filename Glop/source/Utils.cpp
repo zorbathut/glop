@@ -3,6 +3,7 @@
 #include "Base.h"
 #include <stdio.h>
 #include <limits.h>
+
 // Internal function that does a string printf from a vararg.
 string Format(const char *text, va_list arglist) {
   // We do not know how much space is required, so first try with an estimated amount of space.

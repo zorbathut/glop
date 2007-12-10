@@ -14,17 +14,10 @@
 #include <windows.h>
 using namespace std;
 
-// Libraries
-#ifndef GLOP_LIB_DIR                                       // Overridable glop library location
-#define GLOP_LIB_DIR "../Glop/Win32/lib/"
+// Do not show the console window for a console application running in release mode
+#ifdef NDEBUG
+#pragma comment(linker, "/subsystem:\"windows\" /entry:\"mainCRTStartup\"")
 #endif
-#pragma comment(lib, "opengl32.lib")                       // OpenGl key functions
-#pragma comment(lib, "glu32.lib")                          // " "
-#pragma comment(lib, "dinput.lib")                         // DirectInput functions
-#pragma comment(lib, "dxguid.lib")                         // DirectInput keyboard & mouse GUIDs
-#pragma comment(lib, "winmm.lib")                          // Used for timing
-#pragma comment(lib, GLOP_LIB_DIR "freetype235.lib")       // FreeType library for text
-#pragma comment(lib, GLOP_LIB_DIR "jpeg.lib")              // Jpeg-loading library
 
 // Undefines, because Windows sucks
 #undef CreateWindow
@@ -110,58 +103,21 @@ const GlopKey kDIToGlopKeyIndex[] = {0,
   -1, -1, -1, -1, -1,                                      // 250
   -1, -1, -1, -1, -1};
 
-// Function declarations
-extern int GlopInternalMain(int argc, char **argv);
-
 // Globals
 static LARGE_INTEGER gTimerFrequency;
 static map<HWND, OsWindowData*> gWindowMap;
 
-// The true main function - initializes Win32 and then passes control to Glop.
-int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
-  // Parse the WinMain command line into a more usable format. Note that we need to use
-  // GetCommandLine to include the program name.
-	char *cmd_line = GetCommandLine();
-  vector<string> args;
-  int pos = 0;
-  while (cmd_line[pos] != 0) {
-    if (cmd_line[pos] == ' ') {
-      pos++;
-      continue;
-    }
-    string temp;
-    bool in_quotes = false;
-    int end_pos = pos;
-    for (; cmd_line[end_pos] != 0 && (in_quotes || cmd_line[end_pos] != ' '); end_pos++) {
-      if (cmd_line[end_pos] == '"')
-        in_quotes = !in_quotes;
-      else
-        temp += cmd_line[end_pos];
-    }
-    args.push_back(temp);
-    pos = end_pos;
-  }
-  int argnum = (int)args.size();
-  char **argv = new char*[argnum];
-  for (int i = 0; i < argnum; i++) {
-    argv[i] = new char[(int)args[i].size() + 1];
-    strcpy(argv[i], args[i].c_str());
-  }
+// Initialization/Shut down
+// ========================
 
+void Os::Init() {
   // Timer initialization. timeBeginPeriod(1) ensures that Sleep calls return promptly when they
   // are supposed to, and QueryPerformanceFrequency is needed for Os::GetTime.
   timeBeginPeriod(1);
   QueryPerformanceFrequency(&gTimerFrequency);
-
-  // Pass on control to Glop
-	return GlopInternalMain(argnum, argv);
 }
 
-int main(int argnum, char **argv) {
-  timeBeginPeriod(1);
-  QueryPerformanceFrequency(&gTimerFrequency);
-  return GlopInternalMain(argnum, argv);
-}
+void Os::ShutDown() {}
 
 // Logic functions
 // ===============

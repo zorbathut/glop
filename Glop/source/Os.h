@@ -16,8 +16,8 @@
 //     time if desired. Therefore, the Os code in particular should not heavily depend on this.
 // 2. Add the appropriate includes in OpenGl.h.
 
-#ifndef GLOP_Os_H__
-#define GLOP_Os_H__
+#ifndef GLOP_OS_H__
+#define GLOP_OS_H__
 
 // Includes
 #include "Base.h"
@@ -33,11 +33,11 @@ struct OsWindowData;
 // Os class definition
 class Os {
  public:
-   // TODO(jwills): discuss with darthur about how this should be handled.
-   static void Init();
+  // Initializes the Os internals.
+  static void Init();
 
-   // Destroys all glop state, closes any open files, returns screen to original resolution.
-   static void Terminate();
+  // Shuts the Os internals down. This will be called automatically on program exit.
+  static void ShutDown();
 
   // Logic functions
   // ===============
@@ -193,7 +193,6 @@ class Os {
   // applied to this window
   // TODO(jwills): SetCurrentContext isn't implemented yet on Win32Glop
   static void SetCurrentContext(OsWindowData* window);
-
 };
 
-#endif // GLOP_Os_H__
+#endif // GLOP_OS_H__

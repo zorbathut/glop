@@ -11,16 +11,12 @@
 // Globals
 System *gSystem = 0;
 
-// TODO(anyone): This needs to change so that to use glop you call GlopInit() and periodically call
-// GlopThink().
-// Main function. Registers an at-exit clause, and then transfers to GlopMain. This is called by
-// the real main function contained in Os___.cpp.
-//extern int GlopMain(int, char**);
-//int GlopInternalMain(int argc, char **argv) {
-//  gSystem = new System();
-//  atexit(System::ShutDown);
-//  return GlopMain(argc, argv);
-//}
+// Glop initialization
+void System::Init() {
+  Os::Init();
+  gSystem = new System();
+  atexit(System::ShutDown);
+}
 
 // Internal logic - see System.h.
 int System::Think() {
@@ -323,8 +319,8 @@ int System::GetTextWidth(LightSetId font_id, const string &text) const {
   return total_width;
 }
 
-// Interface to GlopInternalMain
-// =============================
+// Setup
+// =====
 
 System::System()
 : window_(gWindow = new GlopWindow()),
@@ -344,6 +340,7 @@ System::~System() {
   delete window_;
   if (free_type_library_ != 0)
     FT_Done_FreeType((FT_Library)free_type_library_);
+  Os::ShutDown();
 }
 
 // Interface to GlopWindow

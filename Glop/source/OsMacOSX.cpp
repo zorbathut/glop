@@ -264,7 +264,7 @@ void Os::Init() {
   }
 }
 
-void Os::Terminate() {
+void Os::ShutDown() {
   // Booya! :-)
 }
 

@@ -8,7 +8,7 @@
 struct OsMutex;
 
 // Thread class definition. This is the basic tool for threading. The user extends the Thread
-// class and overloads the virtual function Run. Once Start is called, the new run function is
+// class and overloads the virtual function Run. Once Start is called, the new Run function is
 // executed in a new thread. Join() can be used to wait for that thread to terminate.
 class Thread {
  public:

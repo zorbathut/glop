@@ -24,6 +24,9 @@ extern System *gSystem;
 // System class definition
 class System {
  public:
+  // Startup. Creates gSystem and does all setup we want. ShutDown is done automatically.
+  static void Init();
+
   // Internal logic - Think must be called exactly once per frame. It returns the number of
   // milliseconds that have elapsed since the previous call. During the call to Think, all
   // KeyHandlers receive OnKeyEvent messages, all GlopFrames perform all their logic, and all
@@ -177,12 +180,10 @@ class System {
   unsigned int GetFontDisplayList(LightSetId id) const {return fonts_[id].display_list_base;}
 
  private:
-  // Interface to GlopInternalMain
-  friend int GlopInternalMain(int, char**);
   System();
-  ~System();
   static void ShutDown() {delete gSystem;}
-
+  ~System();
+  
   // Interface to GlopWindow
   friend class GlopWindow;
   void GlUnregisterAll();
