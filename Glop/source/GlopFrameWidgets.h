@@ -663,7 +663,7 @@ class DefaultButtonRenderer: public ButtonRenderer {
 class AbstractButtonFrame: public PaddedFrame {
  public:
   AbstractButtonFrame(GlopFrame *inner_frame, const ButtonRenderer *renderer)
-  : PaddedFrame(inner_frame, 0), renderer_(renderer), is_enabled_(true),
+  : PaddedFrame(inner_frame, 0), renderer_(renderer),
     is_down_(false), full_press_queued_(false), held_down_queued_(false),
     was_held_down_(false), was_pressed_fully_(false) {
     RecomputePadding();
@@ -677,12 +677,7 @@ class AbstractButtonFrame: public PaddedFrame {
   bool OnKeyEvent(const KeyEvent &event, int dt);
 
   // Button functions
-  virtual void SetIsEnabled(bool is_enabled) {
-    is_enabled_ = is_enabled;
-    if (!is_enabled) SetIsDown(UpNoFullRelease);
-  }
   bool IsDown() const {return is_down_;}
-  bool IsEnabled() const {return is_enabled_;}
   bool WasHeldDown() const {return was_held_down_;}
   bool WasPressedFully() const {return was_pressed_fully_;}
 
@@ -698,8 +693,7 @@ class AbstractButtonFrame: public PaddedFrame {
   void RecomputePadding();
 
   const ButtonRenderer *renderer_;
-  bool is_enabled_,             // Whether the button is reponding 
-       is_down_,                // Is the button currently down? Set by extending class.
+  bool is_down_,                // Is the button currently down? Set by extending class.
        full_press_queued_,      // The next value for was_pressed_fully_. Set in OnKeyEvent.
        held_down_queued_,       // The next value for was_held_down_. Set in OnKeyEvent.
        was_held_down_,          // Was a down event generated this frame? (similar to key down)
@@ -720,10 +714,6 @@ class DefaultButtonFrame: public AbstractButtonFrame {
   bool IsFocusMagnet(const KeyEvent &event) const {return hot_keys_.Find(event.key) != 0;}
 
   // Button functions
-  void SetIsEnabled(bool is_enabled) {
-    AbstractButtonFrame::SetIsEnabled(is_enabled);
-    if (!is_enabled) {down_hot_keys_.Clear(); is_mouse_locked_on_ = false;}
-  }
   LightSetId AddHotKey(const GlopKey &key) {return hot_keys_.InsertItem(key);}
   void RemoveHotKey(LightSetId id) {
     SetIsHotKeyDown(hot_keys_[id], false);
@@ -855,8 +845,12 @@ class SliderFrame: public SingleParentFrame {
               const SliderRenderer *renderer = gDefaultStyle->slider_renderer);
   
   // Hot keys
+  LightSetId AddLargeDecHotKey(const GlopKey &key) {return large_dec_keys_.InsertItem(key);}
+  LightSetId AddLargeIncHotKey(const GlopKey &key) {return large_inc_keys_.InsertItem(key);}
   LightSetId AddDecHotKey(const GlopKey &key) {return dec_button_->AddHotKey(key);}
   LightSetId AddIncHotKey(const GlopKey &key) {return inc_button_->AddHotKey(key);}
+  void RemoveLargeDecHotKey(LightSetId id) {large_dec_keys_.RemoveItem(id);}
+  void RemoveLargeIncHotKey(LightSetId id) {large_inc_keys_.RemoveItem(id);}
   void RemoveDecHotKey(LightSetId id) {dec_button_->RemoveHotKey(id);}
   void RemoveIncHotKey(LightSetId id) {inc_button_->RemoveHotKey(id);}
 
@@ -868,14 +862,17 @@ class SliderFrame: public SingleParentFrame {
 
   // Overloaded functions
   void Think(int dt);
+  bool OnKeyEvent(const KeyEvent &event, int dt);
  protected:
   void RecomputeSize(int rec_width, int rec_height);
+  void OnChildPing(int x1, int y1, int x2, int y2, bool center);
 
  private:
   void Init(Direction direction, int tab_size, int total_size, int position,
             bool has_arrow_hot_keys, int step_size, const SliderRenderer *renderer);
   
   Direction direction_;
+  LightSet<GlopKey> large_dec_keys_, large_inc_keys_;
   DefaultButtonFrame *dec_button_, *inc_button_;
   InnerSliderFrame *inner_slider_;
   const SliderRenderer *renderer_;
@@ -901,8 +898,12 @@ class SliderWidget: public FocusFrame {
                                          position, has_arrow_hot_keys, step_size, renderer)) {}
 
   // Hot keys
+  LightSetId AddLargeDecHotKey(const GlopKey &key) {return slider_->AddLargeDecHotKey(key);}
+  LightSetId AddLargeIncHotKey(const GlopKey &key) {return slider_->AddLargeIncHotKey(key);}
   LightSetId AddDecHotKey(const GlopKey &key) {return slider_->AddDecHotKey(key);}
   LightSetId AddIncHotKey(const GlopKey &key) {return slider_->AddIncHotKey(key);}
+  void RemoveLargeDecHotKey(LightSetId id) {slider_->RemoveLargeDecHotKey(id);}
+  void RemoveLargeIncHotKey(LightSetId id) {slider_->RemoveLargeIncHotKey(id);}
   void RemoveDecHotKey(LightSetId id) {slider_->RemoveDecHotKey(id);}
   void RemoveIncHotKey(LightSetId id) {slider_->RemoveIncHotKey(id);}
 
@@ -915,19 +916,6 @@ class SliderWidget: public FocusFrame {
  private:
   SliderFrame *slider_;
   DISALLOW_EVIL_CONSTRUCTORS(SliderWidget);
-};
-
-///////////////////////////////////////////////////////////////////////////////////////////////////
-// ScrollingFrame
-// ==============
-
-class ScrollingFrame: public FocusFrame {
- public:
-  ScrollingFrame(GlopFrame *frame, bool is_arrow_scrollable = true,
-                 bool is_wheel_scrollable = true,
-                 const SliderRenderer *renderer = gDefaultStyle->slider_renderer);
- private:
-  DISALLOW_EVIL_CONSTRUCTORS(ScrollingFrame);
 };
 
 #endif // GLOP_FRAME_WIDGETS_H__

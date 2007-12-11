@@ -15,12 +15,12 @@ System *gSystem = 0;
 // GlopThink().
 // Main function. Registers an at-exit clause, and then transfers to GlopMain. This is called by
 // the real main function contained in Os___.cpp.
-//extern int GlopMain(int, char**);
-//int GlopInternalMain(int argc, char **argv) {
-//  gSystem = new System();
-//  atexit(System::ShutDown);
-//  return GlopMain(argc, argv);
-//}
+extern int GlopMain(int, char**);
+int GlopInternalMain(int argc, char **argv) {
+  gSystem = new System();
+  atexit(System::ShutDown);
+  return GlopMain(argc, argv);
+}
 
 // Internal logic - see System.h.
 int System::Think() {
