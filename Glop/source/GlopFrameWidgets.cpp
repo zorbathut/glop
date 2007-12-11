@@ -879,8 +879,6 @@ void AbstractButtonFrame::RecomputePadding() {
 
 bool DefaultButtonFrame::OnKeyEvent(const KeyEvent &event, int dt) {
   bool handled_key = false, was_mouse_locked_on = is_mouse_locked_on_;
-  if (!IsEnabled())
-    return false;
   if (event.IsPress() || event.IsRelease()) {
     // Handle enter and hot keys
     bool is_hot_key = (hot_keys_.Find(event.key) != 0) ||
@@ -893,11 +891,11 @@ bool DefaultButtonFrame::OnKeyEvent(const KeyEvent &event, int dt) {
 
     // Handle mouse clicks
     else if (event.key == kMouseLButton && event.IsNonRepeatPress()) {
-      if (event.IsPress())
-        is_mouse_locked_on_ = IsPointVisible(input()->GetMouseX(), input()->GetMouseY());
-      else
-        is_mouse_locked_on_ = false;
+      is_mouse_locked_on_ = IsPointVisible(input()->GetMouseX(), input()->GetMouseY());
       handled_key = true;
+    } else if (event.key == kMouseLButton && event.IsRelease()) {
+      is_mouse_locked_on_ = false;
+      handled_key = false;
     }
   }
 
@@ -906,8 +904,9 @@ bool DefaultButtonFrame::OnKeyEvent(const KeyEvent &event, int dt) {
   } else if (IsPointVisible(input()->GetMouseX(), input()->GetMouseY())) {
     if (is_mouse_locked_on_)
       SetIsDown(was_mouse_locked_on? DownRepeatSoon : Down);
-    else
+    else {
       SetIsDown(UpFullRelease);
+    }
   } else {
     SetIsDown(was_mouse_locked_on? UpNoFullRelease : UpFullRelease);
   }
@@ -1179,13 +1178,35 @@ int SliderFrame::GetTabSize() const {return inner_slider_->GetTabSize();}
 int SliderFrame::GetTotalSize() const {return inner_slider_->GetTotalSize();}
 
 void SliderFrame::Think(int dt) {
-  dec_button_->SetIsEnabled(GetTabPosition() != 0);
-  inc_button_->SetIsEnabled(GetTabPosition() + GetTabSize() != GetTotalSize());
   SingleParentFrame::Think(dt);
   if (dec_button_->WasHeldDown() && !inc_button_->IsDown())
     inner_slider_->SmallDec();
   if (inc_button_->WasHeldDown() && !dec_button_->IsDown())
     inner_slider_->SmallInc();
+}
+
+bool SliderFrame::OnKeyEvent(const KeyEvent &event, int dt) {
+  bool result = inner_slider_->OnKeyEvent(event, dt);
+  bool dec_result = dec_button_->OnKeyEvent(event, dt);
+  bool inc_result = inc_button_->OnKeyEvent(event, dt);
+  if (inner_slider_->GetTabPosition() != 0) {
+    result |= dec_result;
+    if (event.IsPress() && large_dec_keys_.Find(event.key)) {
+      inner_slider_->LargeDec();
+      result = true;
+      NewRelativePing(0, 0, 1, 1);
+    }
+  }
+  if (inner_slider_->GetTabPosition() != inner_slider_->GetTotalSize() -
+                                         inner_slider_->GetTabSize()) {
+    result |= inc_result;
+    if (event.IsPress() && large_inc_keys_.Find(event.key)) {
+      inner_slider_->LargeInc();
+      result = true;
+      NewRelativePing(0, 0, 1, 1);
+    }
+  }
+  return result;
 }
 
 void SliderFrame::RecomputeSize(int rec_width, int rec_height) {
@@ -1197,182 +1218,12 @@ void SliderFrame::RecomputeSize(int rec_width, int rec_height) {
   SingleParentFrame::RecomputeSize(rec_width, rec_height);
 }
 
-///////////////////////////////////////////////////////////////////////////////////////////////////
-// ScrollingFrame
-// ==============
-
-class UnfocusableScrollingFrame: public MultiParentFrame {
- public:
-  UnfocusableScrollingFrame(GlopFrame *frame, bool is_arrow_scrollable, bool is_wheel_scrollable,
-                            const SliderRenderer *renderer)
-  : MultiParentFrame(),
-    horz_slider_(0), vert_slider_(0),
-    is_arrow_scrollable_(is_arrow_scrollable), is_wheel_scrollable_(is_wheel_scrollable),
-    renderer_(renderer) {
-    clipped_inner_frame_ = new ClippedFrame(inner_frame_ = frame);
-    AddChild(clipped_inner_frame_);
-  }
-  
-  void SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2) {
-    GlopFrame::SetPosition(screen_x, screen_y, cx1, cy1, cx2, cy2);
-    clipped_inner_frame_->SetClipping(GetX(), GetY(), GetX() + inner_view_width_ - 1,
-                                      GetY() + inner_view_height_ - 1);
-    clipped_inner_frame_->SetPosition(screen_x -
-      (horz_slider_? horz_slider_->GetTabPosition() : 0), screen_y -
-      (vert_slider_? vert_slider_->GetTabPosition() : 0), cx1, cy1, cx2, cy2);
-    if (horz_slider_)
-      horz_slider_->SetPosition(screen_x, screen_y + inner_view_height_, cx1, cy1, cx2, cy2);
-    if (vert_slider_)
-      vert_slider_->SetPosition(screen_x + inner_view_width_, screen_y, cx1, cy1, cx2, cy2);
-  }
-
- protected:   
-  void RecomputeSize(int rec_width, int rec_height) {
-    // Compute our old horizontal and vertical scroll positions
-    int old_inner_view_width = inner_view_width_, old_inner_view_height = inner_view_height_;
-    int old_inner_total_width = inner_frame_->GetWidth(), 
-        old_inner_total_height = inner_frame_->GetHeight();
-    double old_horz_position = (horz_slider_? 
-      (horz_slider_->GetTabPosition() + 0.5*inner_view_width_) / old_inner_total_width : 0);
-    double old_vert_position = (vert_slider_? 
-      (vert_slider_->GetTabPosition() + 0.5*inner_view_height_) / old_inner_total_height : 0);
-
-    // Compute the size of our inner frame
-    SetSize(rec_width, rec_height);
-    int sb_width = renderer_->RecomputeWidth(false);
-    int sb_height = renderer_->RecomputeWidth(true);
-    clipped_inner_frame_->UpdateSize(rec_width, rec_height);
-
-    // A nasty special case: suppose our inner frame uses recWidth to set width, but scrolls
-    // vertically. Then it will generate a horizontal scroll bar which shouldn't be there.
-    // A cludge here prevents that.
-    if (clipped_inner_frame_->GetWidth() <= rec_width &&
-        clipped_inner_frame_->GetHeight() > rec_height)
-      clipped_inner_frame_->UpdateSize(rec_width - sb_width, rec_height);
-    else if (clipped_inner_frame_->GetHeight() <= rec_height &&
-            clipped_inner_frame_->GetWidth() > rec_width)
-      clipped_inner_frame_->UpdateSize(rec_width, rec_height - sb_height);
-
-    // Compute our maximum width and height, stored in myWidth and myHeight
-    // Also compute the size of a scroll bar
-    inner_view_width_ = inner_frame_->GetWidth();
-    inner_view_height_ = inner_frame_->GetHeight();
-    int sb_width_used = 0, sb_height_used = 0;
-
-    // Figure out which scroll bars we need and determine the amount of the inner
-    // frame to display each time   
-    while (GetWidth() < sb_width_used + inner_view_width_ ||
-          GetHeight() < sb_height_used + inner_view_height_) {
-      if (GetWidth() < sb_width_used + inner_view_width_) {
-        inner_view_width_ = GetWidth() - sb_width_used;
-        sb_height_used = sb_height;
-      }
-      if (GetHeight() < sb_height_used + inner_view_height_) {
-        inner_view_height_ = GetHeight() - sb_height_used;
-        sb_width_used = sb_width;
-      }
-    }
-
-    // Set our actual width and height
-    SetSize(inner_view_width_ + sb_width_used, inner_view_height_ + sb_height_used);
-
-    // Update the horizontal scroll bar if necessary
-    if (inner_view_width_ != old_inner_view_width ||
-        inner_frame_->GetWidth() != old_inner_total_width) {
-      if (horz_slider_)
-        RemoveChild(horz_slider_id_);
-      if (sb_height_used) {
-        horz_slider_ = new SliderFrame(SliderFrame::Horizontal, inner_view_width_,
-                                      inner_frame_->GetWidth(), 0, is_arrow_scrollable_, -1,
-                                      renderer_);
-        horz_slider_id_ = AddChild(horz_slider_);
-      } else {
-        horz_slider_ = 0;
-      }
-    }
-    if (horz_slider_) {
-      horz_slider_->UpdateSize(inner_view_width_, rec_height);
-      horz_slider_->SetTabPosition(int(
-        old_horz_position*inner_frame_->GetWidth() - 0.5*inner_view_width_ + 0.5));
-    }
-
-    // Update the vertical scroll bar if necessary
-    if (inner_view_height_ != old_inner_view_height ||
-        inner_frame_->GetHeight() != old_inner_total_height) {
-      if (vert_slider_)
-        RemoveChild(vert_slider_id_);
-      if (sb_width_used) {
-        vert_slider_ = new SliderFrame(SliderFrame::Vertical, inner_view_height_,
-                                      inner_frame_->GetHeight(), 0, is_arrow_scrollable_, -1,
-                                      renderer_);
-        vert_slider_id_ = AddChild(vert_slider_);
-      } else {
-        vert_slider_ = 0;
-      }
-    }
-    if (vert_slider_) {
-      vert_slider_->UpdateSize(rec_width, inner_view_height_);
-      vert_slider_->SetTabPosition(int(
-        old_vert_position*inner_frame_->GetHeight() - 0.5*inner_view_height_ + 0.5));
-      vert_slider_->AddIncHotKey(kMouseWheelDown);
-      vert_slider_->AddDecHotKey(kMouseWheelUp);
-    }
-  }
-
-  void OnChildPing(int x1, int y1, int x2, int y2, bool center) {
-    // Check the scrolled position of the inner frame   
-    int x = (horz_slider_? horz_slider_->GetTabPosition() : 0);
-    int y = (vert_slider_? vert_slider_->GetTabPosition() : 0);
-
-    // Adjust the ping to child coordinates and handle the special case where the pinged region is
-    // larger than the total view area (in that case, look at the top-left part of the region).
-    x1 += x; x2 += x;
-    y1 += y; y2 += y;
-    if (!center && x2 >= x1 + inner_view_width_)
-      x2 = x1 + inner_view_width_ - 1;
-    if (!center && y2 >= y1 + inner_view_height_)
-      y2 = y1 + inner_view_height_ - 1;
-
-    // Make the ping visible if necessary   
-    if (horz_slider_) {
-      if (center) {
-        horz_slider_->SetTabPosition( (x1+x2)/2 - inner_view_width_/2);
-      } else {
-        if (x1 < x)
-          horz_slider_->SetTabPosition(x1);
-        else if (x2 >= x + inner_view_width_)
-          horz_slider_->SetTabPosition(x2 - inner_view_width_ + 1);
-      }
-    }
-    if (vert_slider_) {
-      if (center) {
-        vert_slider_->SetTabPosition( (y1+y2)/2 - inner_view_height_/2);
-      } else {
-        if (y1 < y)
-          vert_slider_->SetTabPosition(y1);
-        else if (y2 >= y + inner_view_height_)
-          vert_slider_->SetTabPosition(y2 - inner_view_height_ + 1);
-      }
-    }
-    SetPosition(GetX(), GetY(), GetClipX1(), GetClipY1(), GetClipX2(), GetClipY2());
-
-    // Propogate pings upwards
-    x = (horz_slider_? horz_slider_->GetTabPosition() : 0);
-    y = (vert_slider_? vert_slider_->GetTabPosition() : 0);
-    NewAbsolutePing(x1 - x, y1 - y, x2 - x, y2 - y, center);
-  }
-
-  GlopFrame *inner_frame_;
-  ClippedFrame *clipped_inner_frame_;
-  SliderFrame *horz_slider_, *vert_slider_;
-  LightSetId horz_slider_id_, vert_slider_id_;
-  bool is_wheel_scrollable_, is_arrow_scrollable_;
-  int inner_view_width_, inner_view_height_;
-  const SliderRenderer *renderer_;
-  DISALLOW_EVIL_CONSTRUCTORS(UnfocusableScrollingFrame);
-};
-
-ScrollingFrame::ScrollingFrame(GlopFrame *frame, bool is_arrow_scrollable,
-                               bool is_wheel_scrollable, const SliderRenderer *renderer)
-: FocusFrame(new UnfocusableScrollingFrame(frame, is_arrow_scrollable, is_wheel_scrollable,
-                                           renderer)) {}
+void SliderFrame::OnChildPing(int x1, int y1, int x2, int y2, bool center) {
+  if ((x1 == dec_button_->GetX() - GetX() && y1 == dec_button_->GetY() - GetY() &&
+       inner_slider_->GetTabPosition() == 0) ||
+      (x1 == inc_button_->GetX() - GetX() && y1 == inc_button_->GetY() - GetY() &&
+       inner_slider_->GetTabPosition() == inner_slider_->GetTotalSize() -
+                                          inner_slider_->GetTabSize()))
+    return;
+  SingleParentFrame::OnChildPing(x1, y1, x2, y2, center);
+}

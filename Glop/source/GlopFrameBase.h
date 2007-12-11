@@ -518,44 +518,6 @@ class FocusFrame: public SingleParentFrame {
   DISALLOW_EVIL_CONSTRUCTORS(FocusFrame);
 };
 
-// RecSizeFrame
-// ============
-//
-// This overrides the recommended size for its child frame to be the given fraction of the window
-// size. RecWidthFrame and RecHeightFrame override the recommended width and height only.
-class RecWidthFrame: public SingleParentFrame {
- public:
-  RecWidthFrame(GlopFrame *frame, float rec_width)
-  : SingleParentFrame(frame), rec_width_override_(rec_width) {}
- protected:
-  void RecomputeSize(int rec_width, int rec_height);
- private:
-  float rec_width_override_;
-  DISALLOW_EVIL_CONSTRUCTORS(RecWidthFrame);
-};
-
-class RecHeightFrame: public SingleParentFrame {
- public:
-  RecHeightFrame(GlopFrame *frame, float rec_height)
-  : SingleParentFrame(frame), rec_height_override_(rec_height) {}
- protected:
-  void RecomputeSize(int rec_width, int rec_height);
- private:
-  float rec_height_override_;
-  DISALLOW_EVIL_CONSTRUCTORS(RecHeightFrame);
-};
-
-class RecSizeFrame: public SingleParentFrame {
- public:
-  RecSizeFrame(GlopFrame *frame, float rec_width, float rec_height)
-  : SingleParentFrame(frame), rec_width_override_(rec_width), rec_height_override_(rec_height) {}
- protected:
-  void RecomputeSize(int rec_width, int rec_height);
- private:
-  float rec_width_override_, rec_height_override_;
-  DISALLOW_EVIL_CONSTRUCTORS(RecSizeFrame);
-};
-
 // TableauFrame
 // ============
 //
@@ -941,6 +903,54 @@ class ColFrame: public SingleParentFrame {
   const TableFrame *table() const {return (TableFrame*)GetChild();}
   TableFrame *table() {return (TableFrame*)GetChild();}
   DISALLOW_EVIL_CONSTRUCTORS(ColFrame);
+};
+
+// RecSizeFrame
+// ============
+//
+// This overrides the recommended size for its child frame to be the given fraction of the window
+// size. RecWidthFrame and RecHeightFrame override the recommended width and height only.
+class RecWidthFrame: public SingleParentFrame {
+ public:
+  RecWidthFrame(GlopFrame *frame, float rec_width)
+  : SingleParentFrame(frame), rec_width_override_(rec_width) {}
+ protected:
+  void RecomputeSize(int rec_width, int rec_height);
+ private:
+  float rec_width_override_;
+  DISALLOW_EVIL_CONSTRUCTORS(RecWidthFrame);
+};
+
+class RecHeightFrame: public SingleParentFrame {
+ public:
+  RecHeightFrame(GlopFrame *frame, float rec_height)
+  : SingleParentFrame(frame), rec_height_override_(rec_height) {}
+ protected:
+  void RecomputeSize(int rec_width, int rec_height);
+ private:
+  float rec_height_override_;
+  DISALLOW_EVIL_CONSTRUCTORS(RecHeightFrame);
+};
+
+class RecSizeFrame: public SingleParentFrame {
+ public:
+  RecSizeFrame(GlopFrame *frame, float rec_width, float rec_height)
+  : SingleParentFrame(frame), rec_width_override_(rec_width), rec_height_override_(rec_height) {}
+ protected:
+  void RecomputeSize(int rec_width, int rec_height);
+ private:
+  float rec_width_override_, rec_height_override_;
+  DISALLOW_EVIL_CONSTRUCTORS(RecSizeFrame);
+};
+
+// ScrollingFrame
+// ==============
+
+class ScrollingFrame: public FocusFrame {
+ public:
+  ScrollingFrame(GlopFrame *frame, const SliderRenderer *renderer = gDefaultStyle->slider_renderer);
+ private:
+  DISALLOW_EVIL_CONSTRUCTORS(ScrollingFrame);
 };
 
 #endif // GLOP_FRAME_BASE_H__

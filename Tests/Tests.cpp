@@ -14,16 +14,9 @@
 //  - Button listener
 //  - Tidy up clippedframe, scrollingframe if needed
 //  - Fix up general style struct, especially initialization. Should it even exist?
-//  - Page up/page down scrolling
 //  - Scrolling Window: FocusFrame(WindowFrame(ScrollingFrame(MinSizeFrame()))
-//  - Move ScrollingFrame to Base
 //  - Tidy up scrollingframe, buttonframe
 //  - Why does timer test not run at exactly 100fps?
-
-#define _WIN32_WINNT 0x0500
-#include <windows.h>
-#undef CreateWindow
-#include "../Glop/source/Os.h"
 
 // Includes
 #include "../Glop/source/Base.h"
