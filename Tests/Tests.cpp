@@ -2,8 +2,7 @@
 // that Glop is working correctly.
 
 // TODO(darthur):
-//  - Get a reasonable version of this submitted
-//  - Test window focus tracking testing (minimization, mouse focus)
+//  - Clean up this file
 //  - Onquit
 //  - LongTextFrame horizontal overhang fix
 //  - Boxed text prompt frames
@@ -12,7 +11,7 @@
 //  - Figure out system for fonts
 //  - Should text prompts really track enter, escape?
 //  - Fix up general style struct, especially initialization. Should it even exist?
-//  - 3d Frames
+//  - Rework file stuff
 
 // Includes
 #include "../Glop/source/Base.h"
@@ -21,8 +20,10 @@
 #include "../Glop/source/GlopWindow.h"
 #include "../Glop/source/Image.h"
 #include "../Glop/source/Input.h"
+#include "../Glop/source/OpenGl.h"
 #include "../Glop/source/System.h"
 #include "../Glop/source/Thread.h"
+#include "../Glop/source/Glop3d/Camera.h"
 
 // Globals
 Image *gIcon;
@@ -229,16 +230,100 @@ void ThreadTest() {
   input()->WaitForKeyPress();
 }
 
+class CubeFrame: public CameraFrame {
+ public:
+  CubeFrame(): pos_(Vec3(0,0,6)) {
+    SetFog(kWhite*0.3f, 5, 8);
+  }
+
+  void Render3d() {
+    float m[16];
+    glPushMatrix();
+    pos_.FillTransformationMatrix(m);
+    glMultMatrixf(m);
+
+    glBegin(GL_QUADS);
+    GlUtils::SetColor(kBlue);
+		glVertex3f( 1.0f, 1.0f,-1.0f);
+		glVertex3f(-1.0f, 1.0f,-1.0f);
+		glVertex3f(-1.0f, 1.0f, 1.0f);
+		glVertex3f( 1.0f, 1.0f, 1.0f);
+    GlUtils::SetColor(kRed);
+		glVertex3f( 1.0f,-1.0f, 1.0f);
+		glVertex3f(-1.0f,-1.0f, 1.0f);
+		glVertex3f(-1.0f,-1.0f,-1.0f);
+		glVertex3f( 1.0f,-1.0f,-1.0f);
+    GlUtils::SetColor(kGreen);
+		glVertex3f( 1.0f, 1.0f, 1.0f);
+		glVertex3f(-1.0f, 1.0f, 1.0f);
+		glVertex3f(-1.0f,-1.0f, 1.0f);
+		glVertex3f( 1.0f,-1.0f, 1.0f);
+    GlUtils::SetColor(kYellow);
+		glVertex3f( 1.0f,-1.0f,-1.0f);
+		glVertex3f(-1.0f,-1.0f,-1.0f);
+		glVertex3f(-1.0f, 1.0f,-1.0f);
+		glVertex3f( 1.0f, 1.0f,-1.0f);
+    GlUtils::SetColor(kWhite);
+		glVertex3f(-1.0f, 1.0f, 1.0f);
+		glVertex3f(-1.0f, 1.0f,-1.0f);
+		glVertex3f(-1.0f,-1.0f,-1.0f);
+		glVertex3f(-1.0f,-1.0f, 1.0f);
+    GlUtils::SetColor(kPurple);
+		glVertex3f( 1.0f, 1.0f,-1.0f);
+		glVertex3f( 1.0f, 1.0f, 1.0f);
+		glVertex3f( 1.0f,-1.0f, 1.0f);
+		glVertex3f( 1.0f,-1.0f,-1.0f);
+	  glEnd();	
+
+    glPopMatrix();
+    GlUtils::SetColor(kWhite);
+  }
+
+  void Think(int dt) {
+    pos_.Rotate(Vec3(1,2,3), dt*0.1f);
+    Camera c = camera();
+    float rx = input()->GetKeyPressAmountFrame(kMouseRight) -
+               input()->GetKeyPressAmountFrame(kMouseLeft);
+    float ry = input()->GetKeyPressAmountFrame(kMouseDown) -
+               input()->GetKeyPressAmountFrame(kMouseUp);
+    float strafe = input()->GetKeyPressAmountFrame('D') - input()->GetKeyPressAmountFrame('A');
+    float step = input()->GetKeyPressAmountFrame('W') - input()->GetKeyPressAmountFrame('S');
+    c.Rotate(kYAxis, dt*0.2f*rx);
+    c.Rotate(c.right(), dt*0.2f*ry);
+    c.Translate(step * c.forwards() * 0.1f + strafe * c.right() * 0.1f);
+    SetCamera(c);
+  }
+
+ private:
+  Viewpoint pos_;
+};
+
+void CameraTest() {
+  GlopFrame *info = new FancyTextFrame("Rotating Cube with Fog\n\n"
+                                       "Move the camera with the mouse and with W,A,D,S\n\n\n"
+                                       "Press Escape to continue",
+                                       false, kJustifyCenter, kWhite);
+  GlopFrame *cube = new HollowBoxFrame(new CubeFrame(), kWhite);
+  GlopFrame *content = new ColFrame(
+    new PaddedFrame(cube, 10), CellSize::Default(),
+    CellSize::Max(), info, CellSize::Default(), CellSize::Default());
+  gWindow->AddFrame(content);
+  while (!input()->WasKeyPressed(27))
+    gSystem->Think();
+}
+
 void BuildMainMenu() {
   gWindow->SetTitle("Tests menu");
-  ColFrame *column = new ColFrame(6, kJustifyLeft);
+  ColFrame *column = new ColFrame(7, kJustifyLeft);
   column->SetCell(0, new TextFrame("1. DisplayMessage and full-screen modes", kWhite));
   column->SetCell(1, new TextFrame("2. Icon and Title", kWhite));
   column->SetCell(2, new TextFrame("3. Timing", kWhite));
   column->SetCell(3, new TextFrame("4. Input", kWhite));
   column->SetCell(4, new TextFrame("5. Threading", kWhite));
-  column->SetCell(5, new TextFrame("6. Quit", kWhite));
+  column->SetCell(5, new TextFrame("6. Camera frame", kWhite));
+  column->SetCell(6, new TextFrame("7. Quit", kWhite));
   gWindow->AddFrame(column, 0.5f, 0.4f, 0.5f, 0.4f);
+  gSystem->Think();
 }
 
 int main(int argc, char **argv) {
@@ -261,6 +346,7 @@ int main(int argc, char **argv) {
     if (input()->WasKeyPressed('4')) selection = 4;
     if (input()->WasKeyPressed('5')) selection = 5;
     if (input()->WasKeyPressed('6')) selection = 6;
+    if (input()->WasKeyPressed('7')) selection = 7;
     if (selection > 0) {
       gWindow->ClearFrames();
       if (selection == 1)
@@ -274,6 +360,8 @@ int main(int argc, char **argv) {
       else if (selection == 5)
         ThreadTest();
       else if (selection == 6)
+        CameraTest();
+      else if (selection == 7)
         break;
       gWindow->ClearFrames();
       BuildMainMenu();

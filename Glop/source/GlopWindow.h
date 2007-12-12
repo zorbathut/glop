@@ -23,12 +23,20 @@ struct OsWindowData;
 
 // GlopWindowSettings class definition
 struct GlopWindowSettings {
-  GlopWindowSettings(): stencil_bits(0), is_resizable(true), min_width(128), min_height(128) {}
-  short stencil_bits;
-  bool is_resizable;            // Only affects windowed mode
-  short min_width, min_height;  // Do not allow a window to have size smaller than this. Especially
-                                //  useful since, on Windows, OpenGL appears to flat-out not work
-                                //  for windows with very small height.
+  GlopWindowSettings()
+  : stencil_bits(0),
+    is_resizable(true),
+    min_width(128),
+    min_height(128),
+    min_aspect_ratio((4.0f / 3) * 0.3f),
+    min_inverse_aspect_ratio((3.0f / 4) * 0.3f) {}
+  int stencil_bits;
+  bool is_resizable;              // Only affects windowed mode
+  int min_width, min_height;      // Minimum window sizes - used to prevent user screwing things
+                                  //  up. Particularly useful since some (all?) Win32 computers
+                                  //  seem to have bugs with height < 15.
+  float min_aspect_ratio,         // Similar to min_width and min_height: Lower bounds on
+        min_inverse_aspect_ratio; //  width/height and 1/(width/height).
 };
 
 // Globals
@@ -117,6 +125,9 @@ class GlopWindow {
   // See TableauFrame in GlopFrameBase.h
   LightSetId AddFrame(GlopFrame *frame, float rel_x, float rel_y,
                       float horz_justify, float vert_justify, int depth = 0);
+  LightSetId AddFrame(GlopFrame *frame, int depth = 0) {
+    return AddFrame(frame, 0.5f, 0.5f, kJustifyCenter, kJustifyCenter, depth);
+  }
   void MoveFrame(LightSetId id, int depth);
   void MoveFrame(LightSetId id, float rel_x, float rel_y);
   void MoveFrame(LightSetId id, float rel_x, float rel_y, int depth);
@@ -144,6 +155,9 @@ class GlopWindow {
   // Interface to Input
   friend class Input;
   void OnKeyEvent(const KeyEvent &event, int dt);
+
+  // Resizing
+  void ChooseValidSize(int width, int height, int *new_width, int *new_height);
 
   // Focus utilities - see GlopFrameBase.h
   friend class FocusFrame;

@@ -7,6 +7,7 @@
 #include "OpenGl.h"
 #include "Os.h"
 #include "System.h"
+#include <cmath>
 #include <set>
 
 // Constants
@@ -20,10 +21,10 @@ GlopWindow *gWindow = 0;
 
 bool GlopWindow::Create(int width, int height, bool full_screen,
                         const GlopWindowSettings &settings) {
+  ChooseValidSize(width, height, &width, &height);
+
   // Make sure the new window settings are different from the current window settings
   bool same_settings = (memcmp(&settings, &settings_, sizeof(settings)) == 0);
-  width = max(width, settings.min_width);
-  height = max(height, settings.min_height);
   if (is_created_ && width == width_ && height == height_ &&
       full_screen == is_full_screen_ && same_settings)
     return true;
@@ -205,8 +206,7 @@ void GlopWindow::Think(int dt) {
   int width, height;
   Os::GetWindowSize(os_data_, &width, &height);
   if (width != width_ || height != height_) {
-    width_ = max(width, settings_.min_width);
-    height_ = max(height, settings_.min_height);
+    ChooseValidSize(width, height, &width_, &height_);
     if (width_ != width || height_ != height)
       Os::SetWindowSize(os_data_, width_, height_);
     glViewport(0, 0, width_, height_);
@@ -270,6 +270,26 @@ void GlopWindow::Think(int dt) {
     frame_->Render();
     Os::SwapBuffers(os_data_);
   }
+}
+
+// Given a requested window size, this sets our width and height to try to match that size, but
+// always requested the minimum and maximum aspect ratio.
+void GlopWindow::ChooseValidSize(int width, int height, int *new_width, int *new_height) {
+  // Choose the best-fit aspect ratio
+  float ar = float(width) / height;
+  if (ar < settings_.min_aspect_ratio)
+    ar = settings_.min_aspect_ratio;
+  if (1/ar < settings_.min_inverse_aspect_ratio)
+    ar = 1/settings_.min_inverse_aspect_ratio;
+  
+  // Choose an exact size with this aspect ratio that preserves the window area as best as possible
+  width = max(width, settings_.min_width);
+  height = max(height, settings_.min_height);
+  float sqrt_ar = sqrt(ar);
+  float min_mean = max(settings_.min_width / sqrt_ar, settings_.min_height * sqrt_ar);
+  float mean = max(min_mean, sqrt(float(width) * height));
+  *new_width = int(mean * sqrt_ar);
+  *new_height = int(mean / sqrt_ar);
 }
 
 // Unregisters all pings a frame has created. A frame does this when it is deleted.
