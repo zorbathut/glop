@@ -1,5 +1,5 @@
 // Includes
-#include "LightSet.h"
+#include "../include/LightSet.h"
 #include <memory.h>
 
 // Light-weight constructor. No extra memory is allocated until it is needed.

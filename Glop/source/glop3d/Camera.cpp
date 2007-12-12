@@ -1,7 +1,7 @@
 // Includes
-#include "Camera.h"
-#include "../GlopWindow.h"
-#include "../OpenGl.h"
+#include "../../include/glop3d/Camera.h"
+#include "../../include/GlopWindow.h"
+#include "../../include/OpenGl.h"
 #include <cmath>
 
 void CameraFrame::Render() {

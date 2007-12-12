@@ -1,6 +1,6 @@
-#include "Image.h"
-#include "BinaryFileManager.h"
-#include "Color.h"
+#include "../include/Image.h"
+#include "../include/BinaryFileManager.h"
+#include "../include/Color.h"
 #include "third_party/jpeglib/jpeglib.h"
 #include <setjmp.h>  // For LoadJpg error handling
 

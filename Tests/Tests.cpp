@@ -14,16 +14,16 @@
 //  - Rework file stuff
 
 // Includes
-#include "../Glop/source/Base.h"
-#include "../Glop/source/BinaryFileManager.h"
-#include "../Glop/source/GlopFrame.h"
-#include "../Glop/source/GlopWindow.h"
-#include "../Glop/source/Image.h"
-#include "../Glop/source/Input.h"
-#include "../Glop/source/OpenGl.h"
-#include "../Glop/source/System.h"
-#include "../Glop/source/Thread.h"
-#include "../Glop/source/Glop3d/Camera.h"
+#include "../Glop/include/Base.h"
+#include "../Glop/include/BinaryFileManager.h"
+#include "../Glop/include/GlopFrame.h"
+#include "../Glop/include/GlopWindow.h"
+#include "../Glop/include/Image.h"
+#include "../Glop/include/Input.h"
+#include "../Glop/include/OpenGl.h"
+#include "../Glop/include/System.h"
+#include "../Glop/include/Thread.h"
+#include "../Glop/include/glop3d/Camera.h"
 
 // Globals
 Image *gIcon;

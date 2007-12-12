@@ -2,9 +2,7 @@
 
 // Includes
 #include "Os.h"
-#include "Image.h"
-#include "Input.h"
-#include "OpenGl.h"
+#include "../include/Image.h"
 #define DIRECTINPUT_VERSION 0x0500	// We do not need a new version
 #include <dinput.h>
 #include <process.h>

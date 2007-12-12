@@ -1,8 +1,8 @@
 // Includes
-#include "Base.h"
+#include "../include/Base.h"
+#include "../include/System.h"
+#include "../include/Utils.h"
 #include "Os.h"
-#include "System.h"
-#include "Utils.h"
 #include <ctime>
 #include <stdarg.h>
 

@@ -1,9 +1,9 @@
 // Includes
-#include "System.h"
-#include "GlopWindow.h"
-#include "Image.h"
-#include "Input.h"
-#include "OpenGl.h"
+#include "../include/System.h"
+#include "../include/GlopWindow.h"
+#include "../include/Image.h"
+#include "../include/Input.h"
+#include "../include/OpenGl.h"
 #include "Os.h"
 #include "third_party/freetype/ftglyph.h"
 #include <algorithm>

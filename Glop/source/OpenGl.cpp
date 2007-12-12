@@ -1,6 +1,6 @@
 // Includes
-#include "OpenGl.h"
-#include "Image.h"
+#include "../include/OpenGl.h"
+#include "../include/Image.h"
 
 // GlUtils2d class
 // ===============

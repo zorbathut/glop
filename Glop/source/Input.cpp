@@ -1,9 +1,9 @@
 // Includes
-#include "Input.h"
-#include "GlopWindow.h"
+#include "../include/Input.h"
+#include "../include/GlopWindow.h"
+#include "../include/System.h"
+#include "../include/Thread.h"
 #include "Os.h"
-#include "System.h"
-#include "Thread.h"
 
 // Constants
 const float kBaseMouseSensitivity = 3.0f;

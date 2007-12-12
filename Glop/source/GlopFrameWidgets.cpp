@@ -1,10 +1,10 @@
 // Includes
-#include "GlopFrameWidgets.h"
-#include "GlopWindow.h"
-#include "Image.h"
-#include "OpenGl.h"
-#include "System.h"
-#include "Utils.h"
+#include "../include/GlopFrameWidgets.h"
+#include "../include/GlopWindow.h"
+#include "../include/Image.h"
+#include "../include/OpenGl.h"
+#include "../include/System.h"
+#include "../include/Utils.h"
 
 // Constants
 const int kTextPromptCursorCycleTime = 800;

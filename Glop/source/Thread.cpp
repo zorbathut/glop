@@ -1,7 +1,7 @@
 // Includes
-#include "Thread.h"
+#include "../include/Thread.h"
+#include "../include/System.h"
 #include "Os.h"
-#include "System.h"
 
 // Thread
 // ======

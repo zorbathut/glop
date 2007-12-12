@@ -1,9 +1,9 @@
 // Includes
-#include "GlopFrameBase.h"
-#include "GlopFrameWidgets.h"
-#include "GlopWindow.h"
-#include "LightSet.h"
-#include "OpenGl.h"
+#include "../include/GlopFrameBase.h"
+#include "../include/GlopFrameWidgets.h"
+#include "../include/GlopWindow.h"
+#include "../include/LightSet.h"
+#include "../include/OpenGl.h"
 #include <algorithm>
 using namespace std;
 

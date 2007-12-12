@@ -1,12 +1,12 @@
 // Includes
-#include "GlopWindow.h"
-#include "Color.h"
-#include "GlopFrameBase.h"
-#include "Image.h"
-#include "Input.h"
-#include "OpenGl.h"
+#include "../include/GlopWindow.h"
+#include "../include/Color.h"
+#include "../include/GlopFrameBase.h"
+#include "../include/Image.h"
+#include "../include/Input.h"
+#include "../include/OpenGl.h"
+#include "../include/System.h"
 #include "Os.h"
-#include "System.h"
 #include <cmath>
 #include <set>
 
