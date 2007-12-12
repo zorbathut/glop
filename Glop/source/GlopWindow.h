@@ -23,9 +23,12 @@ struct OsWindowData;
 
 // GlopWindowSettings class definition
 struct GlopWindowSettings {
-  GlopWindowSettings(): stencil_bits(0), is_resizable(true) {}
+  GlopWindowSettings(): stencil_bits(0), is_resizable(true), min_width(128), min_height(128) {}
   short stencil_bits;
-  bool is_resizable;  // Only affects windowed mode
+  bool is_resizable;            // Only affects windowed mode
+  short min_width, min_height;  // Do not allow a window to have size smaller than this. Especially
+                                //  useful since, on Windows, OpenGL appears to flat-out not work
+                                //  for windows with very small height.
 };
 
 // Globals

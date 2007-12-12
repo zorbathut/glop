@@ -3,12 +3,13 @@
 #include "Os.h"
 #include "System.h"
 #include "Utils.h"
+#include <ctime>
 #include <stdarg.h>
 
-// Constants
-const char *const kDefaultLogFilename = "log.txt";
-
-// Globals
+// Logging globals
+bool gLoggingStarted = false;
+bool gLogToStdErr = true;
+time_t gLogStartTime = time(0);
 string gLogFilename;
 FILE *gLogFile = 0;
 
@@ -24,31 +25,41 @@ string Format(const char *text, ...) {
 // Logging utilities
 // =================
 
-void LogToFile(const string &filename) {
-  ASSERT(gLogFilename == "" && gLogFile == 0);
+void LogToFile(const string &filename, bool also_log_to_std_err) {
+  ASSERT(gLoggingStarted == false);
   gLogFilename = filename;
-}
-
-void LogToStdErr() {
-  ASSERT(gLogFilename == "" && gLogFile == 0);
-  gLogFile = stderr;
+  gLogToStdErr = also_log_to_std_err;
 }
 
 void __Log(const char *filename, int line, const string &message) {
   // Open the log file if this is our first call
-  if (gLogFile == 0) {
-    if (gLogFilename == "")
-      gLogFilename = kDefaultLogFilename;
+  if (!gLoggingStarted && gLogFilename != "") {
     gLogFile = fopen(gLogFilename.c_str(), "wt");
     ASSERT(gLogFile != 0);
   }
+  if (!gLoggingStarted) {
+    string clock_time = ctime(&gLogStartTime);
+    string temp = Format("Program started at: %s", clock_time.c_str());
+    if (gLogFile != 0)
+      fputs(temp.c_str(), gLogFile);
+    if (gLogToStdErr)
+      fputs(temp.c_str(), stderr);
+  }
+  gLoggingStarted = true;
 
   // Output the log message
   int frame_count = gSystem->GetFrameCount();
   int ticks = gSystem->GetTime();
-  string temp = Format("[%df %.3fs %s:%d] %s\n", frame_count, ticks / 1000.0f,
-                       filename, line, message.c_str());
-  fputs(temp.c_str(), gLogFile);
+  int index = (int)strlen(filename);
+  const char *temp_filename = filename + strlen(filename) - 1;
+  while (index > 0 && filename[index-1] != '/' && filename[index-1] != '\\')
+    index--;
+  string temp = Format("[f%d %.3fs %s:%d] %s\n", frame_count, ticks / 1000.0f,
+                       filename+index, line, message.c_str());
+  if (gLogFile != 0)
+    fputs(temp.c_str(), gLogFile);
+  if (gLogToStdErr)
+    fputs(temp.c_str(), stderr);
   fflush(gLogFile);
 }
 

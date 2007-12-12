@@ -63,7 +63,8 @@ class Os {
   // ================
 
   // TODO(jwills): Should it be possible, for resizable windows, to have a flag that will maintain
-  // the ratio between width and height?
+  // the ratio between width and height? darthur: If we want that, I think it should be in
+  // GlopWindow, not here. Don't want to burden the Os unnecessarily.
   // Creates an Open Gl window with the given properties. On success, a new OsWindowObject should
   // be returned. On failure, NULL should be returned. Notes:
   //  - icon may be NULL, in which case a default icon should be used.
@@ -99,6 +100,9 @@ class Os {
   // icon may be NULL, in which case a default icon should be used.
   // The image may be of any size and type - the Os class must scale it as required.
   static void SetIcon(OsWindowData *window, const Image *icon);
+
+  // Changes the size of a non full-screen window.
+  static void SetWindowSize(OsWindowData *window, int width, int height);
 
   // Input functions
   // ===============

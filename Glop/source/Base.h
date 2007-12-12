@@ -43,13 +43,11 @@ struct __LogfObject {
   int line;
 };
 
-// Actual logging utilities.
-// LogToFile and LogToStdErr choose the logging output location. They are mutually exclusive, and
-// they must be called before any log messages are generated.
+// Actual logging utilities. By default, logging messages go to the console. LogToFile can be used
+// to log to a file also/instead. LogToFile must be called before any log messages are generated.
 // LOG and LOGF output messages to the log.
 // Examples: LOG("Test"); LOGF("x + y = %d", x+y);
-void LogToFile(const string &filename);
-void LogToStdErr();
+void LogToFile(const string &filename, bool also_log_to_std_err);
 #define LOG(message) __Log(__FILE__, __LINE__, message)
 #define LOGF __LogfObject(__FILE__, __LINE__).__Logf
 

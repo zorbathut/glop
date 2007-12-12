@@ -22,6 +22,8 @@ bool GlopWindow::Create(int width, int height, bool full_screen,
                         const GlopWindowSettings &settings) {
   // Make sure the new window settings are different from the current window settings
   bool same_settings = (memcmp(&settings, &settings_, sizeof(settings)) == 0);
+  width = max(width, settings.min_width);
+  height = max(height, settings.min_height);
   if (is_created_ && width == width_ && height == height_ &&
       full_screen == is_full_screen_ && same_settings)
     return true;
@@ -203,10 +205,12 @@ void GlopWindow::Think(int dt) {
   int width, height;
   Os::GetWindowSize(os_data_, &width, &height);
   if (width != width_ || height != height_) {
-    width_ = width;
-    height_ = height;
-    glViewport(0, 0, width, height);
-    frame_->OnWindowResize(width, height);
+    width_ = max(width, settings_.min_width);
+    height_ = max(height, settings_.min_height);
+    if (width_ != width || height_ != height)
+      Os::SetWindowSize(os_data_, width_, height_);
+    glViewport(0, 0, width_, height_);
+    frame_->OnWindowResize(width_, height_);
   }
 
   // Handle focus
@@ -237,7 +241,7 @@ void GlopWindow::Think(int dt) {
     if (parent != 0) {
       int x1, y1, x2, y2;
       ping->GetCoords(&x1, &y1, &x2, &y2);
-      parent->OnChildPing(ping->GetFrame()->GetX() - parent->GetX() + x1,
+      parent->OnChildPing(ping->GetFrame(), ping->GetFrame()->GetX() - parent->GetX() + x1,
                           ping->GetFrame()->GetY() - parent->GetY() + y1,
                           ping->GetFrame()->GetX() - parent->GetX() + x2,
                           ping->GetFrame()->GetY() - parent->GetY() + y2,

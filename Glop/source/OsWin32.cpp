@@ -495,6 +495,17 @@ void Os::SetIcon(OsWindowData *window, const Image *icon) {
   SendMessage(window->window_handle, WM_SETICON, ICON_BIG, (LPARAM)window->icon_handle);
 }
 
+void Os::SetWindowSize(OsWindowData *window, int width, int height) {
+  RECT rect;
+  GetWindowRect(window->window_handle, &rect);
+  rect.right += width - window->width;
+  rect.bottom += height - window->height;
+  MoveWindow(window->window_handle, rect.left, rect.top, rect.right - rect.left,
+             rect.bottom - rect.top, true);
+  window->width = width;
+  window->height = height;
+}
+
 // Input functions
 // ===============
 
