@@ -203,7 +203,9 @@ class GlopFrame {
   
  protected:
   // Resizing and repositioning utilities.
-  //  - See above for RecomputeSize.
+  //  - See above for RecomputeSize. It is guaranteed that rec_width and rec_height will be at
+  //    least 1, even if UpdateSize was given negative values. However, a frame must correctly
+  //    handle all values of 1 or above.
   //  - SetToMaxSize sets width_ and height_ to be as large as possible while respecting the
   //    size limits and an aspect ratio. Like SetSize, this should only be used within UpdateSize.
   virtual void RecomputeSize(int rec_width, int rec_height) {SetSize(rec_width, rec_height);}
@@ -217,7 +219,7 @@ class GlopFrame {
   // eventually propogate it up to the parent frame. OnChildPing is called by GlopWindow when
   // resolving child pings. By default, it registers the ping and propogates it further upwards.
   void AddPing(Ping *ping);
-  virtual void OnChildPing(int x1, int y1, int x2, int y2, bool center) {
+  virtual void OnChildPing(GlopFrame *child, int x1, int y1, int x2, int y2, bool center) {
     NewAbsolutePing(x1, y1, x2, y2, center);
   }
 
@@ -345,6 +347,7 @@ class SingleParentFrame: public GlopFrame {
 
  private:
   void OnWindowResize(int width, int height) {
+    DirtySize();
     if (child_ != 0) child_->OnWindowResize(width, height);
   }
 
@@ -403,7 +406,13 @@ class MultiParentFrame: public GlopFrame {
 
 // ClippedFrame
 // ============
-
+//
+// By default, a frame is free to render anywhere it sees fit, regardless of its size.
+// A ClippedFrame prevents this. It restricts rendering from its children to within a specific
+// box (usually but not always the bounding box it's child reports). The child will be aware of
+// its clipping rectangle, which is useful primarily for mouse tracking. Clicking on a part of a
+// button that is outside of the clipped area should not generate a response. The clipping info is
+// also used to cull objects for rendering.
 class ClippedFrame: public SingleParentFrame {
  public:
   ClippedFrame(GlopFrame *frame): SingleParentFrame(frame), is_standard_clipping_(true) {}
@@ -587,6 +596,8 @@ class TableauFrame: public MultiParentFrame {
   bool order_dirty_;
   DISALLOW_EVIL_CONSTRUCTORS(TableauFrame);
 };
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
 
 // CellSize
 // ========
@@ -905,6 +916,8 @@ class ColFrame: public SingleParentFrame {
   DISALLOW_EVIL_CONSTRUCTORS(ColFrame);
 };
 
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
 // RecSizeFrame
 // ============
 //
@@ -943,12 +956,107 @@ class RecSizeFrame: public SingleParentFrame {
   DISALLOW_EVIL_CONSTRUCTORS(RecSizeFrame);
 };
 
+// MinSizeFrame
+// ============
+//
+// This pads a frame until it reaches the recommended width/height/size. Alternatively, the size
+// limit can be given as a fraction of the corresponding window dimension. Also, justification can
+// be specified. If padding is added, this determines where the inner frame appears within the new
+// padded frame.
+const float kSizeLimitRec = -1e20f;
+class MinWidthFrame: public SingleParentFrame {
+ public:
+  MinWidthFrame(GlopFrame *frame, float min_width = kSizeLimitRec,
+                float horz_justify = kJustifyLeft)
+  : SingleParentFrame(frame), min_width_(min_width), horz_justify_(horz_justify) {}
+  void SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2);
+ protected:
+  void RecomputeSize(int rec_width, int rec_height);
+ private:
+  float min_width_, horz_justify_;
+  int x_offset_; 
+  DISALLOW_EVIL_CONSTRUCTORS(MinWidthFrame);
+};
+
+class MinHeightFrame: public SingleParentFrame {
+ public:
+  MinHeightFrame(GlopFrame *frame, float min_height = kSizeLimitRec,
+                 float vert_justify = kJustifyTop)
+  : SingleParentFrame(frame), min_height_(min_height), vert_justify_(vert_justify) {}
+  void SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2);
+ protected:
+  void RecomputeSize(int rec_width, int rec_height);
+ private:
+  float min_height_, vert_justify_;
+  int y_offset_;
+  DISALLOW_EVIL_CONSTRUCTORS(MinHeightFrame);
+};
+
+class MinSizeFrame: public SingleParentFrame {
+ public:
+  MinSizeFrame(GlopFrame *frame, float min_width = kSizeLimitRec, float min_height = kSizeLimitRec,
+               float horz_justify = kJustifyLeft, float vert_justify = kJustifyTop)
+  : SingleParentFrame(frame), min_width_(min_width), min_height_(min_height),
+    horz_justify_(horz_justify), vert_justify_(vert_justify) {}
+  void SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2);
+ protected:
+  void RecomputeSize(int rec_width, int rec_height);
+ private:
+  float min_width_, min_height_, horz_justify_, vert_justify_;
+  int x_offset_, y_offset_;
+  DISALLOW_EVIL_CONSTRUCTORS(MinSizeFrame);
+};
+
+// MaxSizeFrame
+// ============
+//
+// This clips a frame until it fits in the recommended width/height/size. Alternatively, the size
+// limit can be given as a fraction of the corresponding window dimension. MaxSizeFrame is similar
+// to ScrollingFrame except that it cannot be user-controlled via scroll bars. It still responds
+// to pings, however.
+class MaxWidthFrame: public SingleParentFrame {
+ public:
+  MaxWidthFrame(GlopFrame *frame, float max_width = kSizeLimitRec,
+                float horz_justify = kJustifyLeft);
+ private:
+  DISALLOW_EVIL_CONSTRUCTORS(MaxWidthFrame);
+};
+
+class MaxHeightFrame: public SingleParentFrame {
+ public:
+  MaxHeightFrame(GlopFrame *frame, float max_height = kSizeLimitRec,
+                 float vert_justify = kJustifyTop);
+ private:
+  DISALLOW_EVIL_CONSTRUCTORS(MaxHeightFrame);
+};
+
+class MaxSizeFrame: public SingleParentFrame {
+ public:
+  MaxSizeFrame(GlopFrame *frame, float max_width = kSizeLimitRec, float max_height = kSizeLimitRec,
+               float horz_justify = kJustifyLeft, float vert_justify = kJustifyTop);
+  void SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2);
+ protected:
+  void RecomputeSize(int rec_width, int rec_height);
+  void OnChildPing(GlopFrame *child, int x1, int y1, int x2, int y2, bool center);
+ private:
+  void ScrollToChildPing(int x1, int y1, int x2, int y2, bool center);
+  float max_width_, max_height_;
+  int x_offset_, y_offset_;
+  DISALLOW_EVIL_CONSTRUCTORS(MaxSizeFrame);
+};
+
 // ScrollingFrame
 // ==============
-
+//
+// A user-scrollable frame. If the frame fits in the recommended size, embedding it within a
+// ScrollingFrame has no effect. Otherwise, it adds user-controllable scroll bars as necessary
+// to allow the user to scroll through the frame. It also responds to pings.
+//
+// See also MaxSizeFrame.
 class ScrollingFrame: public FocusFrame {
  public:
-  ScrollingFrame(GlopFrame *frame, const SliderRenderer *renderer = gDefaultStyle->slider_renderer);
+  ScrollingFrame(GlopFrame *frame,
+                 const SliderRenderer *renderer = gDefaultStyle->slider_renderer);
  private:
   DISALLOW_EVIL_CONSTRUCTORS(ScrollingFrame);
 };

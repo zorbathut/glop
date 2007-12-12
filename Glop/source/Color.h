@@ -1,7 +1,7 @@
 // A simple RGBA color stored as an array of 4 floats. We use this rather than unsigned characters
 // since several OpenGl commands require float arrays as colors (eg glFog).
 // Note that arithmetic operations ignore alpha values. This is so both kWhite / 2 and
-// kWhite/2 + kRed/2 work have alpha = 1.
+// kWhite/2 + kRed/2 work and have alpha = 1.
 
 #ifndef GLOP_COLOR_H__
 #define GLOP_COLOR_H__

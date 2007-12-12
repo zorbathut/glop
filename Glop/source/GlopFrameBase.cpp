@@ -68,7 +68,7 @@ void GlopFrame::DirtySize() {
 void GlopFrame::UpdateSize(int rec_width, int rec_height) {
   if (old_rec_width_ == rec_width && old_rec_height_ == rec_height)
     return;
-  RecomputeSize(rec_width, rec_height);
+  RecomputeSize(max(rec_width, 1), max(rec_height, 1));
   old_rec_width_ = rec_width;
   old_rec_height_ = rec_height;
 }
@@ -215,6 +215,7 @@ void MultiParentFrame::ClearChildren() {
 }
 
 void MultiParentFrame::OnWindowResize(int width, int height) {
+  DirtySize();
   for (LightSetId id = children_.GetFirstId(); id != 0; id = children_.GetNextId(id))
     children_[id]->OnWindowResize(width, height);
 }
@@ -224,6 +225,13 @@ void MultiParentFrame::OnWindowResize(int width, int height) {
 
 void ClippedFrame::Render() {
   int old_scissor_test[4];
+
+  // Make sure the clipping rectangle is not empty. This CAN reasonably happen. For example, a
+  // ScrollingFrame might request a negative clipping rectangle if the window is squished too much.
+  // Instead of making every user trap these cases, we just do the right thing here. (Note that
+  // OpenGL does NOT do the right thing.)
+  if (GetClipX1() > GetClipX2() || GetClipY1() > GetClipY2())
+    return;
 
   // Adjust the clipping
   int old_clipping_enabled = glIsEnabled(GL_SCISSOR_TEST);
@@ -689,20 +697,20 @@ void TableFrame::RecomputeSize(int rec_width, int rec_height) {
         int w, h;
         CellSize::Type wtype = cell_info_[index].width.type,
                        htype = cell_info_[index].height.type;
-        if (wtype == CellSize::kMatch)
+        if (wtype == CellSize::kMatch) {
           w = col_info_[x].size;
-        else if (wtype == CellSize::kMax || wtype == CellSize::kMaxDoublePass)
+        } else if (wtype == CellSize::kMax || wtype == CellSize::kMaxDoublePass) {
           w = rec_width - GetWidth() + col_info_[x].size;
-        else {
+        } else {
           double mult = (wtype == CellSize::kDefault? 1.0 / num_cols_ :
                          cell_info_[index].width.fraction);
           w = int(mult * rec_width + (col_round_up[x]? 1-1e-6 : 0));
         }
-        if (htype == CellSize::kMatch)
+        if (htype == CellSize::kMatch) {
           h = row_info_[y].size;
-        else if (htype == CellSize::kMax || htype == CellSize::kMaxDoublePass)
+        } else if (htype == CellSize::kMax || htype == CellSize::kMaxDoublePass) {
           h = rec_height - GetHeight() + row_info_[y].size;
-        else {
+        } else {
           double mult = (htype == CellSize::kDefault? 1.0 / num_rows_ :
                          cell_info_[index].height.fraction);
           h = int(mult * rec_height + (row_round_up[y]? 1-1e-6 : 0));
@@ -747,6 +755,190 @@ void RecSizeFrame::RecomputeSize(int rec_width, int rec_height) {
                                    int(gWindow->GetHeight() * rec_height_override_));
 }
 
+// MinSizeFrame
+// ============
+
+void MinWidthFrame::SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2) {
+  if (GetChild() != 0)
+    GetChild()->SetPosition(screen_x + x_offset_, screen_y, cx1, cy1, cx2, cy2);
+  GlopFrame::SetPosition(screen_x, screen_y, cx1, cy1, cx2, cy2);
+}
+
+void MinWidthFrame::RecomputeSize(int rec_width, int rec_height) {
+  int w = 0, h = 0;
+  if (GetChild() != 0) {
+    GetChild()->UpdateSize(rec_width, rec_height);
+    w = GetChild()->GetWidth();
+    h = GetChild()->GetHeight();
+  }
+  int min_w = (min_width_ == kSizeLimitRec? rec_width : int(gWindow->GetWidth() * min_width_));
+  x_offset_ = int(max(min_w - w, 0) * (horz_justify_));
+  SetSize(max(w, min_w), h);
+}
+
+void MinHeightFrame::SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2) {
+  if (GetChild() != 0)
+    GetChild()->SetPosition(screen_x, screen_y + y_offset_, cx1, cy1, cx2, cy2);
+  GlopFrame::SetPosition(screen_x, screen_y, cx1, cy1, cx2, cy2);
+}
+
+void MinHeightFrame::RecomputeSize(int rec_width, int rec_height) {
+  int w = 0, h = 0;
+  if (GetChild() != 0) {
+    GetChild()->UpdateSize(rec_width, rec_height);
+    w = GetChild()->GetWidth();
+    h = GetChild()->GetHeight();
+  }
+  int min_h = (min_height_ == kSizeLimitRec? rec_height : int(gWindow->GetHeight() * min_height_));
+  y_offset_ = int(max(min_h - h, 0) * (vert_justify_));
+  SetSize(w, max(h, min_h));
+}
+
+void MinSizeFrame::SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2) {
+  if (GetChild() != 0)
+    GetChild()->SetPosition(screen_x + x_offset_, screen_y + y_offset_, cx1, cy1, cx2, cy2);
+  GlopFrame::SetPosition(screen_x, screen_y, cx1, cy1, cx2, cy2);
+}
+
+void MinSizeFrame::RecomputeSize(int rec_width, int rec_height) {
+  int w = 0, h = 0;
+  if (GetChild() != 0) {
+    GetChild()->UpdateSize(rec_width, rec_height);
+    w = GetChild()->GetWidth();
+    h = GetChild()->GetHeight();
+  }
+  int min_w = (min_width_ == kSizeLimitRec? rec_width : int(gWindow->GetWidth() * min_width_));
+  x_offset_ = int(max(min_w - w, 0) * (horz_justify_));
+  int min_h = (min_height_ == kSizeLimitRec? rec_height : int(gWindow->GetHeight() * min_height_));
+  y_offset_ = int(max(min_h - h, 0) * (vert_justify_));
+  SetSize(max(w, min_w), max(h, min_h));
+}
+
+// MaxSizeFrame
+// ============
+
+// A helper function used by MaxSizeFrame and ScrollingFrame. This indicates where we should
+// scroll to on a ping.
+static void ScrollToPing(int scroll_x, int scroll_y, int view_w, int view_h, int total_w,
+                         int total_h, int x1, int y1, int x2, int y2, bool center,
+                         int *new_scroll_x, int *new_scroll_y) {
+  // Handle the special case where the pinged region is larger than the total view area (in that
+  // case, look at the top-left part of the region).
+  if (!center && x2 >= x1 + view_w)
+    x2 = x1 + view_w - 1;
+  if (!center && y2 >= y1 + view_h)
+    y2 = y1 + view_h - 1;
+
+  // Handle horizontal movement
+  if (total_w > view_w) {
+    if (center) {
+      *new_scroll_x = (x1 + x2 - view_w) / 2;
+    } else if (x1 < scroll_x) {
+      *new_scroll_x = x1;
+    } else if (x2 >= scroll_x + view_w) {
+      *new_scroll_x = (x2 - view_w + 1);
+    } else {
+      *new_scroll_x = scroll_x;
+    }
+  }
+  if (*new_scroll_x < 0)
+    *new_scroll_x = 0;
+  if (*new_scroll_x > total_w - view_w)
+    *new_scroll_x = total_w - view_w;
+
+  // Handle vertical movement
+  if (total_h > view_h) {
+    if (center) {
+      *new_scroll_y = (y1 + y2 - view_h) / 2;
+    } else if (y1 < scroll_y) {
+      *new_scroll_y = y1;
+    } else if (y2 >= scroll_y + view_h) {
+      *new_scroll_y = (y2 - view_h + 1);
+    } else {
+      *new_scroll_y = scroll_y;
+    }
+  }
+  if (*new_scroll_y < 0)
+    *new_scroll_y = 0;
+  if (*new_scroll_y > total_h - view_h)
+    *new_scroll_y = total_h - view_h;
+}
+
+const float kSizeLimitNone = -1e10f;
+MaxWidthFrame::MaxWidthFrame(GlopFrame *frame, float max_width, float horz_justify)
+: SingleParentFrame(new MaxSizeFrame(frame, max_width, kSizeLimitNone, horz_justify,
+                                     kJustifyTop)) {}
+
+MaxHeightFrame::MaxHeightFrame(GlopFrame *frame, float max_height, float vert_justify)
+: SingleParentFrame(new MaxSizeFrame(frame, kSizeLimitNone, max_height, kJustifyLeft,
+                                     vert_justify)) {}
+
+MaxSizeFrame::MaxSizeFrame(GlopFrame *frame, float max_width, float max_height, float horz_justify,
+                           float vert_justify)
+: SingleParentFrame(new ClippedFrame(frame)), max_width_(max_width), max_height_(max_height) {
+  GetChild()->NewRelativePing(horz_justify, vert_justify, true);
+}
+
+void MaxSizeFrame::SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2) {
+  ClippedFrame *clipped_frame = (ClippedFrame*)(GetChild());
+  if (clipped_frame != 0) {
+    if (max_width_ != kSizeLimitNone && max_height_ != kSizeLimitNone)
+      clipped_frame->SetClipping(GetX(), GetY(), GetX2(), GetY2());
+    else if (max_width_ != kSizeLimitNone)
+      clipped_frame->SetClipping(GetX(), cy1, GetX2(), cy2);
+    else if (max_height_ != kSizeLimitNone)
+      clipped_frame->SetClipping(cx1, GetY(), cx2, GetY2());
+    clipped_frame->SetPosition(screen_x + x_offset_, screen_y + y_offset_, cx1, cy1, cx2, cy2);
+  }
+  GlopFrame::SetPosition(screen_x, screen_y, cx1, cy1, cx2, cy2);
+}
+
+void MaxSizeFrame::RecomputeSize(int rec_width, int rec_height) {
+  if (GetChild() != 0) {
+    // Track the old scrolling position
+    double old_x = (GetX() + GetWidth()*0.5 - GetChild()->GetX()) / GetChild()->GetWidth();
+    double old_y = (GetY() + GetHeight()*0.5 - GetChild()->GetY()) / GetChild()->GetHeight();
+
+    // Update the child size
+    GetChild()->UpdateSize(rec_width, rec_height);
+
+    // Update our size
+    int max_w = (max_width_ == kSizeLimitNone? kClipInfinity :
+                 max_width_ == kSizeLimitRec? rec_width :
+                 int(gWindow->GetWidth() * max_width_));
+    int max_h = (max_height_ == kSizeLimitNone? kClipInfinity :
+                 max_height_ == kSizeLimitRec? rec_height :
+                 int(gWindow->GetHeight() * max_height_));
+    SetSize(min(GetChild()->GetWidth(), max_w), min(GetChild()->GetHeight(), max_h));
+
+    // Position the child within the new size to be approximately where it was before
+    int px = int(old_x * GetChild()->GetWidth());
+    int py = int(old_y * GetChild()->GetHeight());
+    ScrollToChildPing(px, py, px, py, true);
+  } else {
+    SetSize(0, 0);
+  }
+}
+
+void MaxSizeFrame::OnChildPing(GlopFrame *child, int x1, int y1, int x2, int y2, bool center) {
+  // Do the scrolling for a ping
+  int old_x = child->GetX(), old_y = child->GetY();
+  ScrollToChildPing(x1 - x_offset_, y1 - y_offset_, x2 - x_offset_, y2 - y_offset_, center);
+
+  // Propogate the ping upwards
+  int dx = child->GetX() - old_x, dy = child->GetY() - old_y;
+  NewAbsolutePing(x1 + dx, y1 + dy, x2 + dx, y2 + dy, center);
+}
+
+void MaxSizeFrame::ScrollToChildPing(int x1, int y1, int x2, int y2, bool center) {
+  int new_scroll_x, new_scroll_y;
+  ::ScrollToPing(-x_offset_, -y_offset_, GetWidth(), GetHeight(), GetChild()->GetWidth(),
+                 GetChild()->GetHeight(), x1, y1, x2, y2, center, &new_scroll_x, &new_scroll_y);
+  x_offset_ = -new_scroll_x;
+  y_offset_ = -new_scroll_y;
+  SetPosition(GetX(), GetY(), GetClipX1(), GetClipY1(), GetClipX2(), GetClipY2());
+}
+
 // ScrollingFrame
 // ==============
 
@@ -762,8 +954,8 @@ class UnfocusableScrollingFrame: public MultiParentFrame {
   
   void SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2) {
     GlopFrame::SetPosition(screen_x, screen_y, cx1, cy1, cx2, cy2);
-    clipped_inner_frame_->SetClipping(GetX(), GetY(), GetX() + inner_view_width_ - 1,
-                                      GetY() + inner_view_height_ - 1);
+    clipped_inner_frame_->SetClipping(GetX(), GetY(), GetX() + max(inner_view_width_ - 1, 0),
+                                      GetY() + max(inner_view_height_ - 1, 0));
     clipped_inner_frame_->SetPosition(screen_x -
       (horz_slider_? horz_slider_->GetTabPosition() : 0), screen_y -
       (vert_slider_? vert_slider_->GetTabPosition() : 0), cx1, cy1, cx2, cy2);
@@ -868,47 +1060,29 @@ class UnfocusableScrollingFrame: public MultiParentFrame {
     }
   }
 
-  void OnChildPing(int x1, int y1, int x2, int y2, bool center) {
-    // Check the scrolled position of the inner frame   
-    int x = (horz_slider_? horz_slider_->GetTabPosition() : 0);
-    int y = (vert_slider_? vert_slider_->GetTabPosition() : 0);
-
-    // Adjust the ping to child coordinates and handle the special case where the pinged region is
-    // larger than the total view area (in that case, look at the top-left part of the region).
-    x1 += x; x2 += x;
-    y1 += y; y2 += y;
-    if (!center && x2 >= x1 + inner_view_width_)
-      x2 = x1 + inner_view_width_ - 1;
-    if (!center && y2 >= y1 + inner_view_height_)
-      y2 = y1 + inner_view_height_ - 1;
-
-    // Make the ping visible if necessary   
-    if (horz_slider_) {
-      if (center) {
-        horz_slider_->SetTabPosition( (x1+x2)/2 - inner_view_width_/2);
-      } else {
-        if (x1 < x)
-          horz_slider_->SetTabPosition(x1);
-        else if (x2 >= x + inner_view_width_)
-          horz_slider_->SetTabPosition(x2 - inner_view_width_ + 1);
-      }
+  void OnChildPing(GlopFrame *child, int x1, int y1, int x2, int y2, bool center) {
+    // Only do something special if it's the inner frame that generated the ping
+    if (child != clipped_inner_frame_) {
+      MultiParentFrame::OnChildPing(child, x1, y1, x2, y2, center);
+      return;
     }
-    if (vert_slider_) {
-      if (center) {
-        vert_slider_->SetTabPosition( (y1+y2)/2 - inner_view_height_/2);
-      } else {
-        if (y1 < y)
-          vert_slider_->SetTabPosition(y1);
-        else if (y2 >= y + inner_view_height_)
-          vert_slider_->SetTabPosition(y2 - inner_view_height_ + 1);
-      }
-    }
+
+    // Do the scrolling for a ping
+    int old_x = clipped_inner_frame_->GetX(), old_y = clipped_inner_frame_->GetY();
+    int scroll_x = (horz_slider_? horz_slider_->GetTabPosition() : 0);
+    int scroll_y = (vert_slider_? vert_slider_->GetTabPosition() : 0);
+    int new_scroll_x, new_scroll_y;
+    ScrollToPing(scroll_x, scroll_y, inner_view_width_, inner_view_height_,
+                 clipped_inner_frame_->GetWidth(), clipped_inner_frame_->GetHeight(),
+                 x1 + scroll_x, y1 + scroll_y, x2 + scroll_x, y2 + scroll_y, center,
+                 &new_scroll_x, &new_scroll_y);
+    if (horz_slider_ != 0) horz_slider_->SetTabPosition(new_scroll_x);
+    if (vert_slider_ != 0) vert_slider_->SetTabPosition(new_scroll_y);
     SetPosition(GetX(), GetY(), GetClipX1(), GetClipY1(), GetClipX2(), GetClipY2());
 
-    // Propogate pings upwards
-    x = (horz_slider_? horz_slider_->GetTabPosition() : 0);
-    y = (vert_slider_? vert_slider_->GetTabPosition() : 0);
-    NewAbsolutePing(x1 - x, y1 - y, x2 - x, y2 - y, center);
+    // Propogate the ping upwards
+    int dx = clipped_inner_frame_->GetX() - old_x, dy = clipped_inner_frame_->GetY() - old_y;
+    NewAbsolutePing(x1 + dx, y1 + dy, x2 + dx, y2 + dy, center);
   }
 
   GlopFrame *inner_frame_;

@@ -11,12 +11,8 @@
 //  - Investigate ToX utilities, and their place in PrettyString
 //  - Figure out system for fonts
 //  - Should text prompts really track enter, escape?
-//  - Button listener
-//  - Tidy up clippedframe, scrollingframe if needed
 //  - Fix up general style struct, especially initialization. Should it even exist?
-//  - Scrolling Window: FocusFrame(WindowFrame(ScrollingFrame(MinSizeFrame()))
-//  - Tidy up scrollingframe, buttonframe
-//  - Why does timer test not run at exactly 100fps?
+//  - 3d Frames
 
 // Includes
 #include "../Glop/source/Base.h"
@@ -28,10 +24,20 @@
 #include "../Glop/source/System.h"
 #include "../Glop/source/Thread.h"
 
-#include "../Glop/source/OpenGl.h"
-
 // Globals
 Image *gIcon;
+
+void IntroScreen() {
+  GlopFrame *info = new FancyTextFrame("This is a test program for Glop. Once in the menu,\n"
+                                       "select a test to verify that certain functions perform\n"
+                                       "as expected.",
+                                       false, kJustifyCenter, kWhite);
+  gWindow->AddFrame(info, 0.5f, 0.4f, kJustifyCenter, 0.4f);
+  gWindow->AddFrame(new TextFrame("Press any key to continue...", kYellow),
+                     0.5f, 1.0f, kJustifyCenter, kJustifyBottom);
+  input()->WaitForKeyPress();
+  gWindow->ClearFrames();
+}
 
 void DisplayMessageTest() {
   vector<pair<int, int> > modes = gSystem->GetFullScreenModes();
@@ -233,33 +239,20 @@ void BuildMainMenu() {
   column->SetCell(4, new TextFrame("5. Threading", kWhite));
   column->SetCell(5, new TextFrame("6. Quit", kWhite));
   gWindow->AddFrame(column, 0.5f, 0.4f, 0.5f, 0.4f);
-  
-  ColFrame *huge_col = new ColFrame(20, kJustifyLeft);
-  for (int j = 0; j < 20; j++) {
-    ColFrame *long_col = new ColFrame(52, kJustifyLeft);
-    for (int i = 0; i < 26; i++) {
-      long_col->SetCell(2*i, new TextFrame(Format("Option #%d:", i+1), kBlue/3));
-      ColFrame *temp = new ColFrame(30);
-      for (int j = 0; j < 5; j++)
-        temp->SetCell(j, new TextFrame(Format("%c %c %c %c %c", i + 'A', i + 'A', i + 'A', i + 'A', i + 'A'), kRed/4)); 
-      long_col->SetCell(2*i+1, new ButtonWidget(temp, i + 'A'));
-    }
-    GlopFrame *ff = new ScrollingFrame(long_col);
-    WindowFrame *wnd = new WindowFrame(ff, Format("Scrolling Window #%d", j+1));
-    huge_col->SetCell(j, new RecSizeFrame(wnd, 0.5f, 0.5f));
-  }
-  GlopFrame *outer_frame = new ScrollingFrame(huge_col);
-  gWindow->AddFrame(new RecSizeFrame(outer_frame, 0.6f, 0.9f), 0.5f, 0.5f, 0.5f, 0.5f);
 }
 
 int main(int argc, char **argv) {
   System::Init();
-  gDefaultStyle = new FrameStyle(gSystem->LoadFontOutline("thames.ttf"));
-  gIcon = Image::Load("Icon.bmp", kRed, 1);
-  BuildMainMenu();
+  LightSetId font_id;
+  ASSERT((font_id = gSystem->LoadFontOutline("thames.ttf")) != 0);
+  ASSERT((gIcon = Image::Load("Icon.bmp", kRed, 1)) != 0);
+  gDefaultStyle = new FrameStyle(font_id);
+ 
   gWindow->SetIcon(gIcon);
   ASSERT(gWindow->Create(1024, 768, false));
+  IntroScreen();
 
+  BuildMainMenu();
   while (!input()->WasKeyPressed(27)) {
     int selection = 0;
     if (input()->WasKeyPressed('1')) selection = 1;

@@ -676,9 +676,15 @@ class AbstractButtonFrame: public PaddedFrame {
   void Think(int dt);
   bool OnKeyEvent(const KeyEvent &event, int dt);
 
-  // Button functions
+  // Returns whether the button is currently in the down state.
   bool IsDown() const {return is_down_;}
+
+  // If the button generated events similar to a key on the keyboard, this returns whether a down
+  // event would have been generated this frame. It will be true if a button is just pressed or
+  // it will be true periodically while a button is held down.
   bool WasHeldDown() const {return was_held_down_;}
+
+  // Returns whether a full press and release of the button was completed this frame.
   bool WasPressedFully() const {return was_pressed_fully_;}
 
  protected:
@@ -686,6 +692,18 @@ class AbstractButtonFrame: public PaddedFrame {
     RecomputePadding();
     PaddedFrame::RecomputeSize(rec_width, rec_height);
   }
+
+  // Handles a state change on the button. The AbstractButtonFrame will never change whether the
+  // button is down by itself. This must be done by an extending class using this function.
+  //  UpNoFullRelease: The button is now in the not-pressed state. Do not mark it as having been
+  //                   pressed fully this farme.
+  //  UpFullRelease: The button is now in the not-pressed state. If it was just in the pressed
+  //                 state, mark it as having been pressed fully this frame.
+  //  Down: The button is now in the pressed state. If it was not pressed before, queue a
+  //        WasHeldDown repeat event with a long delay (similar to a key just being pressed).
+  //  DownRepeatSoon: The button is now in the pressed state. If it was not pressed before, queue a
+  //                  WasHeldDown repeat event with a short delay (similar to a key being held
+  //                  down).
   enum DownType {UpNoFullRelease, UpFullRelease, Down, DownRepeatSoon};
   void SetIsDown(DownType down_type);
 
@@ -865,7 +883,7 @@ class SliderFrame: public SingleParentFrame {
   bool OnKeyEvent(const KeyEvent &event, int dt);
  protected:
   void RecomputeSize(int rec_width, int rec_height);
-  void OnChildPing(int x1, int y1, int x2, int y2, bool center);
+  void OnChildPing(GlopFrame *child, int x1, int y1, int x2, int y2, bool center);
 
  private:
   void Init(Direction direction, int tab_size, int total_size, int position,

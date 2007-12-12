@@ -17,8 +17,8 @@ const int kTextPromptCursorFadeTime = 80;
 // ArrowImageFrame
 // ===============
 //
-// Helper class that renders a black arrow covering about 80% of the frame. This is used on buttons.
-// See, for example, SliderFrame.
+// Helper class that renders a black arrow covering about 80% of the frame. This is used on
+// buttons. See, for example, SliderFrame.
 class ArrowImageFrame: public GlopFrame {
  public:
   enum Direction {Up, Down, Left, Right};
@@ -899,6 +899,7 @@ bool DefaultButtonFrame::OnKeyEvent(const KeyEvent &event, int dt) {
     }
   }
 
+  // Set whether we are up or down based on the key event.
   if (down_hot_keys_.GetSize()) {
     SetIsDown(event.IsNonRepeatPress()? Down : DownRepeatSoon);
   } else if (IsPointVisible(input()->GetMouseX(), input()->GetMouseY())) {
@@ -936,12 +937,12 @@ void DefaultButtonFrame::SetIsHotKeyDown(const GlopKey &key, bool is_down) {
 // ============
 
 int DefaultSliderRenderer::RecomputeWidth(bool is_horizontal) const {
-  return int(min(gWindow->GetWidth(), gWindow->GetHeight()) * width_);
+  return max(int(min(gWindow->GetWidth(), gWindow->GetHeight()) * width_), 2);
 }
 
 int DefaultSliderRenderer::RecomputeMinTabLength(bool is_horizontal, int inner_width,
                                                  int inner_height) const {
-  return 6;
+  return min(6, is_horizontal? inner_width: inner_height);
 }
 
 void DefaultSliderRenderer::Render(bool is_horizontal, bool is_primary_focus, int x1, int y1,
@@ -990,7 +991,8 @@ class InnerSliderFrame: public GlopFrame {
     tab_logical_position_(tab_logical_position),
     mouse_lock_mode_(None),
     bar_pixel_length_(0),
-    renderer_(renderer) {}
+    renderer_(renderer) {
+  }
 
   void Render() {
     renderer_->Render(direction_ == Horizontal, GetParent()->IsPrimaryFocus(), GetX(), GetY(),
@@ -1218,12 +1220,10 @@ void SliderFrame::RecomputeSize(int rec_width, int rec_height) {
   SingleParentFrame::RecomputeSize(rec_width, rec_height);
 }
 
-void SliderFrame::OnChildPing(int x1, int y1, int x2, int y2, bool center) {
-  if ((x1 == dec_button_->GetX() - GetX() && y1 == dec_button_->GetY() - GetY() &&
-       inner_slider_->GetTabPosition() == 0) ||
-      (x1 == inc_button_->GetX() - GetX() && y1 == inc_button_->GetY() - GetY() &&
-       inner_slider_->GetTabPosition() == inner_slider_->GetTotalSize() -
-                                          inner_slider_->GetTabSize()))
+void SliderFrame::OnChildPing(GlopFrame *child, int x1, int y1, int x2, int y2, bool center) {
+  if ((child == dec_button_ && inner_slider_->GetTabPosition() == 0) ||
+      (child == inc_button_ && inner_slider_->GetTabPosition() == inner_slider_->GetTotalSize() -
+                                                                  inner_slider_->GetTabSize()))
     return;
-  SingleParentFrame::OnChildPing(x1, y1, x2, y2, center);
+  SingleParentFrame::OnChildPing(child, x1, y1, x2, y2, center);
 }
