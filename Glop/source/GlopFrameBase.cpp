@@ -14,14 +14,24 @@ const int kClipMinusInfinity = -kClipInfinity;
 // FrameStyle
 // ==========
 
-FrameStyle::FrameStyle(LightSetId _font_outline_id)
-: font_outline_id(_font_outline_id),
-  text_color(0, 0, 0),
-  text_height(0.025f),
+TextStyle::TextStyle()
+: color(gDefaultStyle->text_style.color), size(gDefaultStyle->text_style.size),
+  font(gDefaultStyle->text_style.font), flags(gDefaultStyle->text_style.flags) {}
+TextStyle::TextStyle(const Color &_color)
+: color(_color), size(gDefaultStyle->text_style.size), font(gDefaultStyle->text_style.font),
+  flags(gDefaultStyle->text_style.flags) {}
+TextStyle::TextStyle(const Color &_color, float _size)
+: color(_color), size(_size), font(gDefaultStyle->text_style.font),
+  flags(gDefaultStyle->text_style.flags) {}
+TextStyle::TextStyle(const Color &_color, float _size, Font *_font)
+: color(_color), size(_size), font(_font), flags(gDefaultStyle->text_style.flags) {}
+
+FrameStyle::FrameStyle(Font *font)
+: text_style(kBlack, 0.025f, font, 0),
   prompt_highlight_color(0.6f, 0.6f, 1.0f) {
   button_renderer = new DefaultButtonRenderer();
   slider_renderer = new DefaultSliderRenderer(button_renderer);
-  window_renderer = new DefaultWindowRenderer(_font_outline_id);
+  window_renderer = new DefaultWindowRenderer(font);
 }
 
 FrameStyle::~FrameStyle() {
@@ -29,6 +39,7 @@ FrameStyle::~FrameStyle() {
   delete slider_renderer;
   delete window_renderer;
 }
+
 FrameStyle *gDefaultStyle = 0;
 
 // GlopFrame

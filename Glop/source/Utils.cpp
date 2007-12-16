@@ -56,10 +56,10 @@ bool ToBool(const string &s, bool *result) {
 // See ToInt.
 char ToChar(const string &s) {
   char result;
-  ASSERT(ToChar(s, &result));
+  ASSERT(ToChar(s, &result, true));
   return result;
 }
-bool ToChar(const string &s, char *result) {
+bool ToChar(const string &s, char *result, bool leading_zeroes_ok) {
   // Handle characters surrounded by ' markers
   if (s == "'\\'") *result = '\\';
   else if (s == "'\''") *result = '\'';
@@ -71,7 +71,7 @@ bool ToChar(const string &s, char *result) {
   // Handle ASCII codes
   else {
     int temp;
-    if (ToInt(s, &temp) && temp >= 0 && temp < 256) {
+    if (ToInt(s, &temp, leading_zeroes_ok) && temp >= 0 && temp < 256) {
       *result = (char)temp;
       return true;
     }
@@ -129,10 +129,10 @@ bool ToFloat(const string &s, float *result) {
 // Note this allows leading zeroes on positive numbers.
 int ToInt(const string &s, int base) {
   int result;
-  ASSERT(ToInt(s, &result, base));
+  ASSERT(ToInt(s, &result, base, true));
   return result;
 }
-bool ToInt(const string &s, int *result, int base) {
+bool ToInt(const string &s, int *result, int base, bool leading_zeroes_ok) {
   const int64 kMaxInt = 2147483647L, kMinInt = -2147483647L - 1;
     
   // Account for negative signs and empty strings and leading zeroes
@@ -143,6 +143,8 @@ bool ToInt(const string &s, int *result, int base) {
     pos++;
   }
   if (s[pos] == 0 || (is_negative && s[pos] == '0'))
+    return false;
+  if (!leading_zeroes_ok && s[pos] == '0' && s[pos+1] != 0)
     return false;
 
   // Get the value
@@ -171,14 +173,40 @@ bool ToInt(const string &s, int *result, int base) {
 // Converts this string to an int. Method #1 assumes valid formatting, method #2 returns
 // whether the data is correctly formatted (and in range), and gives the value via *result.
 // *ShortFormat* = *IntFormat*
-bool ToShort(const string &s, short *result, int base) {
+bool ToShort(const string &s, short *result, int base, bool leading_zeroes_ok) {
   const int kShortMin = -32768, kShortMax = 32767;
   int temp;
-  if (!ToInt(s, &temp, base))
+  if (!ToInt(s, &temp, base, leading_zeroes_ok))
     return false;
   if (temp >= kShortMin && temp <= kShortMax) {
     *result = (short)temp;
     return true;
-  } else
+  } else {
     return false;
+  }
+}
+
+void *ToPointer(const string &s) {
+  void *result;
+  ASSERT(ToPointer(s, &result));
+  return result;
+}
+bool ToPointer(const string &s, void **result) {
+  uint64 value = 0;
+  for (int pos = 0; s[pos] != 0; pos++) {
+    if (pos >= 2*sizeof(result))
+      return false;
+    int digit;
+    if (s[pos] >= '0' && s[pos] <= '9')
+      digit = s[pos] - '0';
+    else if (s[pos] >= 'A' && s[pos] <= 'F')
+      digit = s[pos] + 10 - 'A';
+    else if (s[pos] >= 'a' && s[pos] <= 'f')
+      digit = s[pos] + 10 - 'a';
+    else
+      return false;
+    value = 16*value + digit;
+  }
+  *result = (void*)value;
+  return true;
 }

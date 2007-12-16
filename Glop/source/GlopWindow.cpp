@@ -6,6 +6,7 @@
 #include "../include/Input.h"
 #include "../include/OpenGl.h"
 #include "../include/System.h"
+#include "GlopInternalData.h"
 #include "Os.h"
 #include <cmath>
 #include <set>
@@ -71,7 +72,7 @@ bool GlopWindow::Create(int width, int height, bool full_screen,
   glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST);
   glFrontFace(GL_CW);
   glViewport(0, 0, width, height);
-  gSystem->GlRegisterAll();
+  GlDataManager::GlInitAll();
 
   // Store our new settings
   is_created_ = true;
@@ -88,7 +89,7 @@ bool GlopWindow::Create(int width, int height, bool full_screen,
 
 void GlopWindow::Destroy() {
   if (is_created_) {
-    gSystem->GlUnregisterAll();
+    GlDataManager::GlShutDownAll();
     input_->StopPolling();
     Os::DestroyWindow(os_data_);
     os_data_ = 0;

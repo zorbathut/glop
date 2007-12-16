@@ -19,15 +19,17 @@ string Format(const char *text, va_list arglist);
 bool ToBool(const string &s);
 bool ToBool(const string &s, bool *result);
 char ToChar(const string &s);
-bool ToChar(const string &s, char *result);
+bool ToChar(const string &s, char *result, bool leading_zeroes_ok = false);
 double ToDouble(const string &s);
 bool ToDouble(const string &s, double *result);
 inline float ToFloat(const string &s) {return float(ToDouble(s));}
 bool ToFloat(const string &s, float *result);
 int ToInt(const string &s, int base = 10);
-bool ToInt(const string &s, int *result, int base = 10);
+bool ToInt(const string &s, int *result, int base = 10, bool leading_zeroes_ok = false);
 inline short ToShort(const string &s, int base = 10) {return short(ToInt(s, base));}
-bool ToShort(const string &s, short *result, int base = 10);
+bool ToShort(const string &s, short *result, int base = 10, bool leading_zeroes_ok = false);
+void *ToPointer(const string &s);
+bool ToPointer(const string &s, void **result);
 
 // Binary search utilities. Assumes that a list is ordered from least to greatest. BSFindLowerBound
 // finds the largest index i such that v[i] <= target, or -1 if there is no such index. BSFindMatch

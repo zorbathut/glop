@@ -4,18 +4,18 @@
 // TODO(darthur):
 //  - Clean up this file
 //  - Onquit
-//  - LongTextFrame horizontal overhang fix
 //  - Boxed text prompt frames
 //  - Pinging on text prompt frames.
-//  - Investigate ToX utilities, and their place in PrettyString
-//  - Figure out system for fonts
 //  - Should text prompts really track enter, escape?
-//  - Fix up general style struct, especially initialization. Should it even exist?
+//  - Fix up gui frame styles
 //  - Rework file stuff
+//  - Why is object slightly visible even when deep in the fog?
+//  - Add general GlopFrame comments, and formalize render expectations vis a vis gl settings
 
 // Includes
 #include "../Glop/include/Base.h"
 #include "../Glop/include/BinaryFileManager.h"
+#include "../Glop/include/Font.h"
 #include "../Glop/include/GlopFrame.h"
 #include "../Glop/include/GlopWindow.h"
 #include "../Glop/include/Image.h"
@@ -29,11 +29,10 @@
 Image *gIcon;
 
 void IntroScreen() {
-  GlopFrame *info = new FancyTextFrame("This is a test program for Glop. Once in the menu,\n"
-                                       "select a test to verify that certain functions perform\n"
-                                       "as expected.",
-                                       false, kJustifyCenter, kWhite);
-  gWindow->AddFrame(info, 0.5f, 0.4f, kJustifyCenter, 0.4f);
+  GlopFrame *info = new FancyTextFrame("\1bu\1Glop Test Program\1/b/u\1\n\n"
+                                       "Select tests to verify that Glop performs as expected.",
+                                       true, 0.5f, kWhite);
+  gWindow->AddFrame(info, 0.5f, 0.3f, 0.5f, 0.3f);
   gWindow->AddFrame(new TextFrame("Press any key to continue...", kYellow),
                      0.5f, 1.0f, kJustifyCenter, kJustifyBottom);
   input()->WaitForKeyPress();
@@ -301,8 +300,8 @@ class CubeFrame: public CameraFrame {
 void CameraTest() {
   GlopFrame *info = new FancyTextFrame("Rotating Cube with Fog\n\n"
                                        "Move the camera with the mouse and with W,A,D,S\n\n\n"
-                                       "Press Escape to continue",
-                                       false, kJustifyCenter, kWhite);
+                                       "\1cFFFF00\1Press Escape to continue",
+                                       false, 0.5f, kWhite);
   GlopFrame *cube = new HollowBoxFrame(new CubeFrame(), kWhite);
   GlopFrame *content = new ColFrame(
     new PaddedFrame(cube, 10), CellSize::Default(),
@@ -327,11 +326,13 @@ void BuildMainMenu() {
 }
 
 int main(int argc, char **argv) {
+  Font *font;
   System::Init();
-  LightSetId font_id;
-  ASSERT((font_id = gSystem->LoadFontOutline("thames.ttf")) != 0);
+  string s = Format("%p", argv);
+  
+  ASSERT((font = Font::Load("thames.ttf")) != 0);
   ASSERT((gIcon = Image::Load("Icon.bmp", kRed, 1)) != 0);
-  gDefaultStyle = new FrameStyle(font_id);
+  gDefaultStyle = new FrameStyle(font);
  
   gWindow->SetIcon(gIcon);
   ASSERT(gWindow->Create(1024, 768, false));

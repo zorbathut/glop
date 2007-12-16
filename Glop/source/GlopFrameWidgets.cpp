@@ -1,5 +1,6 @@
 // Includes
 #include "../include/GlopFrameWidgets.h"
+#include "../include/Font.h"
 #include "../include/GlopWindow.h"
 #include "../include/Image.h"
 #include "../include/OpenGl.h"
@@ -11,67 +12,40 @@ const int kTextPromptCursorCycleTime = 800;
 const int kTextPromptCursorFadeTime = 80;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-// Generic private helper classes
-// ==============================
-
-// ArrowImageFrame
-// ===============
-//
-// Helper class that renders a black arrow covering about 80% of the frame. This is used on
-// buttons. See, for example, SliderFrame.
-class ArrowImageFrame: public GlopFrame {
- public:
-  enum Direction {Up, Down, Left, Right};
-
-  ArrowImageFrame(Direction d, const Color &color = gDefaultStyle->text_color)
-  : direction_(d), color_(color) {}
-
-  void Render() {
-    int x = GetX() + (GetWidth()+1)/2, y = GetY() + (GetHeight()+1)/2;
-    int d = int(GetWidth() * 0.35f + 0.5f);
-
-    GlUtils::SetColor(color_);
-    glBegin(GL_TRIANGLES);
-    switch(direction_) {
-      case Up:
-        glVertex2i(x + d + 1, y + d);
-        glVertex2i(x - d - 1,  y + d);
-        glVertex2i(x, y - d - 2);
-        break;
-      case Right:
-        glVertex2i(x - d - 1, y + d + 1);
-        glVertex2i(x - d - 1, y - d - 1);           
-        glVertex2i(x + d + 1, y);
-        break;
-      case Down:
-        glVertex2i(x - d - 1, y - d - 1);
-        glVertex2i(x + d + 1, y - d - 1);
-        glVertex2i(x, y + d + 1);
-        break;
-      case Left:
-        glVertex2i(x + d, y - d - 1);
-        glVertex2i(x + d, y + d + 1);
-        glVertex2i(x - d - 2, y);
-        break;
-    }
-    glEnd();
-    GlUtils::SetColor(kWhite);
-  }
-
-  // Keep an aspect ratio of 1.0.
-  void RecomputeSize(int rec_width, int rec_height) {
-    SetToMaxSize(rec_width, rec_height, 1.0f);
-  }
-
- private:
-  Direction direction_;
-  Color color_;
-  DISALLOW_EVIL_CONSTRUCTORS(ArrowImageFrame);
-};
-
-///////////////////////////////////////////////////////////////////////////////////////////////////
 // Basic widgets
 // =============
+
+void ArrowImageFrame::Render() {
+  int x = GetX() + (GetWidth()+1)/2, y = GetY() + (GetHeight()+1)/2;
+  int d = int(GetWidth() * 0.35f + 0.5f);
+
+  GlUtils::SetColor(color_);
+  glBegin(GL_TRIANGLES);
+  switch(direction_) {
+    case Up:
+      glVertex2i(x + d + 1, y + d);
+      glVertex2i(x - d - 1,  y + d);
+      glVertex2i(x, y - d - 2);
+      break;
+    case Right:
+      glVertex2i(x - d - 1, y + d + 1);
+      glVertex2i(x - d - 1, y - d - 1);           
+      glVertex2i(x + d + 1, y);
+      break;
+    case Down:
+      glVertex2i(x - d - 1, y - d - 1);
+      glVertex2i(x + d + 1, y - d - 1);
+      glVertex2i(x, y + d + 1);
+      break;
+    case Left:
+      glVertex2i(x + d, y - d - 1);
+      glVertex2i(x + d, y + d + 1);
+      glVertex2i(x - d - 2, y);
+      break;
+  }
+  glEnd();
+  GlUtils::SetColor(kWhite);
+}
 
 void SolidBoxFrame::Render() {
   GlUtils2d::FillRectangle(GetX(), GetY(), GetX2(), GetY2(), inner_color_);
@@ -91,26 +65,12 @@ void HollowBoxFrame::Render() {
 // TextFrame
 // =========
 
-TextFrame::TextFrame(const string &text, const FrameStyle *style, bool is_full_height)
-: text_(text),
-  font_outline_id_(style->font_outline_id),
-  font_id_(0),
-  color_(style->text_color),
-  text_height_(style->text_height),
-  is_full_height_(is_full_height) {}
-  
-TextFrame::TextFrame(const string &text, const Color &color, float text_height,
-                     LightSetId font_outline_id, bool is_full_height)
-: text_(text),
-  font_outline_id_(font_outline_id),
-  font_id_(0),
-  color_(color),
-  text_height_(text_height),
-  is_full_height_(is_full_height) {}
+TextFrame::TextFrame(const string &text, const TextStyle &style)
+: text_(text), text_style_(style), renderer_(0) {}
 
 TextFrame::~TextFrame() {
-  if (font_id_ != 0)
-    gSystem->ReleaseFontRef(font_id_);
+  if (renderer_ != 0)
+    TextRenderer::FreeRef(renderer_);
 }
 
 int TextFrame::GetFontPixelHeight(float height) {
@@ -118,79 +78,28 @@ int TextFrame::GetFontPixelHeight(float height) {
 }
 
 void TextFrame::Render() {
-  if (font_id_ == 0)
-    return;
-
-  // Set the Gl properties for this text
-  glEnable(GL_BLEND);
-  GlUtils::SetFontTexture(font_id_);
-  GlUtils::SetColor(color_);
-
-  // If our text does not fit in the required space, add "..." and clip off entire characters
-  // to make it fit
-  if (GetX() < GetClipX1() || GetX2() > GetClipX2()) {
-    // Calculate the extents of "..." on either side
-    int x0, x = GetX();
-    int lw = gSystem->GetCharWidth(font_id_, '.', true, false) +
-             2 * gSystem->GetCharWidth(font_id_, '.', false, false);
-    int rw = gSystem->GetCharWidth(font_id_, '.', false, true) +
-             2 * gSystem->GetCharWidth(font_id_, '.', false, false);
-
-    // Figure out where to start printing
-    int i = 0, len = (int)text_.size();
-    string print_string = "";
-    if (GetX() < GetClipX1()) {
-      print_string = "...";
-      for (; x < GetClipX1() + lw; i++) 
-        x += gSystem->GetCharWidth(font_id_, text_[i], i==0, i==len-1);
-      x0 = x - lw;
-    } else {
-      x0 = GetX();
-    }
-
-    // Figure out where to end printing
-    if (GetX2() > GetClipX2()) {
-      if (x + rw <= GetClipX2()) {
-        for (; text_[i] != 0; i++) {
-          x += gSystem->GetCharWidth(font_id_, text_[i], i==0, i==len-1);
-          if (x + rw > GetClipX2())
-            break;
-          print_string += text_[i];
-        }
-        print_string += "...";
-      }
-    } else if (i < (int)text_.size()) {
-      print_string += text_.substr(i);
-    }
-
-    // Print the truncated string
-    GlUtils2d::Print(x0, GetY(), print_string, font_id_);
-  } else {
-    GlUtils2d::Print(GetX(), GetY(), text_, font_id_);
+  if (renderer_ != 0 && text_.size() > 0) {
+    renderer_->PrintUl(GetX(), GetY(), text_);
+    GlUtils::SetColor(kWhite);
   }
-
-  // Undo the Gl property changes
-  glDisable(GL_BLEND);
-  GlUtils::SetNoTexture();
-  GlUtils::SetColor(kWhite);
 }
 
 void TextFrame::RecomputeSize(int rec_width, int rec_height) {
   // Obtain a new font if need be
-  int new_height = GetFontPixelHeight(text_height_);
-  if (font_id_ == 0 || new_height != gSystem->GetFontHeight(font_id_, false)) {
-    if (font_id_ != 0)
-      gSystem->ReleaseFontRef(font_id_);
-    font_id_ = gSystem->AddFontRef(font_outline_id_, new_height);
+  TextRenderer *new_renderer = 0;
+  if (text_style_.font != 0) {
+    new_renderer = text_style_.font->AddRef(GetFontPixelHeight(text_style_.size),
+                                            text_style_.color, text_style_.flags); 
   }
+  if (renderer_ != 0)
+    TextRenderer::FreeRef(renderer_);
+  renderer_ = new_renderer;
   
   // Compute our size after the font switch
-  if (font_id_ != 0) {
-    SetSize(gSystem->GetTextWidth(font_id_, text_),
-            gSystem->GetFontHeight(font_id_, is_full_height_));
-  } else {
+  if (renderer_ != 0)
+    SetSize(renderer_->GetTextWidth(text_), renderer_->GetFullHeight());
+  else
     SetSize(0, 0);
-  }
 }
 
 // FpsFrame
@@ -203,159 +112,203 @@ void FpsFrame::Think(int dt) {
 // FancyTextFrame
 // ==============
 
-FancyTextFrame::FancyTextFrame(const string &text, const FrameStyle *style)
-: SingleParentFrame(new ColFrame(0, kJustifyLeft)),
-  text_(text),
-  font_outline_id_(style->font_outline_id),
-  add_soft_returns_(true),
-  start_color_(style->text_color),
-  base_text_height_(style->text_height) {}
+FancyTextFrame::FancyTextFrame(const string &text, const TextStyle &style)
+: MultiParentFrame(), text_(text), base_horz_justify_(0.5f), text_style_(style),
+  add_soft_returns_(true) {}
 
 FancyTextFrame::FancyTextFrame(const string &text, bool add_soft_returns, float horz_justify,
-                               const FrameStyle *style)
-: SingleParentFrame(new ColFrame(0, kJustifyLeft)),
-  text_(text),
-  font_outline_id_(style->font_outline_id),
-  add_soft_returns_(add_soft_returns),
-  start_color_(style->text_color),
-  base_text_height_(style->text_height) {}
+                               const TextStyle &style)
+: MultiParentFrame(), text_(text), base_horz_justify_(horz_justify), text_style_(style),
+  add_soft_returns_(add_soft_returns) {}
 
-FancyTextFrame::FancyTextFrame(const string &text, const Color &start_color, float base_text_height,
-                               LightSetId font_outline_id)
-: SingleParentFrame(new ColFrame(0, kJustifyLeft)),
-  text_(text),
-  font_outline_id_(font_outline_id),
-  add_soft_returns_(true),
-  start_color_(start_color),
-  base_text_height_(base_text_height) {}
-
-FancyTextFrame::FancyTextFrame(const string &text, bool add_soft_returns, float horz_justify,
-                               const Color &start_color, float base_text_height,
-                               LightSetId font_outline_id)
-: SingleParentFrame(new ColFrame(0, horz_justify)),
-  text_(text),
-  font_outline_id_(font_outline_id),
-  add_soft_returns_(add_soft_returns),
-  start_color_(start_color),
-  base_text_height_(base_text_height) {}
-
-// Creates a ParseStatus corresponding to parsing a new block of text with our default settings.
+// Parsing utilities. A ParseStatus gives the position and style of text at a given location in
+// our string. When we start parsing, a ParseStatus also maintains a TextRenderer for the
 FancyTextFrame::ParseStatus FancyTextFrame::CreateParseStatus() {
   ParseStatus result;
   result.pos = 0;
-  result.color = start_color_;
-  result.text_height = base_text_height_;
-  result.font_id = 0;
+  result.horz_justify = base_horz_justify_;
+  result.style = text_style_;
+  result.renderer = 0;
   return result;
 }
 
-// Prepares to parse fancy text from the given status. This requires getting a system reference to
-// the active font.
 void FancyTextFrame::StartParsing(ParseStatus *status) {
-  status->font_id = gSystem->AddFontRef(font_outline_id_,
-    TextFrame::GetFontPixelHeight(status->text_height));
-  ASSERT(status->font_id != 0);
+  status->renderer = status->style.font->AddRef(
+    TextFrame::GetFontPixelHeight(status->style.size), status->style.color, status->style.flags);
 }
 
-// Stop parsing fancy text, given our last active status. This requires releasing the last font
-// reference we had.
 void FancyTextFrame::StopParsing(ParseStatus *status) {
-  gSystem->ReleaseFontRef(status->font_id);
-  status->font_id = 0;
+  TextRenderer::FreeRef(status->renderer);
+  status->renderer = 0;
 }
 
 // Given a string to parse, and our current status, this read the next ASCII character in the
-// string (and returns it via ch), and updates status as well.
+// string (and returns it via ch), and updates status as well. Possible return types:
+//  - Normal: A character (possibly 0) was read, and the text style was not changed.
+//  - NewRenderer: A character (possibly 0) was read, but the character is in a new text style,
+//      which is now reflected in status. We stop parsing in the old style, and start with the
+//      new style.
+//  - Error: There was a parsing error. We also stop parsing.
+//
+// Note this maintains the following invariants:
 //  - status.pos gives the first character index AFTER ch
-//  - The remaining information gives formatting UP TO ch.
-bool FancyTextFrame::ParseNextCharacter(const string &s, ParseStatus *status, char *ch) {
+//  - status.style, etc. gives the status FOR ch
+FancyTextFrame::ParseResult FancyTextFrame::ParseNextCharacter(
+  const string &s, ParseStatus *status, char *ch) {
+  // Handle regular characters
+  if (s[status->pos] != '\1') {
+    *ch = s[status->pos++];
+    return Normal;
+  }
+
   // Handle tags
+  StopParsing(status);
   while (s[status->pos] == '\1') {
     // Read until the end of the tag
     int pos2;
     for (pos2 = status->pos+1; s[pos2] != 0 && s[pos2] != '\1'; pos2++);
     if (pos2 == status->pos+1 || s[status->pos] == 0)
-      return false;
+      return Error;
+
+    // Read the tag
     string tag = s.substr(status->pos + 1, pos2 - status->pos -1);
     switch (tag[0]) {
+      // Bold, italics, underline
+      case 'b':
+      case 'i':
+      case 'u':
+      case '/':
+        for (int i = 0; i < (int)tag.size(); i++) {
+          if (tag[i] == 'b') {
+            status->style.flags |= kFontBold;
+          } else if (tag[i] == 'i') {
+            status->style.flags |= kFontItalics;
+          } else if (tag[i] == 'u') {
+            status->style.flags |= kFontUnderline;
+          } else if (tag[i] == '/') {
+            if (tag[i+1] == 'b') status->style.flags &= (~kFontBold);
+            else if (tag[i+1] == 'i') status->style.flags &= (~kFontItalics);
+            else if (tag[i+1] == 'u') status->style.flags &= (~kFontUnderline);
+            else return Error;
+            i++;
+          } else {
+            return Error;
+          }
+        }
+        break;
+      // Color
       case 'c':
-        // Handle color tags
         if (tag.size() != 7 && tag.size() != 9)
-          return false;
+          return Error;
         int c[4];
-        if (!ToInt(tag.substr(1, 2), &c[0], 16) || !ToInt(tag.substr(3, 2), &c[1], 16) ||
-            !ToInt(tag.substr(5, 2), &c[2], 16))
-          return false;
+        if (!ToInt(tag.substr(1, 2), &c[0], 16, true) ||
+            !ToInt(tag.substr(3, 2), &c[1], 16, true) ||
+            !ToInt(tag.substr(5, 2), &c[2], 16, true))
+          return Error;
         if (tag.size() == 7)
           c[3] = 255;
-        else if (!ToInt(tag.substr(7, 2), &c[3], 16))
-          return false;
-        status->color = Color(c[0] / 255.0f, c[1] / 255.0f, c[2] / 255.0f, c[3] / 255.0f);
+        else if (!ToInt(tag.substr(7, 2), &c[3], 16, true))
+          return Error;
+        status->style.color = Color(c[0] / 255.0f, c[1] / 255.0f, c[2] / 255.0f, c[3] / 255.0f);
         break;
+      // Font
+      case 'f':
+        if (!ToPointer(tag.substr(1), (void**)&status->style.font))
+          return Error;
+        break;
+      // Justify
+      case 'j':
+        if (!ToFloat(tag.substr(1), &status->horz_justify)) return Error;
+        break;
+      // Size
       case 's':
-        // Handle size tags
-        if (!ToFloat(tag.substr(1), &status->text_height))
-          return false;
-        status->text_height *= base_text_height_;
-        StopParsing(status);
-        StartParsing(status);
+        if (!ToFloat(tag.substr(1), &status->style.size))
+          return Error;
+        status->style.size *= text_style_.size;
         break;
       default:
-        return false;
+        return Error;
     }
     status->pos = pos2 + 1;
   }
 
   // Read the next ASCII character
   *ch = s[status->pos++];
-  return true;
+  StartParsing(status);
+  return NewRenderer;
+}
+
+void FancyTextFrame::SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2) {
+  for (int i = 0; i < (int)text_blocks_.size(); i++)
+  for (int j = 0; j < (int)text_blocks_[i].size(); j++) {
+    GetChild(text_blocks_[i][j].child_id)->SetPosition(screen_x + text_blocks_[i][j].x,
+                                                       screen_y + text_blocks_[i][j].y,
+                                                       cx1, cy1, cx2, cy2);
+  }
 }
 
 // Rebuilds the fancy text frame as a collection of standard text frames.
 void FancyTextFrame::RecomputeSize(int rec_width, int rec_height) {
   int lines = 0;
 
-  // Add soft returns and store the result in text2
+  // If soft returns are enabled, do a first pass to add them. Regardless, we output text2, which
+  // is formatted identically to text_, except that soft returns are manually added. We also count
+  // the number of output lines.
   string text2;
   if (add_soft_returns_) {
     bool is_done = false;
     ParseStatus status = CreateParseStatus();
+
+    // Loop through each line
     while (!is_done) {
       int start_pos = status.pos, x = 0;
       bool is_soft_return;
       StartParsing(&status);
       ParseStatus word_start_status = status, dash_status = status;
 
-      // Read a line of text
+      // Read a line of text, maintaining the following:
+      //  - status: The parse status as of the last character we successfully read
+      //  - look_ahead_status: The parse status after reading the current character
+      //  - word_start_status: The parse status after reading the most recent space
+      //  - dash_status: The parse status after reading the last character that can be appended
+      //      with a '-' and not extend outside the view size.
       while (1) {
         char ch;
+
+        // Get the next character and check for errors
         ParseStatus look_ahead_status = status;
-        if (!ParseNextCharacter(text_, &look_ahead_status, &ch)) {
-          StopParsing(&status);
-          column()->Resize(0);
-          SingleParentFrame::RecomputeSize(rec_width, rec_height);
+        if (ParseNextCharacter(text_, &look_ahead_status, &ch) == Error) {
+          text_blocks_.clear();
+          ClearChildren();
+          MultiParentFrame::RecomputeSize(rec_width, rec_height);
           return;
         }
+
+        // Check for end-lines
         if (ch == 0 || ch == '\n') {
           status = look_ahead_status;
           is_soft_return = false;
           is_done = (ch == 0);
+          StopParsing(&look_ahead_status);
           break;
         }
+
+        // Update our values and break early. Regardless, status should represent that active
+        // parser when we leave this loop.
         if (ch == ' ')
-          word_start_status = look_ahead_status;
-        if (x + gSystem->GetCharWidth(status.font_id, '-', false, true) <= rec_width)
+          word_start_status = status;
+        if (x + status.renderer->GetCharWidth('-', false, true) <= rec_width)
           dash_status = status;
-        if (x + gSystem->GetCharWidth(look_ahead_status.font_id, ch, x == 0, true) > rec_width) {
+        if (x + look_ahead_status.renderer->GetCharWidth(ch, x == 0, true) > rec_width) {
           is_soft_return = true;
+          StopParsing(&look_ahead_status);
           break;
         }
-        x += gSystem->GetCharWidth(look_ahead_status.font_id, ch, x == 0, false);
+        x += look_ahead_status.renderer->GetCharWidth(ch, x == 0, false);
         status = look_ahead_status;
       }
       lines++;
-      StopParsing(&status);
-
+      
       // Backtrack to the beginning of the line
       if (is_soft_return && word_start_status.pos > start_pos) {
         text2 += text_.substr(start_pos, word_start_status.pos - start_pos) + "\n";
@@ -383,48 +336,90 @@ void FancyTextFrame::RecomputeSize(int rec_width, int rec_height) {
     lines++;
   }
 
-  // Build the table of TextFrame's
-  column()->Resize(lines);
+  // Build the new frames. We postpone deleting the old frames, so that their fonts don't get
+  // deleted yet. This means that if we still need those fonts, we can get them for free.
+  vector<vector<TextFrame*> > new_frames(lines);
+  vector<float> row_justify(lines);
   ParseStatus status = CreateParseStatus();
   StartParsing(&status);
   string cur_part = "";
   for (int row_num = 0; row_num < lines; row_num++) {
-    vector<GlopFrame*> row;
-
+    
     // Build TextFrame's for this row
+    bool is_row_justify_fixed = false;
     while (1) {
       char ch;
       ParseStatus old_status = status;
-      if (!ParseNextCharacter(text2, &status, &ch)) {
-        StopParsing(&status);
-        column()->Resize(0);
-        SingleParentFrame::RecomputeSize(rec_width, rec_height);
+
+      // Get the next character and check for errors
+      ParseResult parse_result = ParseNextCharacter(text2, &status, &ch);
+      if (parse_result == Error) {
+        for (int i = 0; i < (int)new_frames.size(); i++)
+        for (int j = 0; j < (int)new_frames[i].size(); j++)
+          delete new_frames[i][j];
+        text_blocks_.clear();
+        ClearChildren();
+        MultiParentFrame::RecomputeSize(rec_width, rec_height);
         return;
       }
-      if (ch == 0 || ch == '\n' || old_status.color != status.color ||
-          old_status.text_height != status.text_height) {
-        TextFrame *frame = new TextFrame(cur_part, old_status.color, old_status.text_height,
-                                         font_outline_id_, row_num == lines - 1);
-        row.push_back(frame);
+
+      // Handle new text blocks
+      if (ch == 0 || ch == '\n' || parse_result == NewRenderer)
+      if (cur_part != "" || ch == 0 || ch == '\n') {
+        new_frames[row_num].push_back(new TextFrame(cur_part, old_status.style));
         cur_part = "";
         if (ch == 0 || ch == '\n')
           break;
       }
-      cur_part += ch;
-    }
 
-    // Store the row in our final result
-    if (row.size() == 1) {
-      column()->SetCell(row_num, row[0]);
-    } else {
-      RowFrame *row_frame = new RowFrame((int)row.size(), kJustifyBottom);
-      for (int i = 0; i < (int)row.size(); i++)
-        row_frame->SetCell(i, row[i]);
-      column()->SetCell(row_num, row_frame);
+      // Move to the next character
+      if (!is_row_justify_fixed)
+        row_justify[row_num] = status.horz_justify;
+      cur_part += ch;
+      is_row_justify_fixed = true;
     }
   }
   StopParsing(&status);
-  SingleParentFrame::RecomputeSize(rec_width, rec_height);
+
+  // Update our children.
+  // Pass #1: Add the frames as children, and calculate each frame dx, each row width, and each
+  //  row ascent.
+  text_blocks_.clear();
+  ClearChildren();
+  text_blocks_.resize(lines);
+  vector<int> row_ascent(lines, 0), row_width(lines, 0);
+  vector<vector<int> > frame_dx(lines);
+  int total_width = 0;
+  for (int i = 0; i < lines; i++) {
+    for (int j = 0; j < (int)new_frames[i].size(); j++) {
+      TextFrame *frame = new_frames[i][j];
+      TextBlock block;
+      block.child_id = AddChild(frame);
+      text_blocks_[i].push_back(block);
+      frame->UpdateSize(rec_width, rec_height);
+      frame_dx[i].push_back(frame->GetRenderer()->GetTextWidth(frame->GetText(), j == 0,
+                                                               j+1 == (int)new_frames[i].size()));
+      row_width[i] += frame_dx[i][j];
+      row_ascent[i] = max(row_ascent[i],  frame->GetRenderer()->GetAscent());
+    }
+    total_width = max(total_width, row_width[i]);
+  }
+
+  // Pass #2: Position all children.
+  int row_pos = 0;
+  for (int i = 0; i < lines; i++) {
+    int x = int(row_justify[i] * (total_width - row_width[i])), next_row_pos = row_pos;
+    for (int j = 0; j < (int)new_frames[i].size(); j++) {
+      TextFrame *frame = new_frames[i][j];
+      int y = row_pos + row_ascent[i] - frame->GetRenderer()->GetAscent();
+      text_blocks_[i][j].x = x;
+      text_blocks_[i][j].y = y;
+      x += frame_dx[i][j];
+      next_row_pos = max(next_row_pos, y + frame->GetRenderer()->GetFullHeight());
+    }
+    row_pos = next_row_pos;
+  }
+  SetSize(total_width, row_pos);
 }
 
 // AbstractTextPromptFrame
@@ -435,7 +430,7 @@ void AbstractTextPromptFrame::Render() {
 
   if (IsInFocus()) {
     // Determine the cursor color (including translucency)
-    Color cursor_color((text()->GetColor() + kBlue) / 2);
+    Color cursor_color((text()->GetStyle().color + kBlue) / 2);
     int delim[] = {kTextPromptCursorCycleTime / 2 - kTextPromptCursorFadeTime,
                    kTextPromptCursorCycleTime / 2,
                    kTextPromptCursorCycleTime - kTextPromptCursorFadeTime,
@@ -450,13 +445,7 @@ void AbstractTextPromptFrame::Render() {
       cursor_color[3] = (cursor_timer_ - delim[2]) / float(delim[3] - delim[2]);
 
     // Print the cursor
-    GlUtils::SetFontTexture(text()->GetFontId());
-    GlUtils::SetColor(cursor_color);
-    glEnable(GL_BLEND);
-    GlUtils2d::Print(GetX() + char_x_[cursor_pos_], GetY(), "|", text()->GetFontId());
-    glDisable(GL_BLEND);
-    GlUtils::SetColor(kWhite);
-    GlUtils::SetNoTexture();
+    text()->GetRenderer()->PrintUl(GetX() + char_x_[cursor_pos_], GetY(), "|");
   }
 }
 
@@ -470,11 +459,11 @@ void AbstractTextPromptFrame::Think(int dt) {
 
 void AbstractTextPromptFrame::RecomputeSize(int rec_width, int rec_height) {
   SingleParentFrame::RecomputeSize(rec_width, rec_height);
-  SetSize(GetWidth() + gSystem->GetCharWidth(text()->GetFontId(), '|', true, true), GetHeight());
+  SetSize(GetWidth() + text()->GetRenderer()->GetCharWidth('|', true, true), GetHeight());
   char_x_.clear();
   char_x_.push_back(0);
   for (int i = 0; i < (int)text()->GetText().size(); i++) {
-    int dx = gSystem->GetCharWidth(text()->GetFontId(), text()->GetText()[i], i == 0, false);
+    int dx = text()->GetRenderer()->GetCharWidth(text()->GetText()[i], i == 0, false);
     char_x_.push_back(char_x_[i] + dx);
   }
 }
@@ -586,16 +575,15 @@ bool BasicTextPromptFrame::OnKeyEvent(const KeyEvent &event, int dt) {
 }
 
 BasicTextPromptFrame::BasicTextPromptFrame(const string &text, const FrameStyle *style)
-: AbstractTextPromptFrame(text, style),
+: AbstractTextPromptFrame(text, style->text_style),
   stored_value_(text),
   is_tracking_mouse_(false),
   selection_anchor_(GetCursorPos()),
   selection_color_(style->prompt_highlight_color) {}
 
-BasicTextPromptFrame::BasicTextPromptFrame(const string &text, const Color &color,
-                                           float text_height, LightSetId font_outline_id,
+BasicTextPromptFrame::BasicTextPromptFrame(const string &text, const TextStyle &text_style,
                                            const Color &selection_color)
-: AbstractTextPromptFrame(text, color, text_height, font_outline_id),
+: AbstractTextPromptFrame(text, text_style),
   stored_value_(text),
   is_tracking_mouse_(false),
   selection_anchor_(GetCursorPos()),
@@ -672,7 +660,7 @@ void StringPromptFrame::Set(const string &value) {
 }
 
 bool StringPromptFrame::CanInsertCharacter(char ch, bool in_theory) const {
-  return (ch >= kFirstFontCharacter && ch <= kLastFontCharacter) &&
+  return (ch >= 32 && ch <= 126) &&
          (in_theory || (int)text()->GetText().size() < length_limit_);
 }
 
@@ -708,8 +696,7 @@ void IntegerPromptFrame::ReformText(bool is_confirmed) {
 // ===========
 
 GlopFrame *DefaultWindowRenderer::CreateTitleFrame(const string &title) const {
-  return new PaddedFrame(new TextFrame(title, title_color_, title_height_, title_font_id_),
-                         4, 2, 2, 0);
+  return new PaddedFrame(new TextFrame(title, title_style_), 4, 2, 2, 0);
 }
 
 void DefaultWindowRenderer::GetInnerFramePadding(bool has_title, int *lp, int *tp,
@@ -1145,21 +1132,25 @@ SliderFrame::SliderFrame(Direction direction, int tab_size, int total_size, int 
   if (direction == Horizontal) {
     table->Resize(3, 1);
     table->SetCell(0, 0, dec_button_ = new DefaultButtonFrame(
-      new ArrowImageFrame(ArrowImageFrame::Left), renderer->GetButtonRenderer()));
+      new ArrowImageFrame(ArrowImageFrame::Left, renderer->GetButtonColor()),
+      renderer->GetButtonRenderer()));
     table->SetCell(1, 0, inner_slider_ = new InnerSliderFrame(InnerSliderFrame::Horizontal,
                        tab_size, total_size, position, step_size, renderer),
                      CellSize::Max(), CellSize::Default());
     table->SetCell(2, 0, inc_button_ = new DefaultButtonFrame(
-      new ArrowImageFrame(ArrowImageFrame::Right), renderer->GetButtonRenderer()));
+      new ArrowImageFrame(ArrowImageFrame::Right, renderer->GetButtonColor()),
+      renderer->GetButtonRenderer()));
   } else {
     table->Resize(1, 3);
     table->SetCell(0, 0, dec_button_ = new DefaultButtonFrame(
-      new ArrowImageFrame(ArrowImageFrame::Up), renderer->GetButtonRenderer()));
+      new ArrowImageFrame(ArrowImageFrame::Up, renderer->GetButtonColor()),
+      renderer->GetButtonRenderer()));
     table->SetCell(0, 1, inner_slider_ = new InnerSliderFrame(InnerSliderFrame::Vertical,
                        tab_size, total_size, position, step_size, renderer),
                      CellSize::Default(), CellSize::Max());
     table->SetCell(0, 2, inc_button_ = new DefaultButtonFrame(
-      new ArrowImageFrame(ArrowImageFrame::Down), renderer->GetButtonRenderer()));
+      new ArrowImageFrame(ArrowImageFrame::Down, renderer->GetButtonColor()),
+      renderer->GetButtonRenderer()));
   }
 
   // Set the hot keys

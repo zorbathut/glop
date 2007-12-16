@@ -5,15 +5,14 @@
 //
 // To add a new operating system:
 // 1. Implement Os___.cpp that does the following:
-//   - Defines the main function, which calls GlopInternalMain(int argnum, char **argv) when done.
-//     Here, argv[0] should be the executable that is being run, and argv[] should be the
-//     full list of parameters, parsed in the same way as g++.
 //   - Defines the OsWindowData struct.
 //   - Defines all functions in the Os class. Accessor functions will be called approximately once
 //     per frame, and mutators will be called at most this often, and will never be called
 //     redundantly (e.g. SetTitle to the already existing title).
 //   - Glop only supports one window. However, it should be possible to change this at some future
 //     time if desired. Therefore, the Os code in particular should not heavily depend on this.
+//   - Note that all Os windows and functions will be controlled externally. Thus, an Os has no
+//     ownership of it's own objects. So, after a window is created, Os should never delete it.
 // 2. Add the appropriate includes in OpenGl.h.
 
 #ifndef GLOP_OS_H__
@@ -62,10 +61,7 @@ class Os {
   // Window functions
   // ================
 
-  // TODO(jwills): Should it be possible, for resizable windows, to have a flag that will maintain
-  // the ratio between width and height? darthur: If we want that, I think it should be in
-  // GlopWindow, not here. Don't want to burden the Os unnecessarily.
-  // Creates an Open Gl window with the given properties. On success, a new OsWindowObject should
+  // Creates an OpenGl window with the given properties. On success, a new OsWindowObject should
   // be returned. On failure, NULL should be returned. Notes:
   //  - icon may be NULL, in which case a default icon should be used.
   //  - is_resizable only applies in the case of a non-fullscreen window.
@@ -149,8 +145,8 @@ class Os {
   // if a user plugs in a joystick, RefreshJoysticks should update data based on the change). This
   // should be reflected both in GetNumJoysticks() and in joystick notifications from System. If
   // the joystick information has not changed, this should NOT disrupt regular input polling.
-  // Note: this refresh should not happen automatically, except possibly on window recreation where
-  // it is difficult to avoid.
+  // Note: this kind of refresh should not happen automatically, except possibly on window
+  // re-creation where it is difficult to avoid.
   static void RefreshJoysticks(OsWindowData *window);
 
   // Returns the number of joysticks that we are currently aware of.

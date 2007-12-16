@@ -1,16 +1,20 @@
 // Here we provide a set of useful stand-alone frames.
 //
-// TextPrompt overview: A TextPrompt is any frame containing a flashing cursor and a text value
-//   that responds to user input. For example, the text could be a user-entered string or it could
-//   be the last key pressed by the user. The hierarchy is:
-//     AbstractTextPromptFrame: The absolute base class
-//     BasicTextPromptFrame: The base class for a TextPrompt that is edited one character at a
-//                           time (e.g. string or integer prompts)
-//     XXXPromptFrame: 
+// Decorative Frames
+// =================
 //
-//
+// EmptyFrame: A convenience frame that takes max size and renders nothing.
+// SolidBoxFrame, HollowBoxFrame: Solid or hollow boxes, possibly sized to fit around an existing
+//                                frame.
+// ArrowImageFrame: Renders an arrow in some direction. Used for slider buttons for example.
 // WindowFrame: A decorative, unmovable window, optionally with a title.
 //  Helper classes: WindowRenderer, DefaultWindowRenderer
+// TextFrame, FancyTextFrame: Text output. TextFrame is faster but requires a uniform text style
+//                            with no new lines. FancyTextFrame can handle new lines and changing
+//                            style within the text.
+//
+// Interactive GUI Widgets
+// =======================
 //
 // ButtonWidget: A basic push-button. Can override rendering via ButtonRenderer. Can override
 //               functionality by extending AbstractButtonFrame.
@@ -21,6 +25,15 @@
 //  Helper classes: SliderRenderer, DefaultSliderRenderer, InnerSliderFrame, SliderFrame
 //
 //
+// TextPrompt overview: A TextPrompt is any frame containing a flashing cursor and a text value
+//   that responds to user input. For example, the text could be a user-entered string or it could
+//   be the last key pressed by the user. The hierarchy is:
+//     AbstractTextPromptFrame: The absolute base class
+//     BasicTextPromptFrame: The base class for a TextPrompt that is edited one character at a
+//                           time (e.g. string or integer prompts)
+//     XXXPromptFrame: 
+//
+//
 // See GlopFrameBase.h.
 
 #ifndef GLOP_FRAME_WIDGETS_H__
@@ -28,6 +41,7 @@
 
 // Includes
 #include "Color.h"
+#include "Font.h"
 #include "GlopFrameBase.h"
 #include "Input.h"
 
@@ -53,6 +67,7 @@ const Color kDefaultSliderBorderColor(0.2f, 0.2f, 0.2f);
 
 // Class declarations
 class InnerSliderFrame;
+class TextRenderer;
 
 // EmptyFrame
 // ==========
@@ -105,30 +120,42 @@ class HollowBoxFrame: public PaddedFrame {
   DISALLOW_EVIL_CONSTRUCTORS(HollowBoxFrame);
 };
 
+// ArrowImageFrame
+// ===============
+//
+// Helper class that renders a black arrow covering about 80% of the frame. This is often on
+// buttons - for example sliders.
+class ArrowImageFrame: public GlopFrame {
+ public:
+  enum Direction {Up, Down, Left, Right};
+  ArrowImageFrame(Direction d, const Color &color): direction_(d), color_(color) {}
+  void Render();
+ protected:
+  void RecomputeSize(int rec_width, int rec_height) {SetToMaxSize(rec_width, rec_height, 1.0f);}
+ private:
+  Direction direction_;
+  Color color_;
+  DISALLOW_EVIL_CONSTRUCTORS(ArrowImageFrame);
+};
+
 // TextFrame
 // =========
 //
-// This renders a single line of text in a single style. The following customization is supported:
-//  FontOutlineId, Color: Font and color.
-//  Height: The text will automatically rescale to be this fraction of the window height.
-//  IsFullHeight: If true, the frame height will be set so that it completely covers the line of
-//                text. Otherwise the size will not include overhang below the baseline. For
-//                example, the frame size will include the bottom part of a 'p' only if
-//                IsFullHeight==true. Usually, this would be true, but in a paragraph of text, it
-//                is natural to use IsFullHeight == false to pack the text closer together.
+// This renders a string text in a single TextStyle. Hard returns, soft returns, and multiple
+// styles are not supported. See FancyTextFrame.
 class TextFrame: public GlopFrame {
  public:
-  TextFrame(const string &text, const FrameStyle *style = gDefaultStyle,
-            bool is_full_height = true);
-  TextFrame(const string &text, const Color &color, float text_height = gDefaultStyle->text_height,
-            LightSetId font_outline_id = gDefaultStyle->font_outline_id,
-            bool is_full_height = true);
+  TextFrame(const string &text, const TextStyle &style = gDefaultStyle->text_style);
   virtual ~TextFrame();
   
-  // A utility to return the pixel height we would choose for a font given the relative height as
-  // specified to TextFrame. This is provided so that an external class can get font information
-  // about a potential TextFrame before instantiating the TextFrame.
+  // Returns the pixel height we would choose for our text given the relative height as specified
+  // to TextFrame. This is provided so that an external class can get font information about a
+  // potential TextFrame before instantiating the TextFrame.
   static int GetFontPixelHeight(float height);
+
+  // Returns the renderer that is currently being used for rendering this text. Can be used to
+  // get font metrics if needed.
+  const TextRenderer *GetRenderer() const {return renderer_;}
 
   // Accessors and mutators
   const string &GetText() const {return text_;}
@@ -138,54 +165,36 @@ class TextFrame: public GlopFrame {
       DirtySize();
     }
   }
-  LightSetId GetFontId() const {return font_id_;}
-  const Color &GetColor() const {return color_;}
-  void SetColor(const Color &color) {color_ = color;}
-  float GetFontHeight() const {return text_height_;}
-  void SetFontHeight(float text_height) {
-    if (text_height_ != text_height) {
-      text_height_ = text_height;
-      DirtySize();
-    }
+  const TextStyle &GetStyle() const {return text_style_;}
+  void SetStyle(const TextStyle &style) {
+    text_style_ = style;
+    DirtySize();
   }
-  bool IsFullHeight() const {return is_full_height_;}
 
-  // Standard overloaded functionality
+  // Standard GlopFrame functionality
   virtual void Render();
  protected:
   virtual void RecomputeSize(int rec_width, int rec_height);
 
  private:
   string text_;
-  LightSetId font_outline_id_, font_id_;
-  Color color_;
-  float text_height_;
-  bool is_full_height_;
+  TextStyle text_style_;
+  TextRenderer *renderer_;
   DISALLOW_EVIL_CONSTRUCTORS(TextFrame);
 };
 
 // FpsFrame
 // ========
 //
-// This is a TextFrame that always gives the current frame rate.
+// A TextFrame that always displays the current frame rate.
 class FpsFrame: public SingleParentFrame {
  public:
-  FpsFrame(const FrameStyle *style = gDefaultStyle, bool is_full_height = true)
-  : SingleParentFrame(new TextFrame("", style, is_full_height)) {}
-  FpsFrame(const Color &color, float text_height = gDefaultStyle->text_height,
-           LightSetId font_outline_id = gDefaultStyle->font_outline_id, bool is_full_height = true)
-  : SingleParentFrame(new TextFrame("", color, text_height, font_outline_id, is_full_height)) {}
+  FpsFrame(const TextStyle &style = gDefaultStyle->text_style)
+  : SingleParentFrame(new TextFrame("", style)) {}
+  const TextStyle &GetStyle() const {return text()->GetStyle();}
+  void SetStyle(const TextStyle &style) {text()->SetStyle(style);}
 
-  // Text properties
-  const Color &GetColor() const {return text()->GetColor();}
-  void SetColor(const Color &color) {text()->SetColor(color);}
-  float GetFontHeight() const {return text()->GetFontHeight();}
-  void SetFontHeight(float text_height) {text()->SetFontHeight(text_height);}
-  bool IsFullHeight() const {return text()->IsFullHeight();}
-
-  // Logic
   virtual void Think(int dt);
-
  private:
   const TextFrame *text() const {return (TextFrame*)GetChild();}
   TextFrame *text() {return (TextFrame*)GetChild();}
@@ -195,37 +204,48 @@ class FpsFrame: public SingleParentFrame {
 // FancyTextFrame
 // ==============
 //
-// This is a TextFrame with additional formatting options. In particular, it supports:
-//  - New lines. These may either be used explicitly with "\n", or they can be added automatically
+// A TextFrame with additional formatting options. In particular, it supports:
+//  - New lines. These may either be added explicitly with "\n", or they can be added automatically
 //    as soft returns so that the FancyTextFrame will not exceed its recommended width. The latter
 //    feature can be disabled by setting add_soft_returns to false.
-//  - Colors. If a CTag is added into a string, all following characters are printed with the given
-//    CTag.color.
-//  - Sizes. If an STag is added into a string, all following characters are printed with size
-//    STag.size * base_text_height.
-// All tags are implemented with ASCII value 1 delimiters.
-class FancyTextFrame: public SingleParentFrame {
+//  - Horizontal justification. This is used to align different lines of different sizes.
+//  - Varying style via tags. The text for a FancyTextFrame can contain tags delimited by ASCII
+//    value 1 (thus, to turn a section bold, add the text "\1b\1"). These change the style of all
+//    future text.
+//
+//     Bold/Italics/Underline: (concatenation of "b", "/b", "i", "/i", "u", "/u") Turns bold,
+//       italics, or underlining on or off.
+//     Italics: ("i" or "nu") Turns italics on or off.
+//     Underline: ("u" or "nu") Turns underlining on or off.
+//     Horz Justify: ("j<num>", e.g. "j0.5") Sets horizontal justification for future text. Takes
+//       effect on this line if this line is still empty. Otherwise, takes effect on the next line.
+//     Font: ("f<ptr>", e.g. "fDEADBEEF") Sets the active font to the one pointed to by font.
+//     Size: ("s<size>", e.g. "s2.5") Sets the active font to have size the given multiple of the
+//       the original size. Note this is RELATIVE to the base size, unlike other tags.
+//     Color: ("c<r><g><b>" or "c<r><g><b><a>", e.g. "cFF0000") Sets the active color.
+//
+//    Tags can also be created using the static methods, _Tag, below.
+class FancyTextFrame: public MultiParentFrame {
  public:
   // Constructors. horz_justify is used to align different rows of text.
-  FancyTextFrame(const string &text, const FrameStyle *style = gDefaultStyle);
+  FancyTextFrame(const string &text, const TextStyle &style = gDefaultStyle->text_style);
   FancyTextFrame(const string &text, bool add_soft_returns, float horz_justify,
-                 const FrameStyle *style = gDefaultStyle);
+                 const TextStyle &style = gDefaultStyle->text_style);
 
-  FancyTextFrame(const string &text, const Color &start_color,
-                 float base_text_height = gDefaultStyle->text_height,
-                 LightSetId font_outline_id = gDefaultStyle->font_outline_id);
-  FancyTextFrame(const string &text, bool add_soft_returns, float horz_justify,
-                 const Color &start_color, float base_text_height = gDefaultStyle->text_height,
-                 LightSetId font_outline_id = gDefaultStyle->font_outline_id);
-
-  // Tags. These can be added directly to any string.
-  //   Example: CTag(kRed) + "red text " + CTag(kWhite) + " white text";
-  // If this string is given to a FancyTextFrame, it will print the string accordingly.
+  // Tags. These can be used as follows: string("Test: " + CTag(kRed) + " red");
+  // Note that, they return strings, not char points, so if they are to be used with a call to
+  // Format, .c_str() is needed.
+  static const string BiuTag(int flags) {
+    return string("\1") + ((flags & kFontBold) > 0? "b" : "/b") +
+      ((flags & kFontItalics) > 0? "i" : "/i") + ((flags & kFontUnderline) > 0? "u" : "/u") + "\1";
+  }
   static const string CTag(const Color &color) {
     return Format("\1c%02X%02X%02X%02X\1",
       min(max(int(color[0] * 255), 0), 255), min(max(int(color[1] * 255), 0), 255),
       min(max(int(color[2] * 255), 0), 255), min(max(int(color[3] * 255), 0), 255));
   }
+  static const string FTag(const Font *font) {return Format("\1f%p\1", font);}
+  static const string JTag(float horz_justify) {return Format("\1j%f\1", horz_justify);}
   static const string STag(float size_multiplier) {return Format("\1s%f\1", size_multiplier);}
     
   // Accessors and mutators
@@ -236,54 +256,41 @@ class FancyTextFrame: public SingleParentFrame {
       DirtySize();
     }
   }
-  LightSetId GetFontOutlineId() const {return font_outline_id_;}
-  void SetFontOutlineId(LightSetId font_outline_id) {
-    if (font_outline_id_ != font_outline_id) {
-      font_outline_id_ = font_outline_id;
-      DirtySize();
-    }
+  const TextStyle &GetStyle() const {return text_style_;}
+  void SetStyle(const TextStyle &style) {
+    text_style_ = style;
+    DirtySize();
   }
-  const Color &GetStartColor() const {return start_color_;}
-  void SetStartColor(const Color &color) {
-    if (start_color_ != color) {
-      start_color_ = color;
-      DirtySize();
-    }
-  }
-  float GetBaseFontHeight() const {return base_text_height_;}
-  void SetBaseFontHeight(float base_text_height) {
-    if (base_text_height_ != base_text_height) {
-      base_text_height_ = base_text_height;
-      DirtySize();
-    }
-  }
-  float GetHorzJustify() const {return column()->GetDefaultHorzJustify();}
-  void SetHorzJustify(float horz_justify) {column()->SetDefaultHorzJustify(horz_justify);}
 
+  // Standard GlopFrame functionality
+  void SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2);
  protected:
   void RecomputeSize(int rec_width, int rec_height);
 
  private:
-  const ColFrame *column() const {return (ColFrame*)GetChild();}
-  ColFrame *column() {return (ColFrame*)GetChild();}
-
   // Parsing utilities
   struct ParseStatus {
     int pos;
-    Color color;
-    float text_height;
-    LightSetId font_id;
+    float horz_justify;
+    TextStyle style;
+    TextRenderer *renderer;
   };
   ParseStatus CreateParseStatus();
   void StartParsing(ParseStatus *status);
   void StopParsing(ParseStatus *status);
-  bool ParseNextCharacter(const string &s, ParseStatus *status, char *ch);
+  enum ParseResult {Normal, NewRenderer, Error};
+  ParseResult ParseNextCharacter(const string &s, ParseStatus *status, char *ch);
 
+  // Data
   string text_;
-  LightSetId font_outline_id_;
+  float base_horz_justify_;
+  TextStyle text_style_;
   bool add_soft_returns_;
-  Color start_color_;
-  float base_text_height_;
+  struct TextBlock {
+    LightSetId child_id;
+    int x, y;
+  };
+  vector<vector<TextBlock> > text_blocks_;
   DISALLOW_EVIL_CONSTRUCTORS(FancyTextFrame);
 };
 
@@ -311,14 +318,8 @@ class AbstractTextPromptFrame: public SingleParentFrame {
   bool WasCanceled() const {return was_canceled_;}
 
  protected:
-  AbstractTextPromptFrame(const string &text, const FrameStyle *style)
+  AbstractTextPromptFrame(const string &text, const TextStyle &style)
   : SingleParentFrame(new TextFrame(text, style)),
-    cursor_timer_(0), cursor_pos_((int)text.size()),
-    was_confirmed_(false), was_canceled_(false),
-    was_confirm_queued_(false), was_cancel_queued_(false) {}
-  AbstractTextPromptFrame(const string &text, const Color &color, float text_height,
-                          LightSetId font_outline_id)
-  : SingleParentFrame(new TextFrame(text, color, text_height, font_outline_id)),
     cursor_timer_(0), cursor_pos_((int)text.size()),
     was_confirmed_(false), was_canceled_(false),
     was_confirm_queued_(false), was_cancel_queued_(false) {}
@@ -383,8 +384,8 @@ class BasicTextPromptFrame: public AbstractTextPromptFrame {
 
  protected:
   BasicTextPromptFrame(const string &text, const FrameStyle *style);
-  BasicTextPromptFrame(const string &text, const Color &color, float text_height,
-                       LightSetId font_outline_id, const Color &selection_color);
+  BasicTextPromptFrame(const string &text, const TextStyle &text_style,
+                       const Color &selection_color);
   void OnFocusChange();
   void SetCursorPos(int pos, bool move_anchor);
   void SetText(const string &text) {
@@ -426,15 +427,9 @@ class BasicTextPromptFrame: public AbstractTextPromptFrame {
 // keys.
 class GlopKeyPromptFrame: public AbstractTextPromptFrame {
  public:
-  GlopKeyPromptFrame(const GlopKey &start_value, const FrameStyle *style = gDefaultStyle)
-  : AbstractTextPromptFrame("", style), stored_value_(start_value) {
-    RestoreValue();
-  }
-
-  GlopKeyPromptFrame(const GlopKey &start_value, const Color &color,
-                     float text_height = gDefaultStyle->text_height,
-                     LightSetId font_outline_id = gDefaultStyle->font_outline_id)
-  : AbstractTextPromptFrame("", color, text_height, font_outline_id),
+  GlopKeyPromptFrame(const GlopKey &start_value,
+                     const TextStyle &style = gDefaultStyle->text_style)
+  : AbstractTextPromptFrame("", style),
     stored_value_(start_value) {
     RestoreValue();
   }
@@ -473,11 +468,10 @@ class StringPromptFrame: public BasicTextPromptFrame {
   : BasicTextPromptFrame("", style), length_limit_(length_limit) {
     Set(start_value);
   }
-  StringPromptFrame(const string &start_value, int length_limit, const Color &color,
-                    float text_height = gDefaultStyle->text_height,
-                    LightSetId font_outline_id = gDefaultStyle->font_outline_id,
+  StringPromptFrame(const string &start_value, int length_limit,
+                    const TextStyle &text_style = gDefaultStyle->text_style,
                     const Color &selection_color = gDefaultStyle->prompt_highlight_color)
-  : BasicTextPromptFrame("", color, text_height, font_outline_id, selection_color),
+  : BasicTextPromptFrame("", text_style, selection_color),
     length_limit_(length_limit) {
     Set(start_value);
   }
@@ -503,11 +497,10 @@ class IntegerPromptFrame: public BasicTextPromptFrame {
   : BasicTextPromptFrame("", style), min_value_(min_value), max_value_(max_value) {
     Set(start_value);
   }
-  IntegerPromptFrame(int start_value, int min_value, int max_value, const Color &color,
-                     float text_height = gDefaultStyle->text_height,
-                     LightSetId font_outline_id = gDefaultStyle->font_outline_id,
+  IntegerPromptFrame(int start_value, int min_value, int max_value,
+                     const TextStyle &text_style = gDefaultStyle->text_style,
                      const Color &selection_color = gDefaultStyle->prompt_highlight_color)
-  : BasicTextPromptFrame("", color, text_height, font_outline_id, selection_color),
+  : BasicTextPromptFrame("", text_style, selection_color),
     min_value_(min_value), max_value_(max_value) {
     Set(start_value);
   }
@@ -540,7 +533,7 @@ class WindowRenderer {
   virtual GlopFrame *CreateTitleFrame(const string &title) const = 0;
 
   // Calculates the padding between the inner frame and the edge of the window (or of the title
-  // bar if has_title == true).
+  // bar if has_title == true). Cannot depend on frame/window size currently.
   virtual void GetInnerFramePadding(bool has_title, int *lp, int *tp, int *rp, int *bp) const = 0;
 
   // Renders a window with the given coordinates and inner frames. Note that title_frame may be
@@ -554,25 +547,21 @@ class WindowRenderer {
 class DefaultWindowRenderer: public WindowRenderer {
  public:
   // Constructors
-  DefaultWindowRenderer(LightSetId font_id = 0)
+  DefaultWindowRenderer(Font *font)
   : border_highlight_color_(kDefaultWindowBorderHighlightColor),
     border_lowlight_color_(kDefaultWindowBorderLowlightColor),
-    inner_color_(kDefaultWindowInnerColor), title_color_(kDefaultWindowTitleColor),
-    title_font_id_(font_id), title_height_(kDefaultTextHeight) {}
+    inner_color_(kDefaultWindowInnerColor),
+    title_style_(kDefaultWindowTitleColor, kDefaultTextHeight, font, 0) {}
   DefaultWindowRenderer(const Color &border_highlight_color, const Color &border_lowlight_color,
-                        const Color &inner_color, const Color &title_color,
-                        LightSetId title_font_id, float title_height)
+                        const Color &inner_color, const TextStyle &title_style)
   : border_highlight_color_(border_highlight_color), border_lowlight_color_(border_lowlight_color),
-    inner_color_(inner_color), title_color_(title_color), title_font_id_(title_font_id),
-    title_height_(title_height) {}
+    inner_color_(inner_color), title_style_(title_style) {}
 
   // Mutators
   void SetBorderHighlightColor(const Color &c) {border_highlight_color_ = c;}
   void SetBorderLowlightColor(const Color &c) {border_lowlight_color_ = c;}
   void SetInnerColor(const Color &c) {inner_color_ = c;}
-  void SetTitleColor(const Color &c) {title_color_ = c;}
-  void SetTitleFontId(LightSetId id) {title_font_id_ = id;}
-  void SetTitleHeight(float height) {title_height_ = height;}
+  void SetTitleStyle(const TextStyle &style) {title_style_ = style;}
 
   // Operations
   GlopFrame *CreateTitleFrame(const string &title) const;
@@ -581,9 +570,8 @@ class DefaultWindowRenderer: public WindowRenderer {
               GlopFrame *inner_frame) const;
 
  private:
-  Color border_highlight_color_, border_lowlight_color_, inner_color_, title_color_;
-  LightSetId title_font_id_;
-  float title_height_;
+  Color border_highlight_color_, border_lowlight_color_, inner_color_;
+  TextStyle title_style_;
   DISALLOW_EVIL_CONSTRUCTORS(DefaultWindowRenderer);
 };
 
@@ -769,16 +757,16 @@ class ButtonWidget: public FocusFrame {
 
   // Convenience constructors for text button frames
   ButtonWidget(const string &text, const FrameStyle *style = gDefaultStyle)
-  : FocusFrame(button_ = new DefaultButtonFrame(new TextFrame(text, style),
+    : FocusFrame(button_ = new DefaultButtonFrame(new TextFrame(text, style->text_style),
                style->button_renderer)) {}
   ButtonWidget(const string &text, const GlopKey &hot_key, const FrameStyle *style = gDefaultStyle)
-  : FocusFrame(button_ = new DefaultButtonFrame(new TextFrame(text, style),
+  : FocusFrame(button_ = new DefaultButtonFrame(new TextFrame(text, style->text_style),
                style->button_renderer)) {
     button_->AddHotKey(hot_key);
   }
   ButtonWidget(const string &text, const GlopKey &hot_key1, const GlopKey &hot_key2,
                const FrameStyle *style = gDefaultStyle)
-  : FocusFrame(button_ = new DefaultButtonFrame(new TextFrame(text, style),
+  : FocusFrame(button_ = new DefaultButtonFrame(new TextFrame(text, style->text_style),
                style->button_renderer)) {
     button_->AddHotKey(hot_key1);
     button_->AddHotKey(hot_key2);
@@ -807,6 +795,9 @@ class SliderRenderer {
   SliderRenderer(const ButtonRenderer *renderer): button_renderer_(renderer) {}
   void SetButtonRenderer(const ButtonRenderer *renderer) {button_renderer_ = renderer;}
   const ButtonRenderer *GetButtonRenderer() const {return button_renderer_;}
+
+  // Make this better
+  virtual Color GetButtonColor() const = 0;
 
   // Recomputes the minor-axis size of the slider.
   virtual int RecomputeWidth(bool is_horizontal) const = 0;
@@ -842,6 +833,7 @@ class DefaultSliderRenderer: public SliderRenderer {
   void SetBorderColor(const Color &c) {border_color_ = c;}
 
   // Operations
+  Color GetButtonColor() const {return kBlack;}
   int RecomputeWidth(bool is_horizontal) const;
   int RecomputeMinTabLength(bool is_horizontal, int inner_width, int inner_height) const;
   void Render(bool is_horizontal, bool is_primary_focus, int x1, int y1, int x2, int y2,

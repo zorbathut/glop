@@ -86,11 +86,27 @@ using namespace std;
 
 // Class declarations
 class ButtonRenderer;
+class FocusFrame;
+class Font;
 class SliderRenderer;
 class WindowRenderer;
-class FocusFrame;
 struct GlopKey;
 struct KeyEvent;
+struct TextStyle;
+
+struct TextStyle {
+  TextStyle();
+  TextStyle(const Color &_color);
+  TextStyle(const Color &_color, float _size);
+  TextStyle(const Color &_color, float _size, Font *_font);
+  TextStyle(const Color &_color, float _size, Font *_font, unsigned int _flags)
+  : color(_color), size(_size), font(_font), flags(_flags) {}
+
+  Color color;
+  float size;
+  Font *font;
+  unsigned int flags;
+};
 
 // FrameStyle
 // ==========
@@ -99,20 +115,19 @@ struct KeyEvent;
 // size). A new FrameStyle can be created to override existing settings. If a FrameStyle is already
 // in use, changing it may or may not affect existing frames. The results are undefined.
 struct FrameStyle {
-  FrameStyle(LightSetId _font_outline_id = 0);
+  FrameStyle(Font *font);
   ~FrameStyle();
 
   // General style
-  LightSetId font_outline_id;         // Default font for plain text
-  Color text_color;                   // Default color for plain text
-  float text_height;                  // Default size for all text
-  Color prompt_highlight_color;        // Background color of text we highlight in a TextPrompt
+  TextStyle text_style;
+  Color prompt_highlight_color;       // Background color of text we highlight in a TextPrompt
 
   // Renderers
   ButtonRenderer *button_renderer;
   SliderRenderer *slider_renderer;
   WindowRenderer *window_renderer;
 };
+
 extern FrameStyle *gDefaultStyle;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1043,6 +1058,39 @@ class MaxSizeFrame: public SingleParentFrame {
   float max_width_, max_height_;
   int x_offset_, y_offset_;
   DISALLOW_EVIL_CONSTRUCTORS(MaxSizeFrame);
+};
+
+// ExactSizeFrame
+// ==============
+//
+// A combined MinSizeFrame and MaxSizeFrame. justify_max is used if the frame is too small,
+// justify_min is used if the frame is too large.
+class ExactWidthFrame: public MinWidthFrame {
+ public:
+  ExactWidthFrame(GlopFrame *frame, float width = kSizeLimitRec,
+                  float horz_justify_max = kJustifyLeft, float horz_justify_min = kJustifyLeft)
+  : MinWidthFrame(new MaxWidthFrame(frame, width, horz_justify_max), width, horz_justify_min) {}
+ private:
+  DISALLOW_EVIL_CONSTRUCTORS(ExactWidthFrame);
+};
+class ExactHeightFrame: public MinHeightFrame {
+ public:
+  ExactHeightFrame(GlopFrame *frame, float height = kSizeLimitRec,
+                   float vert_justify_max = kJustifyTop, float vert_justify_min = kJustifyTop)
+  : MinHeightFrame(new MaxHeightFrame(frame, height, vert_justify_max),
+                   height, vert_justify_min) {}
+ private:
+  DISALLOW_EVIL_CONSTRUCTORS(ExactHeightFrame);
+};
+class ExactSizeFrame: public MinSizeFrame {
+ public:
+  ExactSizeFrame(GlopFrame *frame, float width = kSizeLimitRec, float height = kSizeLimitRec,
+                 float horz_justify_max = kJustifyLeft, float vert_justify_max = kJustifyTop,
+                 float horz_justify_min = kJustifyLeft, float vert_justify_min = kJustifyTop)
+  : MinSizeFrame(new MaxSizeFrame(frame, width, height, horz_justify_max, vert_justify_max),
+                 width, height, horz_justify_min, vert_justify_min) {}
+ private:
+  DISALLOW_EVIL_CONSTRUCTORS(ExactSizeFrame);
 };
 
 // ScrollingFrame
