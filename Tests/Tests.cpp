@@ -31,12 +31,35 @@ Image *gIcon;
 void IntroScreen() {
   GlopFrame *info = new FancyTextFrame("\1bu\1Glop Test Program\1/b/u\1\n\n"
                                        "Select tests to verify that Glop performs as expected.",
-                                       true, 0.5f, kWhite);
+                                       kWhite);
   gWindow->AddFrame(info, 0.5f, 0.3f, 0.5f, 0.3f);
   gWindow->AddFrame(new TextFrame("Press any key to continue...", kYellow),
                      0.5f, 1.0f, kJustifyCenter, kJustifyBottom);
   input()->WaitForKeyPress();
   gWindow->ClearFrames();
+}
+
+class GlUtils2dTestFrame: public GlopFrame {
+ public:
+  void Render() {
+    GlUtils2d::FillRectangle(GetX(), GetY(), GetX2(), GetY2(), kYellow);
+    GlUtils2d::DrawRectangle(GetX() + 1, GetY() + 1, GetX2() - 1, GetY2() - 1, kBlack);
+    GlUtils2d::DrawLine(GetX() + 2, GetY() + 2, GetX2() - 2, GetY2() - 2, kBlue);
+    GlUtils2d::DrawLine(GetX() + 2, GetY2() - 2, GetX2() - 2, GetY() + 2, kBlue);
+    GlUtils2d::DrawLine(GetX2() - 2, GetY2() - 2, GetX() + 2, GetY() + 2, kRed);
+    GlUtils2d::DrawLine(GetX2() - 2, GetY() + 2, GetX() + 2, GetY2() - 2, kRed);
+  }
+};
+
+void GlUtils2dTest() {
+  gWindow->AddFrame(new PaddedFrame(new GlUtils2dTestFrame(), 1));
+  GlopFrame *info = new FancyTextFrame(
+    "You should see a yellow filled box surrounded by a black box, surrounded"
+    "by a yellow box. There should be red diagonals in the box (not overlapping "
+    "the black part.\n\n"
+    "\1c0000FF\1Press any key to continue", kBlack);
+  gWindow->AddFrame(new RecWidthFrame(info, 0.6f), 0.5f, 0.4f, 0.5f, 0.4f);
+  input()->WaitForKeyPress();
 }
 
 void DisplayMessageTest() {
@@ -301,7 +324,7 @@ void CameraTest() {
   GlopFrame *info = new FancyTextFrame("Rotating Cube with Fog\n\n"
                                        "Move the camera with the mouse and with W,A,D,S\n\n\n"
                                        "\1cFFFF00\1Press Escape to continue",
-                                       false, 0.5f, kWhite);
+                                       kWhite);
   GlopFrame *cube = new HollowBoxFrame(new CubeFrame(), kWhite);
   GlopFrame *content = new ColFrame(
     new PaddedFrame(cube, 10), CellSize::Default(),
@@ -313,14 +336,15 @@ void CameraTest() {
 
 void BuildMainMenu() {
   gWindow->SetTitle("Tests menu");
-  ColFrame *column = new ColFrame(7, kJustifyLeft);
-  column->SetCell(0, new TextFrame("1. DisplayMessage and full-screen modes", kWhite));
-  column->SetCell(1, new TextFrame("2. Icon and Title", kWhite));
-  column->SetCell(2, new TextFrame("3. Timing", kWhite));
-  column->SetCell(3, new TextFrame("4. Input", kWhite));
-  column->SetCell(4, new TextFrame("5. Threading", kWhite));
-  column->SetCell(5, new TextFrame("6. Camera frame", kWhite));
-  column->SetCell(6, new TextFrame("7. Quit", kWhite));
+  ColFrame *column = new ColFrame(8, kJustifyLeft);
+  column->SetCell(0, new TextFrame("1. 2d rendering test", kWhite));
+  column->SetCell(1, new TextFrame("2. DisplayMessage and full-screen modes", kWhite));
+  column->SetCell(2, new TextFrame("3. Icon and Title", kWhite));
+  column->SetCell(3, new TextFrame("4. Timing", kWhite));
+  column->SetCell(4, new TextFrame("5. Input", kWhite));
+  column->SetCell(5, new TextFrame("6. Threading", kWhite));
+  column->SetCell(6, new TextFrame("7. Camera frame", kWhite));
+  column->SetCell(7, new TextFrame("8. Quit", kWhite));
   gWindow->AddFrame(column, 0.5f, 0.4f, 0.5f, 0.4f);
   gSystem->Think();
 }
@@ -348,21 +372,24 @@ int main(int argc, char **argv) {
     if (input()->WasKeyPressed('5')) selection = 5;
     if (input()->WasKeyPressed('6')) selection = 6;
     if (input()->WasKeyPressed('7')) selection = 7;
+    if (input()->WasKeyPressed('8')) selection = 8;
     if (selection > 0) {
       gWindow->ClearFrames();
       if (selection == 1)
-        DisplayMessageTest();
+        GlUtils2dTest();
       else if (selection == 2)
-        IconTitleTest();
+        DisplayMessageTest();
       else if (selection == 3)
-        TimeTest();
+        IconTitleTest();
       else if (selection == 4)
-        InputTest();
+        TimeTest();
       else if (selection == 5)
-        ThreadTest();
+        InputTest();
       else if (selection == 6)
-        CameraTest();
+        ThreadTest();
       else if (selection == 7)
+        CameraTest();
+      else if (selection == 8)
         break;
       gWindow->ClearFrames();
       BuildMainMenu();

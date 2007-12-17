@@ -289,8 +289,8 @@ void GlopWindow::ChooseValidSize(int width, int height, int *new_width, int *new
   float sqrt_ar = sqrt(ar);
   float min_mean = max(settings_.min_width / sqrt_ar, settings_.min_height * sqrt_ar);
   float mean = max(min_mean, sqrt(float(width) * height));
-  *new_width = int(mean * sqrt_ar);
-  *new_height = int(mean / sqrt_ar);
+  *new_width = int(mean * sqrt_ar + 0.5f);
+  *new_height = int(mean / sqrt_ar + 0.5);
 }
 
 // Unregisters all pings a frame has created. A frame does this when it is deleted.
