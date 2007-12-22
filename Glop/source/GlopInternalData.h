@@ -1,5 +1,5 @@
-#ifndef GLOP_INTERNAL_DATA_H__
-#define GLOP_INTERNAL_DATA_H__
+#ifndef GLOP_GLOP_INTERNAL_DATA_H__
+#define GLOP_GLOP_INTERNAL_DATA_H__
 
 // Includes
 #include "../include/LightSet.h"
@@ -50,4 +50,4 @@ class GlDataManager {
   static LightSet<DisplayLists*> multi_display_lists_;
 };
 
-#endif // GLOP_INTERNAL_DATA_H__
+#endif // GLOP_GLOP_INTERNAL_DATA_H__

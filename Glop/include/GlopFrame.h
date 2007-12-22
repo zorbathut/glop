@@ -1,10 +1,11 @@
 // See GlopFrameBase.h
 
-#ifndef GLOP_FRAME_H__
-#define GLOP_FRAME_H__
+#ifndef GLOP_GLOP_FRAME_H__
+#define GLOP_GLOP_FRAME_H__
 
 // Includes
 #include "GlopFrameBase.h"
+#include "GlopFrameStyle.h"
 #include "GlopFrameWidgets.h"
 
-#endif // GLOP_FRAME_H__
+#endif // GLOP_GLOP_FRAME_H__

@@ -11,37 +11,6 @@ using namespace std;
 const int kClipInfinity = 1000000000;
 const int kClipMinusInfinity = -kClipInfinity;
 
-// FrameStyle
-// ==========
-
-TextStyle::TextStyle()
-: color(gDefaultStyle->text_style.color), size(gDefaultStyle->text_style.size),
-  font(gDefaultStyle->text_style.font), flags(gDefaultStyle->text_style.flags) {}
-TextStyle::TextStyle(const Color &_color)
-: color(_color), size(gDefaultStyle->text_style.size), font(gDefaultStyle->text_style.font),
-  flags(gDefaultStyle->text_style.flags) {}
-TextStyle::TextStyle(const Color &_color, float _size)
-: color(_color), size(_size), font(gDefaultStyle->text_style.font),
-  flags(gDefaultStyle->text_style.flags) {}
-TextStyle::TextStyle(const Color &_color, float _size, Font *_font)
-: color(_color), size(_size), font(_font), flags(gDefaultStyle->text_style.flags) {}
-
-FrameStyle::FrameStyle(Font *font)
-: text_style(kBlack, 0.025f, font, 0),
-  prompt_highlight_color(0.6f, 0.6f, 1.0f) {
-  button_renderer = new DefaultButtonRenderer();
-  slider_renderer = new DefaultSliderRenderer(button_renderer);
-  window_renderer = new DefaultWindowRenderer(font);
-}
-
-FrameStyle::~FrameStyle() {
-  delete button_renderer;
-  delete slider_renderer;
-  delete window_renderer;
-}
-
-FrameStyle *gDefaultStyle = 0;
-
 // GlopFrame
 // =========
 
@@ -151,7 +120,7 @@ void SingleParentFrame::SetChild(GlopFrame *frame) {
 
 // Renders all child frames. We automatically prune the children if they are completely outside
 // the clipping rectangle.
-void MultiParentFrame::Render() {
+void MultiParentFrame::Render() const {
   for (LightSetId id = children_.GetFirstId(); id != 0; id = children_.GetNextId(id)) {
     int x = children_[id]->GetX(), y = children_[id]->GetY(),
         w = children_[id]->GetWidth(), h = children_[id]->GetHeight();
@@ -234,7 +203,7 @@ void MultiParentFrame::OnWindowResize(int width, int height) {
 // ClippedFrame
 // ============
 
-void ClippedFrame::Render() {
+void ClippedFrame::Render() const {
   int old_scissor_test[4];
 
   // Make sure the clipping rectangle is not empty. This CAN reasonably happen. For example, a
@@ -276,18 +245,16 @@ void ClippedFrame::SetPosition(int screen_x, int screen_y, int cx1, int cy1, int
 
 void PaddedFrame::SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2) {
   GlopFrame::SetPosition(screen_x, screen_y, cx1, cy1, cx2, cy2);
-  if (GetChild() != 0) {
-    GetChild()->SetPosition(screen_x + GetLeftPadding(), screen_y + GetTopPadding(),
-                            cx1, cy1, cx2, cy2);
-  }
+  if (GetChild() != 0)
+    GetChild()->SetPosition(screen_x + left_padding_, screen_y + top_padding_, cx1, cy1, cx2, cy2);
 }
 
 void PaddedFrame::RecomputeSize(int rec_width, int rec_height) {
   if (GetChild() != 0) {
-    GetChild()->UpdateSize(rec_width - GetLeftPadding() - GetRightPadding(),
-                           rec_height - GetTopPadding() - GetBottomPadding());
-    SetSize(GetChild()->GetWidth() + GetLeftPadding() + GetRightPadding(),
-            GetChild()->GetHeight() + GetTopPadding() + GetBottomPadding());
+    GetChild()->UpdateSize(rec_width - left_padding_ - right_padding_,
+                           rec_height - top_padding_ - bottom_padding_);
+    SetSize(GetChild()->GetWidth() + left_padding_ + right_padding_,
+            GetChild()->GetHeight() + top_padding_ + bottom_padding_);
   } else {
     SetSize(rec_width, rec_height);
   }
@@ -295,8 +262,8 @@ void PaddedFrame::RecomputeSize(int rec_width, int rec_height) {
 
 void PaddedFrame::SetPadding(int left_padding, int top_padding, int right_padding,
                              int bottom_padding) {
-  if (left_padding + right_padding != GetLeftPadding() + GetRightPadding() ||
-      top_padding + bottom_padding != GetTopPadding() + GetBottomPadding())
+  if (left_padding + right_padding != left_padding_ + right_padding_ ||
+      top_padding + bottom_padding != top_padding_ + bottom_padding_)
     DirtySize();
   left_padding_ = left_padding;
   top_padding_ = top_padding;
@@ -307,12 +274,36 @@ void PaddedFrame::SetPadding(int left_padding, int top_padding, int right_paddin
 // ScalingPaddedFrame
 // ==================
 
+void ScalingPaddedFrame::SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2,
+                                     int cy2) {
+  GlopFrame::SetPosition(screen_x, screen_y, cx1, cy1, cx2, cy2);
+  if (GetChild() != 0)
+    GetChild()->SetPosition(screen_x + left_padding_, screen_y + top_padding_, cx1, cy1, cx2, cy2);
+}
+
 void ScalingPaddedFrame::RecomputeSize(int rec_width, int rec_height) {
-  SetPadding(int(scaled_left_padding_ * gWindow->GetWidth()),
-             int(scaled_top_padding_ * gWindow->GetHeight()),
-             int(scaled_right_padding_ * gWindow->GetWidth()),
-             int(scaled_bottom_padding_ * gWindow->GetHeight()));
-  PaddedFrame::RecomputeSize(rec_width, rec_height);
+  if (GetChild() != 0) {
+    int base = min(gWindow->GetWidth(), gWindow->GetHeight());
+    left_padding_ = int(scaled_left_padding_ * base);
+    top_padding_ = int(scaled_top_padding_ * base);
+    right_padding_ = int(scaled_right_padding_ * base);
+    bottom_padding_ = int(scaled_bottom_padding_ * base);
+    GetChild()->UpdateSize(rec_width - left_padding_ - right_padding_,
+                           rec_height - top_padding_ - bottom_padding_);
+    SetSize(GetChild()->GetWidth() + left_padding_ + right_padding_,
+            GetChild()->GetHeight() + top_padding_ + bottom_padding_);
+  } else {
+    SetSize(rec_width, rec_height);
+  }
+}
+
+void ScalingPaddedFrame::SetPadding(float left_padding, float top_padding, float right_padding,
+                                    float bottom_padding) {
+  DirtySize();
+  scaled_left_padding_ = left_padding;
+  scaled_top_padding_ = top_padding;
+  scaled_right_padding_ = right_padding;
+  scaled_bottom_padding_ = bottom_padding;
 }
 
 // FocusFrame
@@ -358,7 +349,7 @@ void FocusFrame::DemandFocus() {
 
 // Renders all the frames in the tableau, respecting depth.
 // This may cause us to rebuild ordered_children_.
-void TableauFrame::Render() {
+void TableauFrame::Render() const {
   if (order_dirty_) {
     // Note that we need to stable_sort so that children with the same depth will remain in the
     // same relative order.
@@ -955,10 +946,10 @@ void MaxSizeFrame::ScrollToChildPing(int x1, int y1, int x2, int y2, bool center
 
 class UnfocusableScrollingFrame: public MultiParentFrame {
  public:
-  UnfocusableScrollingFrame(GlopFrame *frame, const SliderRenderer *renderer)
+  UnfocusableScrollingFrame(GlopFrame *frame, const SliderViewFactory *factory)
   : MultiParentFrame(),
     horz_slider_(0), vert_slider_(0),
-    renderer_(renderer) {
+    view_factory_(factory) {
     clipped_inner_frame_ = new ClippedFrame(inner_frame_ = frame);
     AddChild(clipped_inner_frame_);
   }
@@ -988,12 +979,14 @@ class UnfocusableScrollingFrame: public MultiParentFrame {
       (vert_slider_->GetTabPosition() + 0.5*inner_view_height_) / old_inner_total_height : 0);
 
     // Compute the size of our inner frame
+    SliderView *temp_view = view_factory_->Create();
+    int sb_width = temp_view->GetWidthOnResize(rec_width, rec_height, false);
+    int sb_height = temp_view->GetWidthOnResize(rec_width, rec_height, true);
+    delete temp_view;
     SetSize(rec_width, rec_height);
-    int sb_width = renderer_->RecomputeWidth(false);
-    int sb_height = renderer_->RecomputeWidth(true);
     clipped_inner_frame_->UpdateSize(rec_width, rec_height);
 
-    // A nasty special case: suppose our inner frame uses recWidth to set width, but scrolls
+    // A nasty special case: suppose our inner frame uses rec_width to set width, but scrolls
     // vertically. Then it will generate a horizontal scroll bar which shouldn't be there.
     // A cludge here prevents that.
     if (clipped_inner_frame_->GetWidth() <= rec_width &&
@@ -1034,7 +1027,7 @@ class UnfocusableScrollingFrame: public MultiParentFrame {
       if (sb_height_used) {
         horz_slider_ = new SliderFrame(SliderFrame::Horizontal, inner_view_width_,
                                        inner_frame_->GetWidth(), 0, true, -1,
-                                       renderer_);
+                                       view_factory_);
         horz_slider_id_ = AddChild(horz_slider_);
       } else {
         horz_slider_ = 0;
@@ -1054,7 +1047,7 @@ class UnfocusableScrollingFrame: public MultiParentFrame {
       if (sb_width_used) {
         vert_slider_ = new SliderFrame(SliderFrame::Vertical, inner_view_height_,
                                       inner_frame_->GetHeight(), 0, true, -1,
-                                      renderer_);
+                                      view_factory_);
         vert_slider_id_ = AddChild(vert_slider_);
       } else {
         vert_slider_ = 0;
@@ -1101,9 +1094,9 @@ class UnfocusableScrollingFrame: public MultiParentFrame {
   SliderFrame *horz_slider_, *vert_slider_;
   LightSetId horz_slider_id_, vert_slider_id_;
   int inner_view_width_, inner_view_height_;
-  const SliderRenderer *renderer_;
+  const SliderViewFactory *view_factory_;
   DISALLOW_EVIL_CONSTRUCTORS(UnfocusableScrollingFrame);
 };
 
-ScrollingFrame::ScrollingFrame(GlopFrame *frame, const SliderRenderer *renderer)
-: FocusFrame(new UnfocusableScrollingFrame(frame, renderer)) {}
+ScrollingFrame::ScrollingFrame(GlopFrame *frame, const SliderViewFactory *factory)
+: FocusFrame(new UnfocusableScrollingFrame(frame, factory)) {}

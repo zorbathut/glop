@@ -316,6 +316,10 @@ void TextRenderer::FreeRef(TextRenderer *renderer) {
 
 void TextRenderer::Print(int x, int y, const string &text) const {
   if (text.size() > 0) {
+    // Adjust so that x and y are the baseline beginning
+    x -= GetX1(text[0]);
+    y += GetAscent();
+
     // Begin with the underline - this way the font overlaps the underline, not vice-versa
     GlUtils::SetColor(color_);
     if ((flags_ & kFontUnderline) > 0) {
@@ -328,7 +332,7 @@ void TextRenderer::Print(int x, int y, const string &text) const {
     glEnable(GL_BLEND);
     GlUtils::SetTexture(bitmap_->texture_);
     glPushMatrix();
-    glTranslatef(float(x - GetX1(text[0])), float(y), 0);
+    glTranslatef(float(x), float(y), 0);
     display_lists_->Call((int)text.size(), GL_BYTE, text.c_str());
     glPopMatrix();
 

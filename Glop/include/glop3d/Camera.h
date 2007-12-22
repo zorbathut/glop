@@ -54,8 +54,8 @@ class CameraFrame: public GlopFrame {
   : camera_(camera), is_fog_enabled_(false) {}
 
   // Rendering. Render3d should be overloaded, NOT render.
-  virtual void Render3d() = 0;
-  void Render();
+  virtual void Render3d() const = 0;
+  void Render() const;
 
   // Camera control
   const Camera &camera() const {return camera_;}

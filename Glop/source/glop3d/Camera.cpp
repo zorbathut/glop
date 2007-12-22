@@ -4,7 +4,7 @@
 #include "../../include/OpenGl.h"
 #include <cmath>
 
-void CameraFrame::Render() {
+void CameraFrame::Render() const {
   // Enable clipping - see ClippedFrame. We do it ourselves instead of actually using a
   // ClippedFrame so that the user can both extend CameraFrame and instantiate it without being
   // aware of any clipping nonsense.

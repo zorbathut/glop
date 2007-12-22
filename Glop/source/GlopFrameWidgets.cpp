@@ -15,50 +15,55 @@ const int kTextPromptCursorFadeTime = 80;
 // Basic widgets
 // =============
 
-void ArrowImageFrame::Render() {
-  int x = GetX() + (GetWidth()+1)/2, y = GetY() + (GetHeight()+1)/2;
-  int d = int(GetWidth() * 0.35f + 0.5f);
-
-  GlUtils::SetColor(color_);
-  glBegin(GL_TRIANGLES);
-  switch(direction_) {
-    case Up:
-      glVertex2i(x + d + 1, y + d);
-      glVertex2i(x - d - 1,  y + d);
-      glVertex2i(x, y - d - 2);
-      break;
-    case Right:
-      glVertex2i(x - d - 1, y + d + 1);
-      glVertex2i(x - d - 1, y - d - 1);           
-      glVertex2i(x + d + 1, y);
-      break;
-    case Down:
-      glVertex2i(x - d - 1, y - d - 1);
-      glVertex2i(x + d + 1, y - d - 1);
-      glVertex2i(x, y + d + 1);
-      break;
-    case Left:
-      glVertex2i(x + d, y - d - 1);
-      glVertex2i(x + d, y + d + 1);
-      glVertex2i(x - d - 2, y);
-      break;
-  }
-  glEnd();
-  GlUtils::SetColor(kWhite);
+void ArrowImageFrame::Render() const {
+  view_->Render(GetX(), GetY(), GetX2(), GetY2(), (ArrowView::Direction)direction_);
+}
+void ArrowImageFrame::RecomputeSize(int rec_width, int rec_height) {
+  int width, height;
+  view_->OnResize(rec_width, rec_height, (ArrowView::Direction)direction_, &width, &height);
+  SetSize(width, height);
 }
 
-void SolidBoxFrame::Render() {
+void SolidBoxFrame::SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2) {
+  int p = (has_outer_part_? 1 : 0);
+  GlopFrame::SetPosition(screen_x, screen_y, cx1, cy1, cx2, cy2);
+  if (GetChild() != 0)
+    GetChild()->SetPosition(screen_x + p, screen_y + p, cx1, cy1, cx2, cy2);
+}
+void SolidBoxFrame::RecomputeSize(int rec_width, int rec_height) {
+  int p = (has_outer_part_? 1 : 0);
+  if (GetChild() != 0) {
+    GetChild()->UpdateSize(rec_width - 2*p, rec_height - 2*p);
+    SetSize(GetChild()->GetWidth() + 2*p, GetChild()->GetHeight() + 2*p);
+  } else {
+    SetSize(rec_width, rec_height);
+  }
+}
+void SolidBoxFrame::Render() const {
   GlUtils2d::FillRectangle(GetX(), GetY(), GetX2(), GetY2(), inner_color_);
   if (has_outer_part_)
     GlUtils2d::DrawRectangle(GetX(), GetY(), GetX2(), GetY2(), outer_color_);
   GlUtils::SetColor(kWhite);
-  PaddedFrame::Render();
+  SingleParentFrame::Render();
 }
 
-void HollowBoxFrame::Render() {
+void HollowBoxFrame::SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2) {
+  GlopFrame::SetPosition(screen_x, screen_y, cx1, cy1, cx2, cy2);
+  if (GetChild() != 0)
+    GetChild()->SetPosition(screen_x + 1, screen_y + 1, cx1, cy1, cx2, cy2);
+}
+void HollowBoxFrame::RecomputeSize(int rec_width, int rec_height) {
+  if (GetChild() != 0) {
+    GetChild()->UpdateSize(rec_width - 2, rec_height - 2);
+    SetSize(GetChild()->GetWidth() + 2, GetChild()->GetHeight() + 2);
+  } else {
+    SetSize(rec_width, rec_height);
+  }
+}
+void HollowBoxFrame::Render() const {
   GlUtils2d::DrawRectangle(GetX(), GetY(), GetX2(), GetY2(), color_);
   GlUtils::SetColor(kWhite);
-  PaddedFrame::Render();
+  SingleParentFrame::Render();
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -77,9 +82,9 @@ int TextFrame::GetFontPixelHeight(float height) {
   return int(gWindow->GetHeight() * height);
 }
 
-void TextFrame::Render() {
+void TextFrame::Render() const {
   if (renderer_ != 0 && text_.size() > 0) {
-    renderer_->PrintUl(GetX(), GetY(), text_);
+    renderer_->Print(GetX(), GetY(), text_);
     GlUtils::SetColor(kWhite);
   }
 }
@@ -239,6 +244,7 @@ FancyTextFrame::ParseResult FancyTextFrame::ParseNextCharacter(
 }
 
 void FancyTextFrame::SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2) {
+  GlopFrame::SetPosition(screen_x, screen_y, cx1, cy1, cx2, cy2);
   for (int i = 0; i < (int)text_blocks_.size(); i++)
   for (int j = 0; j < (int)text_blocks_[i].size(); j++) {
     GetChild(text_blocks_[i][j].child_id)->SetPosition(screen_x + text_blocks_[i][j].x,
@@ -297,8 +303,8 @@ void FancyTextFrame::RecomputeSize(int rec_width, int rec_height) {
         // parser when we leave this loop.
         if (ch == ' ')
           word_start_status = status;
-        if (x + status.renderer->GetCharWidth('-', false, true) <= rec_width)
-          dash_status = status;
+        if (x + look_ahead_status.renderer->GetCharWidth('-', false, true) <= rec_width)
+          dash_status = look_ahead_status;
         if (x + look_ahead_status.renderer->GetCharWidth(ch, x == 0, true) > rec_width) {
           is_soft_return = true;
           StopParsing(&look_ahead_status);
@@ -425,7 +431,7 @@ void FancyTextFrame::RecomputeSize(int rec_width, int rec_height) {
 // AbstractTextPromptFrame
 // =======================
 
-void AbstractTextPromptFrame::Render() {
+void AbstractTextPromptFrame::Render() const {
   SingleParentFrame::Render();
 
   if (IsInFocus()) {
@@ -445,7 +451,7 @@ void AbstractTextPromptFrame::Render() {
       cursor_color[3] = (cursor_timer_ - delim[2]) / float(delim[3] - delim[2]);
 
     // Print the cursor
-    text()->GetRenderer()->PrintUl(GetX() + char_x_[cursor_pos_], GetY(), "|");
+    text()->GetRenderer()->Print(GetX() + char_x_[cursor_pos_], GetY(), "|");
   }
 }
 
@@ -471,7 +477,7 @@ void AbstractTextPromptFrame::RecomputeSize(int rec_width, int rec_height) {
 // BasicTextPromptFrame
 // ====================
 
-void BasicTextPromptFrame::Render() {
+void BasicTextPromptFrame::Render() const {
   if (GetCursorPos() != selection_anchor_) {
     int s1 = min(GetCursorPos(), selection_anchor_), s2 = max(GetCursorPos(), selection_anchor_);
     GlUtils2d::FillRectangle(GetX() + GetCharX()[s1], GetY(),
@@ -695,136 +701,43 @@ void IntegerPromptFrame::ReformText(bool is_confirmed) {
 // WindowFrame
 // ===========
 
-GlopFrame *DefaultWindowRenderer::CreateTitleFrame(const string &title) const {
-  return new PaddedFrame(new TextFrame(title, title_style_), 4, 2, 2, 0);
-}
-
-void DefaultWindowRenderer::GetInnerFramePadding(bool has_title, int *lp, int *tp,
-                                                 int *rp, int *bp) const {
-  *lp = *tp = *rp = *bp = 3;
-}
-
-void DefaultWindowRenderer::Render(int x1, int y1, int x2, int y2, GlopFrame *title_frame,
-                                   GlopFrame *inner_frame) const {
-  int title_height = (title_frame == 0? 0 : title_frame->GetHeight()), ym = y1 + title_height - 1;
-
-  // Draw the fancy title bar
-  if (title_frame != 0) {
-    glBegin(GL_QUADS);
-    GlUtils::SetColor(border_highlight_color_);
-    glVertex2i(x1 + 1, y1 + 1);
-    glVertex2i(x2, y1 + 1);
-    GlUtils::SetColor(border_lowlight_color_);
-    glVertex2i(x2, y1 + title_height/4);
-    glVertex2i(x1 + 1, y1 + title_height/4);
-    glVertex2i(x1 + 1, y1 + title_height/4);
-    glVertex2i(x2, y1 + title_height/4);
-    GlUtils::SetColor(border_highlight_color_);
-    glVertex2i(x2, y1 + title_height + 1);
-    glVertex2i(x1, y1 + title_height + 1);
-    glEnd();
-  }
-
-  // Draw the window border
-  GlUtils2d::DrawRectangle(x1, y1, x2, y2, border_lowlight_color_);
-  GlUtils2d::DrawRectangle(x1 + 1, ym + 1, x2 - 1, y2 - 1, border_highlight_color_);
-  GlUtils2d::DrawRectangle(x1 + 2, ym + 2, x2 - 2, y2 - 2, border_lowlight_color_);
-
-  // Draw the window interior    
-  GlUtils2d::FillRectangle(x1 + 3, ym + 3, x2 - 3, y2 - 3, inner_color_);
-
-  // Delegate to the inner frames
-  GlUtils::SetColor(kWhite);
-  if (title_frame != 0)
-    title_frame->Render();
-  inner_frame->Render();
-}
-
 WindowFrame::WindowFrame(GlopFrame *inner_frame, const string &title,
-                         const WindowRenderer *renderer)
-: SingleParentFrame(0), renderer_(renderer) {
-  ColFrame *col = new ColFrame(2, kJustifyLeft);
-  int lp, tp, rp, bp;
-  renderer->GetInnerFramePadding(true, &lp, &tp, &rp, &bp);
-  col->SetCell(0, title_frame_ = renderer->CreateTitleFrame(title));
-  col->SetCell(1, inner_frame_ = new PaddedFrame(inner_frame, lp, tp, rp, bp),
-               CellSize::Default(), CellSize::Max());
-  SetChild(col);
+                         const WindowViewFactory *factory)
+: SingleParentFrame(0), view_(factory->Create()) {
+  padded_title_frame_ = new PaddedFrame(new TextFrame(title, view_->GetTitleStyle()), 0);
+  padded_inner_frame_ = new PaddedFrame(inner_frame, 0);
+  SetChild(new ColFrame(padded_title_frame_, CellSize::Default(), CellSize::Default(),
+                        padded_inner_frame_, CellSize::Default(), CellSize::Max(), kJustifyLeft));
 }
 
-WindowFrame::WindowFrame(GlopFrame *inner_frame, const WindowRenderer *renderer)
-: SingleParentFrame(0), renderer_(renderer), title_frame_(0) {
-  int lp, tp, rp, bp;
-  renderer->GetInnerFramePadding(false, &lp, &tp, &rp, &bp);
-  SetChild(inner_frame_ = new PaddedFrame(inner_frame, lp, tp, rp, bp));
+WindowFrame::WindowFrame(GlopFrame *inner_frame, const WindowViewFactory *factory)
+: SingleParentFrame(0), view_(factory->Create()), padded_title_frame_(0) {
+  padded_inner_frame_ = new PaddedFrame(inner_frame, 0);
+  SetChild(padded_inner_frame_);
+}
+
+void WindowFrame::Render() const {
+  view_->Render(GetX(), GetY(), GetX2(), GetY2(), padded_title_frame_, padded_inner_frame_);
+}
+
+void WindowFrame::RecomputeSize(int rec_width, int rec_height) {
+  int title_l, title_t, title_r, title_b, inner_l, inner_t, inner_r, inner_b;
+  view_->OnResize(rec_width, rec_height, padded_title_frame_ != 0,
+                  &title_l, &title_t, &title_r, &title_b,
+                  &inner_l, &inner_t, &inner_r, &inner_b);
+  if (padded_title_frame_ != 0)
+    padded_title_frame_->SetPadding(title_l, title_t, title_r, title_b);
+  padded_inner_frame_->SetPadding(inner_l, inner_t, inner_r, inner_b);
+  SingleParentFrame::RecomputeSize(rec_width, rec_height);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // ButtonWidget
 // ============
 
-void DefaultButtonRenderer::RecomputePadding(bool is_down, int *lp, int *tp,
-                                             int *rp, int *bp) const {
-  int padding = 2 + int(min(gWindow->GetWidth(), gWindow->GetHeight()) * border_size_);
-  int offset = (is_down? 1 : 0);
-  *lp = *tp = padding + offset - 1;
-  *rp = *bp = padding - offset;
-}
-
-void DefaultButtonRenderer::Render(bool is_down, bool is_primary_focus, int x1, int y1, int x2,
-                                   int y2, GlopFrame *inner_frame) const {
-  int lpadding, rpadding;
-  RecomputePadding(is_down, &lpadding, &lpadding, &rpadding, &rpadding);
-
-  // Handle up buttons
-  if (!is_down) {
-    // Draw the border
-    GlUtils2d::DrawRectangle(x1, y1, x2, y2, border_color_);
-
-    // Draw the highlight
-    GlUtils2d::FillRectangle(x1 + 1, y1 + 1, x2 - 1, y2 - 1, highlight_color_);
-
-    // Draw the lowlight
-    GlUtils2d::FillRectangle(x1 + lpadding, y2 - rpadding + 1, x2 - 1, y2 - 1, lowlight_color_);
-    glBegin(GL_TRIANGLES);
-    glVertex2i(x1 + 1, y2);
-    glVertex2i(x1 + lpadding, y2 - rpadding + 1);
-    glVertex2i(x1 + lpadding, y2);
-    glEnd();
-    GlUtils2d::FillRectangle(x2 - rpadding + 1, y1 + lpadding, x2 - 1, y2 - 1);
-    glBegin(GL_TRIANGLES);
-    glVertex2i(x2 - rpadding + 1, y1 + lpadding);
-    glVertex2i(x2, y1 + 1);
-    glVertex2i(x2, y1 + lpadding);
-    glEnd();
-
-    // Draw the button interior
-    GlUtils2d::FillRectangle(x1 + lpadding, y1 + lpadding, x2 - rpadding, y2 - rpadding,
-                             unpressed_inner_color_);
-  } else {
-    // Draw a pressed button
-    GlUtils2d::DrawRectangle(x1, y1, x2, y2, border_color_);
-    GlUtils2d::FillRectangle(x1 + 1, y1 + 1, x2 - 1, y2 - 1, lowlight_color_);
-    GlUtils2d::FillRectangle(x1 + lpadding, y1 + lpadding, x2 - rpadding, y2 - rpadding,
-                             pressed_inner_color_);
-  }
-
-  // Draw the inner frame
-  GlUtils::SetColor(kWhite);
-  if (inner_frame != 0)
-    inner_frame->Render();
-
-  // Draw the focus display
-  if (is_primary_focus) {
-    GlUtils2d::DrawRectangle(x1, y1, x2, y2, selection_color_);
-    glEnable(GL_LINE_STIPPLE);
-    glLineStipple(1, 0x5555);
-    GlUtils2d::DrawRectangle(x1 + lpadding - 1, y1 + lpadding - 1, x2 - rpadding + 1,
-                            y2 - rpadding + 1, selection_color_);
-    glLineStipple(1, 0xffff);
-    glDisable(GL_LINE_STIPPLE);
-    GlUtils::SetColor(kWhite);
-  }
+void AbstractButtonFrame::Render() const {
+  view_->Render(GetX(), GetY(), GetX2(), GetY2(), is_down_, IsPrimaryFocus(),
+                (PaddedFrame*)GetChild());
 }
 
 void AbstractButtonFrame::Think(int dt) {
@@ -848,7 +761,7 @@ void AbstractButtonFrame::SetIsDown(DownType down_type) {
   bool is_down = (down_type == Down || down_type == DownRepeatSoon);
   if (is_down == is_down_) return;
   is_down_ = is_down;
-  RecomputePadding();
+  DirtySize();
   if (is_down_) {
     NewRelativePing(0, 0, 1, 1);
     held_down_queued_ = true;
@@ -858,10 +771,11 @@ void AbstractButtonFrame::SetIsDown(DownType down_type) {
   }
 }
 
-void AbstractButtonFrame::RecomputePadding() {
+void AbstractButtonFrame::RecomputeSize(int rec_width, int rec_height) {
   int lp, tp, rp, bp;
-  renderer_->RecomputePadding(is_down_, &lp, &tp, &rp, &bp);
-  SetPadding(lp, tp, rp, bp);
+  view_->OnResize(rec_width, rec_height, is_down_, &lp, &tp, &rp, &bp);
+  ((PaddedFrame*)GetChild())->SetPadding(lp, tp, rp, bp);
+  SingleParentFrame::RecomputeSize(rec_width, rec_height);
 }
 
 bool DefaultButtonFrame::OnKeyEvent(const KeyEvent &event, int dt) {
@@ -923,235 +837,32 @@ void DefaultButtonFrame::SetIsHotKeyDown(const GlopKey &key, bool is_down) {
 // SliderWidget
 // ============
 
-int DefaultSliderRenderer::RecomputeWidth(bool is_horizontal) const {
-  return max(int(min(gWindow->GetWidth(), gWindow->GetHeight()) * width_), 2);
-}
-
-int DefaultSliderRenderer::RecomputeMinTabLength(bool is_horizontal, int inner_width,
-                                                 int inner_height) const {
-  return min(6, is_horizontal? inner_width: inner_height);
-}
-
-void DefaultSliderRenderer::Render(bool is_horizontal, bool is_primary_focus, int x1, int y1,
-                                   int x2, int y2, int tab_x1, int tab_y1, int tab_x2,
-                                   int tab_y2) const {
-  // Elongate the tab a little - this means the border will overlap with the button border
-  if (is_horizontal) {
-    tab_x1--;
-    tab_x2++;
-  } else {
-    tab_y1--;
-    tab_y2++;
-  }
-
-  // Draw the background
-  GlUtils2d::FillRectangle(x1, y1, x2, y2, background_color_);
-  GlUtils::SetColor(kWhite);
-
-  // Draw the tab
-  GetButtonRenderer()->Render(false, is_primary_focus, x1 + tab_x1, y1 + tab_y1, x1 + tab_x2,
-                              y1 + tab_y2, 0);
-
-  // Draw the border
-  if (is_horizontal) {
-    GlUtils2d::DrawLine(x1, y1, x2, y1, border_color_);
-    GlUtils2d::DrawLine(x1, y2, x2, y2, border_color_);
-  } else {
-    GlUtils2d::DrawLine(x1, y1, x1, y2, border_color_);
-    GlUtils2d::DrawLine(x2, y1, x2, y2, border_color_);
-  }
-  GlUtils::SetColor(kWhite);
-}
-
-// This is the part of a SliderFrame between the two buttons: a long bar with a movable tab in
-// the middle.
-class InnerSliderFrame: public GlopFrame {
- public:
-  // Basic constructor. See SliderWidget for parameter description.
-  enum Direction {Horizontal, Vertical};
-  InnerSliderFrame(Direction direction, int tab_logical_size, int bar_logical_size,
-                   int tab_logical_position, int step_size, const SliderRenderer *renderer)
-  : direction_(direction),
-    tab_logical_size_(tab_logical_size),
-    bar_logical_size_(bar_logical_size),
-    step_size_(step_size),
-    tab_logical_position_(tab_logical_position),
-    mouse_lock_mode_(None),
-    bar_pixel_length_(0),
-    renderer_(renderer) {
-  }
-
-  void Render() {
-    renderer_->Render(direction_ == Horizontal, GetParent()->IsPrimaryFocus(), GetX(), GetY(),
-                      GetX2(), GetY2(), tab_x1_, tab_y1_, tab_x2_, tab_y2_);
-  }
-
-  bool OnKeyEvent(const KeyEvent &event, int dt) {
-    // Compute the mouse pixel position on the slider
-    int mouse_pixel, tab_start_pixel, tab_end_pixel;
-    if (direction_ == Horizontal) {
-      tab_start_pixel = tab_x1_;
-      tab_end_pixel = tab_x2_;
-      mouse_pixel = input()->GetMouseX() - GetX();
-    } else {
-      tab_start_pixel = tab_y1_;
-      tab_end_pixel = tab_y2_;
-      mouse_pixel = input()->GetMouseY() - GetY();
-    }
-
-    // Handle mouse first clicks
-    if (event.key == kMouseLButton && event.IsNonRepeatPress() &&
-        IsPointVisible(input()->GetMouseX(), input()->GetMouseY())) {
-      if (mouse_pixel >= tab_start_pixel && mouse_pixel <= tab_end_pixel) {
-        mouse_lock_mode_ = Tab;
-        tab_grab_position_ = GetLocationPixelStart(GetLocationByPixel(mouse_pixel)) -
-                                                   tab_start_pixel;
-      } else {
-        mouse_lock_mode_ = Bar; 
-      }
-    } else if (event.key == kMouseLButton && event.IsRelease()) {
-      mouse_lock_mode_ = None;
-    }
-
-    // Handle mouse repeat clicks
-    if (event.key == kMouseLButton && event.IsPress() && mouse_lock_mode_ == Bar &&
-        IsPointVisible(input()->GetMouseX(), input()->GetMouseY())) {
-      if (mouse_pixel < tab_start_pixel)
-        LargeDec();
-      else if (mouse_pixel > tab_end_pixel)
-        LargeInc();
-    }
-
-    // Handle mouse dragging
-    if (mouse_lock_mode_ == Tab)
-      SetTabPosition(GetLocationByPixel(mouse_pixel - tab_grab_position_));
-    return event.key == kMouseLButton;
-  }
-
-  // State
-  void SetTabPosition(int position) {
-    tab_logical_position_ = min(max(position, 0), bar_logical_size_ - tab_logical_size_);
-    RecomputeTabScreenPosition();
-  }
-  int GetTabPosition() const {return tab_logical_position_;}
-  void SmallDec() {SetTabPosition(tab_logical_position_ - step_size_);}
-  void SmallInc() {SetTabPosition(tab_logical_position_ + step_size_);}
-  void LargeDec() {SetTabPosition(tab_logical_position_ - (tab_logical_size_*9+9)/10);}
-  void LargeInc() {SetTabPosition(tab_logical_position_ + (tab_logical_size_*9+9)/10);}
-  int GetTabSize() const {return tab_logical_size_;}
-  int GetTotalSize() const {return bar_logical_size_;}
-
- protected:
-  void RecomputeSize(int rec_width, int rec_height) {
-    SetSize(rec_width, rec_height);
-    int bar_pixel_length = (direction_ == Horizontal? GetWidth() : GetHeight());
-    if (bar_pixel_length != bar_pixel_length_) {
-      bar_pixel_length_ = bar_pixel_length;
-      mouse_lock_mode_ = None;
-      RecomputeTabScreenPosition();
-    }
-  }
-
-  void OnFocusChange() {
-    if (!IsInFocus())
-      mouse_lock_mode_ = None;
-  }
-
- private:
-  // Given a logical position, this returns the pixel on the slider where that position starts
-  int GetLocationPixelStart(int pos) const {
-    return pos * (bar_pixel_length_ - tab_pixel_length_) / (bar_logical_size_ - tab_logical_size_);
-  }
-
-  // Given a pixel on the slider, this returns the corresponding logical position. We are extra
-  // careful to make sure rounding does not not prevent total consistency with
-  // getLocationPixelStart. Otherwise, the scroll bar can have weird jumps when it is being
-  // dragged.
-  int GetLocationByPixel(int pixel_location) {
-    if (bar_pixel_length_ <= tab_pixel_length_)
-      return 0;	// A truly degenerate case
-    int pos = pixel_location * (bar_logical_size_ - tab_logical_size_) /
-              (bar_pixel_length_ - tab_pixel_length_) - 1;
-    while (GetLocationPixelStart(pos+1) <= pixel_location)
-      pos++;
-    return pos;
-  }
-
-  // Recomputes the screen coordinates for the tab rectangle
-  void RecomputeTabScreenPosition() {
-    int min_tab_length = renderer_->RecomputeMinTabLength(direction_ == Horizontal,
-                                                          GetWidth(), GetHeight());
-
-    // Compute the length of the tab
-    if (tab_logical_size_ < bar_logical_size_) {
-      tab_pixel_length_ = max(tab_logical_size_ * (bar_pixel_length_ - 1) / bar_logical_size_,
-                              min_tab_length);
-    } else {
-      tab_pixel_length_ = bar_pixel_length_;
-    }
-
-    // Compute its coordinates
-    if (direction_ == Horizontal) {
-      tab_x1_ = GetLocationPixelStart(tab_logical_position_);
-      tab_x2_ = tab_x1_ + tab_pixel_length_ - 1;
-      tab_y1_ = 0;
-      tab_y2_ = GetHeight() - 1;
-    } else {
-      tab_y1_ = GetLocationPixelStart(tab_logical_position_);
-      tab_y2_ = tab_y1_ + tab_pixel_length_ - 1;
-      tab_x1_ = 0;
-      tab_x2_ = GetWidth() - 1;
-    }
-  }
-
-  // Data
-  enum MouseLockMode {None, Bar, Tab};
-  Direction direction_;
-  int tab_logical_size_, bar_logical_size_;
-  int step_size_;
-  int tab_logical_position_;
-  MouseLockMode mouse_lock_mode_;
-  int bar_pixel_length_;
-  int tab_pixel_length_, tab_x1_, tab_y1_, tab_x2_, tab_y2_;
-  int tab_grab_position_;
-  const SliderRenderer *renderer_;
-  DISALLOW_EVIL_CONSTRUCTORS(InnerSliderFrame);
-};
-
 SliderFrame::SliderFrame(Direction direction, int tab_size, int total_size, int position,
-                         bool has_arrow_hot_keys, int step_size, const SliderRenderer *renderer)
-: SingleParentFrame(new TableFrame(0, 0)) {
-  // Store the data
-  if (step_size == -1)
-    step_size = (tab_size + 9) / 10;
-  direction_ = direction;
-  renderer_ = renderer;
+                         bool has_arrow_hot_keys, int step_size, const SliderViewFactory *factory)
+: MultiParentFrame(),
+  direction_(direction),
+  tab_logical_position_(position),
+  tab_logical_size_(tab_size),
+  total_logical_size_(total_size),
+  step_size_(step_size == -1? (tab_size + 9) / 10 : step_size),  
+  mouse_lock_mode_(None),
+  bar_pixel_length_(0),
+  view_(factory->Create()) {
 
-  // Create the table
-  TableFrame *table = (TableFrame*)GetChild();
+  // Create the buttons
   if (direction == Horizontal) {
-    table->Resize(3, 1);
-    table->SetCell(0, 0, dec_button_ = new DefaultButtonFrame(
-      new ArrowImageFrame(ArrowImageFrame::Left, renderer->GetButtonColor()),
-      renderer->GetButtonRenderer()));
-    table->SetCell(1, 0, inner_slider_ = new InnerSliderFrame(InnerSliderFrame::Horizontal,
-                       tab_size, total_size, position, step_size, renderer),
-                     CellSize::Max(), CellSize::Default());
-    table->SetCell(2, 0, inc_button_ = new DefaultButtonFrame(
-      new ArrowImageFrame(ArrowImageFrame::Right, renderer->GetButtonColor()),
-      renderer->GetButtonRenderer()));
+    dec_button_ = new DefaultButtonFrame(new ArrowImageFrame(ArrowImageFrame::Left,
+      view_->GetArrowViewFactory()), view_->GetButtonViewFactory());
+    inc_button_ = new DefaultButtonFrame(new ArrowImageFrame(ArrowImageFrame::Right,
+      view_->GetArrowViewFactory()), view_->GetButtonViewFactory());
   } else {
-    table->Resize(1, 3);
-    table->SetCell(0, 0, dec_button_ = new DefaultButtonFrame(
-      new ArrowImageFrame(ArrowImageFrame::Up, renderer->GetButtonColor()),
-      renderer->GetButtonRenderer()));
-    table->SetCell(0, 1, inner_slider_ = new InnerSliderFrame(InnerSliderFrame::Vertical,
-                       tab_size, total_size, position, step_size, renderer),
-                     CellSize::Default(), CellSize::Max());
-    table->SetCell(0, 2, inc_button_ = new DefaultButtonFrame(
-      new ArrowImageFrame(ArrowImageFrame::Down, renderer->GetButtonColor()),
-      renderer->GetButtonRenderer()));
+    dec_button_ = new DefaultButtonFrame(new ArrowImageFrame(ArrowImageFrame::Up,
+      view_->GetArrowViewFactory()), view_->GetButtonViewFactory());
+    inc_button_ = new DefaultButtonFrame(new ArrowImageFrame(ArrowImageFrame::Down,
+      view_->GetArrowViewFactory()), view_->GetButtonViewFactory());
   }
+  AddChild(dec_button_);
+  AddChild(inc_button_);
 
   // Set the hot keys
   if (has_arrow_hot_keys) {
@@ -1165,56 +876,192 @@ SliderFrame::SliderFrame(Direction direction, int tab_size, int total_size, int 
   }
 }
 
-int SliderFrame::GetTabPosition() const {return inner_slider_->GetTabPosition();}
-void SliderFrame::SetTabPosition(int position) {inner_slider_->SetTabPosition(position);}
-int SliderFrame::GetTabSize() const {return inner_slider_->GetTabSize();}
-int SliderFrame::GetTotalSize() const {return inner_slider_->GetTotalSize();}
+void SliderFrame::SetTabPosition(int position) {
+  tab_logical_position_ = min(max(position, 0), total_logical_size_ - tab_logical_size_);
+  RecomputeTabScreenPosition();
+}
+
+void SliderFrame::Render() const {
+  view_->Render(GetX(), GetY(), GetX2(), GetY2(), direction_ == Horizontal,
+                GetParent()->IsPrimaryFocus(), tab_x1_ + inner_bar_x_, tab_y1_ + inner_bar_y_,
+                tab_x2_ + inner_bar_x_, tab_y2_ + inner_bar_y_, dec_button_, inc_button_);
+}
 
 void SliderFrame::Think(int dt) {
-  SingleParentFrame::Think(dt);
+  MultiParentFrame::Think(dt);
   if (dec_button_->WasHeldDown() && !inc_button_->IsDown())
-    inner_slider_->SmallDec();
+    SmallDec();
   if (inc_button_->WasHeldDown() && !dec_button_->IsDown())
-    inner_slider_->SmallInc();
+    SmallInc();
 }
 
 bool SliderFrame::OnKeyEvent(const KeyEvent &event, int dt) {
-  bool result = inner_slider_->OnKeyEvent(event, dt);
+  // Delegate to the decrement and increment buttons
+  bool result = false;
   bool dec_result = dec_button_->OnKeyEvent(event, dt);
   bool inc_result = inc_button_->OnKeyEvent(event, dt);
-  if (inner_slider_->GetTabPosition() != 0) {
+
+  // Handle decrement requests - do not mark a key as used if it is used by a currently irrelevant
+  // decrement button
+  if (tab_logical_position_ != 0) {
     result |= dec_result;
     if (event.IsPress() && large_dec_keys_.Find(event.key)) {
-      inner_slider_->LargeDec();
+      LargeDec();
       result = true;
       NewRelativePing(0, 0, 1, 1);
     }
   }
-  if (inner_slider_->GetTabPosition() != inner_slider_->GetTotalSize() -
-                                         inner_slider_->GetTabSize()) {
+
+  // Handle increment requests - do not mark a key as used if it is used by a currently irrelevant
+  // increment button
+  if (tab_logical_position_ != total_logical_size_ - tab_logical_size_) {
     result |= inc_result;
     if (event.IsPress() && large_inc_keys_.Find(event.key)) {
-      inner_slider_->LargeInc();
+      LargeInc();
       result = true;
       NewRelativePing(0, 0, 1, 1);
     }
   }
+
+  // Compute the mouse pixel position on the slider
+  int mouse_pixel, tab_start_pixel, tab_end_pixel;
+  if (direction_ == Horizontal) {
+    tab_start_pixel = tab_x1_;
+    tab_end_pixel = tab_x2_;
+    mouse_pixel = input()->GetMouseX() - inner_bar_x_;
+  } else {
+    tab_start_pixel = tab_y1_;
+    tab_end_pixel = tab_y2_;
+    mouse_pixel = input()->GetMouseY() - inner_bar_y_;
+  }
+
+  // Handle mouse first clicks
+  if (event.key == kMouseLButton && event.IsNonRepeatPress() &&
+      IsPointVisible(input()->GetMouseX(), input()->GetMouseY()) &&
+      mouse_pixel >= 0 && mouse_pixel < bar_pixel_length_) {
+    if (mouse_pixel >= tab_start_pixel && mouse_pixel <= tab_end_pixel) {
+      mouse_lock_mode_ = Tab;
+      tab_grab_position_ = GetLocationPixelStart(GetLocationByPixel(mouse_pixel)) -
+                                                  tab_start_pixel;
+    } else {
+      mouse_lock_mode_ = Bar; 
+    }
+  } else if (event.key == kMouseLButton && event.IsRelease()) {
+    mouse_lock_mode_ = None;
+  }
+
+  // Handle mouse repeat clicks
+  if (event.key == kMouseLButton && event.IsPress() && mouse_lock_mode_ == Bar &&
+      IsPointVisible(input()->GetMouseX(), input()->GetMouseY())) {
+    if (mouse_pixel < tab_start_pixel)
+      LargeDec();
+    else if (mouse_pixel > tab_end_pixel)
+      LargeInc();
+  }
+
+  // Handle mouse dragging
+  if (mouse_lock_mode_ == Tab)
+    SetTabPosition(GetLocationByPixel(mouse_pixel - tab_grab_position_));
+  result |= (event.key == kMouseLButton);
   return result;
 }
 
+void SliderFrame::SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2) {
+  dec_button_->SetPosition(screen_x, screen_y, cx1, cy1, cx2, cy2);
+  inc_button_->SetPosition(screen_x + GetWidth() - inc_button_->GetWidth(),
+                           screen_y + GetHeight() - inc_button_->GetHeight(), cx1, cy1, cx2, cy2);
+  if (direction_ == Horizontal) {
+    inner_bar_x_ = dec_button_->GetX2() + 1;
+    inner_bar_y_ = screen_y;
+  } else {
+    inner_bar_x_ = screen_x;
+    inner_bar_y_ = dec_button_->GetY2() + 1;
+  }
+  GlopFrame::SetPosition(screen_x, screen_y, cx1, cy1, cx2, cy2);
+}
+
 void SliderFrame::RecomputeSize(int rec_width, int rec_height) {
-  int width = renderer_->RecomputeWidth(direction_ == Horizontal);
-  if (direction_ == Horizontal)
-    rec_height = width;
-  else
-    rec_width = width;
-  SingleParentFrame::RecomputeSize(rec_width, rec_height);
+  int width = view_->GetWidthOnResize(rec_width, rec_height, direction_ == Horizontal);
+  int bar_pixel_length;
+  if (direction_ == Horizontal) {
+    dec_button_->UpdateSize(rec_width/2, width);
+    inc_button_->UpdateSize(rec_width/2, width);
+    bar_pixel_length = rec_width - dec_button_->GetWidth() - inc_button_->GetWidth();
+    SetSize(rec_width, width);
+  } else {
+    dec_button_->UpdateSize(width, rec_height/2);
+    inc_button_->UpdateSize(width, rec_height/2);
+    bar_pixel_length = rec_height - dec_button_->GetHeight() - inc_button_->GetHeight();
+    SetSize(width, rec_height);
+  }
+  if (bar_pixel_length != bar_pixel_length_) {
+    bar_pixel_length_ = bar_pixel_length;
+    mouse_lock_mode_ = None;
+    RecomputeTabScreenPosition();
+  }
 }
 
 void SliderFrame::OnChildPing(GlopFrame *child, int x1, int y1, int x2, int y2, bool center) {
-  if ((child == dec_button_ && inner_slider_->GetTabPosition() == 0) ||
-      (child == inc_button_ && inner_slider_->GetTabPosition() == inner_slider_->GetTotalSize() -
-                                                                  inner_slider_->GetTabSize()))
+  if ((child == dec_button_ && tab_logical_position_ == 0) ||
+      (child == inc_button_ && tab_logical_position_ == total_logical_size_ - tab_logical_size_))
     return;
-  SingleParentFrame::OnChildPing(child, x1, y1, x2, y2, center);
+  MultiParentFrame::OnChildPing(child, x1, y1, x2, y2, center);
+}
+
+void SliderFrame::OnFocusChange() {
+  if (!IsInFocus())
+    mouse_lock_mode_ = None;
+  MultiParentFrame::OnFocusChange();
+}
+
+// Given a logical position, this returns the pixel on the slider where that position starts
+int SliderFrame::GetLocationPixelStart(int pos) const {
+  return pos * (bar_pixel_length_ - tab_pixel_length_) / (total_logical_size_ - tab_logical_size_);
+}
+
+// Given a pixel on the slider, this returns the corresponding logical position. We are extra
+// careful to make sure rounding does not not prevent total consistency with
+// getLocationPixelStart. Otherwise, the scroll bar can have weird jumps when it is being
+// dragged.
+int SliderFrame::GetLocationByPixel(int pixel_location) {
+  if (bar_pixel_length_ <= tab_pixel_length_)
+    return 0;	// A truly degenerate case
+  int pos = pixel_location * (total_logical_size_ - tab_logical_size_) /
+            (bar_pixel_length_ - tab_pixel_length_) - 1;
+  while (GetLocationPixelStart(pos+1) <= pixel_location)
+    pos++;
+  return pos;
+}
+
+// Recomputes the screen coordinates for the tab rectangle
+void SliderFrame::RecomputeTabScreenPosition() {
+  int min_tab_length;
+  if (direction_ == Horizontal) {
+    min_tab_length = view_->GetMinTabLengthOnResize(
+      GetWidth() - dec_button_->GetWidth() - inc_button_->GetWidth(), GetHeight(), true);
+  } else {
+    min_tab_length = view_->GetMinTabLengthOnResize(
+      GetWidth(), GetHeight() - dec_button_->GetHeight() - inc_button_->GetHeight(), false);
+  }
+
+  // Compute the length of the tab
+  if (tab_logical_size_ < total_logical_size_) {
+    tab_pixel_length_ = max(tab_logical_size_ * (bar_pixel_length_ - 1) / total_logical_size_,
+                            min_tab_length);
+  } else {
+    tab_pixel_length_ = bar_pixel_length_;
+  }
+
+  // Compute its coordinates
+  if (direction_ == Horizontal) {
+    tab_x1_ = GetLocationPixelStart(tab_logical_position_);
+    tab_x2_ = tab_x1_ + tab_pixel_length_ - 1;
+    tab_y1_ = 0;
+    tab_y2_ = GetHeight() - 1;
+  } else {
+    tab_y1_ = GetLocationPixelStart(tab_logical_position_);
+    tab_y2_ = tab_y1_ + tab_pixel_length_ - 1;
+    tab_x1_ = 0;
+    tab_x2_ = GetWidth() - 1;
+  }
 }

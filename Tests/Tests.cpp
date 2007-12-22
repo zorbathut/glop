@@ -11,6 +11,9 @@
 //  - Rework file stuff
 //  - Why is object slightly visible even when deep in the fog?
 //  - Add general GlopFrame comments, and formalize render expectations vis a vis gl settings
+//  - FancyTextFrame parser don't constantly create/delete font reference
+//  - RecomputePadding for buttons
+//  - Clean up scroll frame onresize
 
 // Includes
 #include "../Glop/include/Base.h"
@@ -33,15 +36,19 @@ void IntroScreen() {
                                        "Select tests to verify that Glop performs as expected.",
                                        kWhite);
   gWindow->AddFrame(info, 0.5f, 0.3f, 0.5f, 0.3f);
+  gWindow->AddFrame(new SliderWidget(SliderWidget::Horizontal, 100, 1000, 500));
+  gWindow->AddFrame(new SliderWidget(SliderWidget::Horizontal, 100, 1000, 500), 0.5f, 0.7f, 0.5f, 0.5f);
   gWindow->AddFrame(new TextFrame("Press any key to continue...", kYellow),
                      0.5f, 1.0f, kJustifyCenter, kJustifyBottom);
-  input()->WaitForKeyPress();
+
+  while (!input()->WasKeyPressed(27))
+    input()->WaitForKeyPress();
   gWindow->ClearFrames();
 }
 
 class GlUtils2dTestFrame: public GlopFrame {
  public:
-  void Render() {
+  void Render() const {
     GlUtils2d::FillRectangle(GetX(), GetY(), GetX2(), GetY2(), kYellow);
     GlUtils2d::DrawRectangle(GetX() + 1, GetY() + 1, GetX2() - 1, GetY2() - 1, kBlack);
     GlUtils2d::DrawLine(GetX() + 2, GetY() + 2, GetX2() - 2, GetY2() - 2, kBlue);
@@ -54,9 +61,9 @@ class GlUtils2dTestFrame: public GlopFrame {
 void GlUtils2dTest() {
   gWindow->AddFrame(new PaddedFrame(new GlUtils2dTestFrame(), 1));
   GlopFrame *info = new FancyTextFrame(
-    "You should see a yellow filled box surrounded by a black box, surrounded"
+    "You should see a yellow filled box surrounded by a black box, surrounded "
     "by a yellow box. There should be red diagonals in the box (not overlapping "
-    "the black part.\n\n"
+    "the black part.)\n\n"
     "\1c0000FF\1Press any key to continue", kBlack);
   gWindow->AddFrame(new RecWidthFrame(info, 0.6f), 0.5f, 0.4f, 0.5f, 0.4f);
   input()->WaitForKeyPress();
@@ -258,7 +265,7 @@ class CubeFrame: public CameraFrame {
     SetFog(kWhite*0.3f, 5, 8);
   }
 
-  void Render3d() {
+  void Render3d() const {
     float m[16];
     glPushMatrix();
     pos_.FillTransformationMatrix(m);
@@ -352,11 +359,10 @@ void BuildMainMenu() {
 int main(int argc, char **argv) {
   Font *font;
   System::Init();
-  string s = Format("%p", argv);
   
   ASSERT((font = Font::Load("thames.ttf")) != 0);
   ASSERT((gIcon = Image::Load("Icon.bmp", kRed, 1)) != 0);
-  gDefaultStyle = new FrameStyle(font);
+  gFrameStyle = new FrameStyle(font);
  
   gWindow->SetIcon(gIcon);
   ASSERT(gWindow->Create(1024, 768, false));

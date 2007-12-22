@@ -175,18 +175,8 @@ class TextRenderer {
   // Frees a reference to the given renderer.
   static void FreeRef(TextRenderer *renderer);
 
-  // Renders the given string of text with (x,y) the coordinates of the baseline start. Note that
-  // the text can extend in all four directions from text. The exact boundaries are as follows:
-  //  left = x + GetX1(text[0]);
-  //  top = y - GetAscent();
-  //  width = GetTextWidth("text");
-  //  height = GetFullTextHeight();
-  // PrintUl is identical, except here (x,y) specifies the top-left corner of the text.
-  // When complete, either function guarantees texturing/blending are disabled.
+  // Renders the given string of text with (x,y) the top-left coordinates to print from.
   void Print(int x, int y, const string &text) const;
-  void PrintUl(int x, int y, const string &text) const {
-    if (text.size() > 0) Print(x - GetX1(text[0]), y + GetAscent(), text);
-  }
 
   // Font metrics. In additions to the basic character metrics discussed in FontOutline, there are
   // several derived metrics.

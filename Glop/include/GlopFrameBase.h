@@ -74,63 +74,21 @@
 // In GlopFrameBase.h, we define a set of "support" frames. As a rule of thumb, these do not render
 // anything, but they help organize other frames.
 
-#ifndef GLOP_FRAME_BASE_H__
-#define GLOP_FRAME_BASE_H__
+#ifndef GLOP_GLOP_FRAME_BASE_H__
+#define GLOP_GLOP_FRAME_BASE_H__
 
 // Includes
 #include "Base.h"
-#include "Color.h"
+#include "GlopFrameStyle.h"
 #include "LightSet.h"
 #include <vector>
 using namespace std;
 
 // Class declarations
-class ButtonRenderer;
 class FocusFrame;
-class Font;
-class SliderRenderer;
-class WindowRenderer;
-struct GlopKey;
 struct KeyEvent;
-struct TextStyle;
 
-struct TextStyle {
-  TextStyle();
-  TextStyle(const Color &_color);
-  TextStyle(const Color &_color, float _size);
-  TextStyle(const Color &_color, float _size, Font *_font);
-  TextStyle(const Color &_color, float _size, Font *_font, unsigned int _flags)
-  : color(_color), size(_size), font(_font), flags(_flags) {}
-
-  Color color;
-  float size;
-  Font *font;
-  unsigned int flags;
-};
-
-// FrameStyle
-// ==========
-//
-// This specifies various constants that are used for constructing GUI frames (e.g. font color &
-// size). A new FrameStyle can be created to override existing settings. If a FrameStyle is already
-// in use, changing it may or may not affect existing frames. The results are undefined.
-struct FrameStyle {
-  FrameStyle(Font *font);
-  ~FrameStyle();
-
-  // General style
-  TextStyle text_style;
-  Color prompt_highlight_color;       // Background color of text we highlight in a TextPrompt
-
-  // Renderers
-  ButtonRenderer *button_renderer;
-  SliderRenderer *slider_renderer;
-  WindowRenderer *window_renderer;
-};
-
-extern FrameStyle *gDefaultStyle;
-
-///////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // GlopFrame
 // =========
@@ -148,7 +106,7 @@ class GlopFrame {
   // Main GlopFrame functions. OnKeyEvent is the most accurate way to respond to key presses
   // (see discussion in Input.h). Think will be called after all OnKeyEvent calls, and it is
   // suitable for all other logic.
-  virtual void Render() {}
+  virtual void Render() const {}
   virtual bool OnKeyEvent(const KeyEvent &event, int dt) {return false;}
   virtual void Think(int dt) {}
   
@@ -327,7 +285,7 @@ class SingleParentFrame: public GlopFrame {
   ~SingleParentFrame() {SetChild(0);}
 
   // Child delegation functions
-  virtual void Render() {if (child_ != 0) child_->Render();}
+  virtual void Render() const {if (child_ != 0) child_->Render();}
   virtual bool OnKeyEvent(const KeyEvent &event, int dt) {
     return (child_ != 0 && !child_->IsFocusFrame() && child_->OnKeyEvent(event, dt));
   }
@@ -387,7 +345,7 @@ class MultiParentFrame: public GlopFrame {
   virtual ~MultiParentFrame() {ClearChildren();}
   
   // Child delegation functions
-  virtual void Render();
+  virtual void Render() const;
   virtual bool OnKeyEvent(const KeyEvent &event, int dt);
   virtual void Think(int dt);
   virtual void SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2);
@@ -432,7 +390,7 @@ class ClippedFrame: public SingleParentFrame {
  public:
   ClippedFrame(GlopFrame *frame): SingleParentFrame(frame), is_standard_clipping_(true) {}
 
-  void Render();
+  void Render() const;
   void SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2);
   void SetStandardClipping() {is_standard_clipping_ = true;}
   void SetClipping(int x1, int y1, int x2, int y2) {
@@ -458,23 +416,27 @@ class ClippedFrame: public SingleParentFrame {
 // region as normal.
 class PaddedFrame: public SingleParentFrame {
  public:
-  PaddedFrame(GlopFrame *frame, int padding): SingleParentFrame(frame) {SetPadding(padding);}
+  PaddedFrame(GlopFrame *frame, int padding = 0)
+  : SingleParentFrame(frame), left_padding_(padding), top_padding_(padding),
+    right_padding_(padding), bottom_padding_(padding) {}
   PaddedFrame(GlopFrame *frame, int left_padding, int top_padding, int right_padding,
-              int bottom_padding): SingleParentFrame(frame) {
-    SetPadding(left_padding, top_padding, right_padding, bottom_padding);
-  }
+              int bottom_padding)
+  : SingleParentFrame(frame), left_padding_(left_padding), top_padding_(top_padding),
+    right_padding_(right_padding), bottom_padding_(bottom_padding) {}
  
- 	void SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2);
- protected:
-  void RecomputeSize(int rec_width, int rec_height);
-
-  // Padding accessors/mutators
+  // Accessors/mutators
+  const GlopFrame *GetInnerFrame() const {return GetChild();}
+  GlopFrame *GetInnerFrame() {return GetChild();}
   int GetLeftPadding() const {return left_padding_;}
   int GetTopPadding() const {return top_padding_;}
   int GetRightPadding() const {return right_padding_;}
   int GetBottomPadding() const {return bottom_padding_;}
   void SetPadding(int padding) {SetPadding(padding, padding, padding, padding);}
   void SetPadding(int left_padding, int top_padding, int right_padding, int bottom_padding);
+
+  void SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2);
+ protected:
+  void RecomputeSize(int rec_width, int rec_height);
 
  private:
   int left_padding_, top_padding_, right_padding_, bottom_padding_;
@@ -485,20 +447,36 @@ class PaddedFrame: public SingleParentFrame {
 // ==================
 //
 // This is a PaddedFrame whose padding is taken to be a constant multiplier of the window size.
-class ScalingPaddedFrame: public PaddedFrame {
+class ScalingPaddedFrame: public SingleParentFrame {
  public:
-  ScalingPaddedFrame(GlopFrame *frame, float padding)
-  : PaddedFrame(frame, 0), scaled_left_padding_(padding), scaled_top_padding_(padding),
+  ScalingPaddedFrame(GlopFrame *frame, float padding = 0)
+  : SingleParentFrame(frame), scaled_left_padding_(padding), scaled_top_padding_(padding),
     scaled_right_padding_(padding), scaled_bottom_padding_(padding) {}
   ScalingPaddedFrame(GlopFrame *frame, float left_padding, float top_padding, float right_padding,
                      float bottom_padding)
-  : PaddedFrame(frame, 0), scaled_left_padding_(left_padding), scaled_top_padding_(top_padding),
+  : SingleParentFrame(frame), scaled_left_padding_(left_padding), scaled_top_padding_(top_padding),
     scaled_right_padding_(right_padding), scaled_bottom_padding_(bottom_padding) {}
  
+  // Accessors/mutators
+  const GlopFrame *GetInnerFrame() const {return GetChild();}
+  GlopFrame *GetInnerFrame() {return GetChild();}
+  int GetAbsLeftPadding() const {return left_padding_;}
+  int GetAbsTopPadding() const {return top_padding_;}
+  int GetAbsRightPadding() const {return right_padding_;}
+  int GetAbsBottomPadding() const {return bottom_padding_;}
+  float GetRelLeftPadding() const {return scaled_left_padding_;}
+  float GetRelTopPadding() const {return scaled_top_padding_;}
+  float GetRelRightPadding() const {return scaled_right_padding_;}
+  float GetRelBottomPadding() const {return scaled_bottom_padding_;}
+  void SetPadding(float padding) {SetPadding(padding, padding, padding, padding);}
+  void SetPadding(float left_padding, float top_padding, float right_padding, float bottom_padding);
+
+  void SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2);
  protected:
   void RecomputeSize(int rec_width, int rec_height);
 
  private:
+  int left_padding_, top_padding_, right_padding_, bottom_padding_;
   float scaled_left_padding_, scaled_top_padding_, scaled_right_padding_, scaled_bottom_padding_;
   DISALLOW_EVIL_CONSTRUCTORS(ScalingPaddedFrame);
 };
@@ -555,7 +533,7 @@ class TableauFrame: public MultiParentFrame {
    TableauFrame(): order_dirty_(false) {}
   
   // Render is overwritten to draw frames in depth order
-  virtual void Render();
+  virtual void Render() const;
   
   // Child accessors
   const GlopFrame *GetChild(LightSetId id) const {return MultiParentFrame::GetChild(id);}
@@ -592,11 +570,12 @@ class TableauFrame: public MultiParentFrame {
   struct ChildPosition {
     float horz_justify, vert_justify;
     float rel_x, rel_y;
-    int depth, order_pos;
+    int depth;
+    mutable int order_pos;
   };
   class ChildOrderCompare {
    public:
-     ChildOrderCompare(TableauFrame *tableau): tableau_(tableau) {}
+     ChildOrderCompare(const TableauFrame *tableau): tableau_(tableau) {}
      bool operator()(LightSetId id1, LightSetId id2) {
        if (id1 == 0 || id2 == 0)
          return (id2 == 0);
@@ -604,11 +583,11 @@ class TableauFrame: public MultiParentFrame {
          return tableau_->child_pos_[id1].depth < tableau_->child_pos_[id2].depth;
      }
    private:
-    TableauFrame *tableau_;
+    const TableauFrame *tableau_;
   };
   LightSet<ChildPosition> child_pos_;
-  vector<LightSetId> ordered_children_;
-  bool order_dirty_;
+  mutable vector<LightSetId> ordered_children_;
+  mutable bool order_dirty_;
   DISALLOW_EVIL_CONSTRUCTORS(TableauFrame);
 };
 
@@ -1104,9 +1083,9 @@ class ExactSizeFrame: public MinSizeFrame {
 class ScrollingFrame: public FocusFrame {
  public:
   ScrollingFrame(GlopFrame *frame,
-                 const SliderRenderer *renderer = gDefaultStyle->slider_renderer);
+                 const SliderViewFactory *factory = gFrameStyle->slider_view_factory);
  private:
   DISALLOW_EVIL_CONSTRUCTORS(ScrollingFrame);
 };
 
-#endif // GLOP_FRAME_BASE_H__
+#endif // GLOP_GLOP_FRAME_BASE_H__

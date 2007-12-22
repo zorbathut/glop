@@ -5,8 +5,8 @@
 // Glop supports only one window, and the object is owned by System. To actually have a window
 // appear on screen, Window::Create needs to be called.
 
-#ifndef GLOP_WINDOW_H__
-#define GLOP_WINDOW_H__
+#ifndef GLOP_GLOP_WINDOW_H__
+#define GLOP_GLOP_WINDOW_H__
 
 // Includes
 #include "Base.h"
@@ -189,4 +189,4 @@ class GlopWindow {
   DISALLOW_EVIL_CONSTRUCTORS(GlopWindow);
 };
 
-#endif // GLOP_WINDOW_H__
+#endif // GLOP_GLOP_WINDOW_H__

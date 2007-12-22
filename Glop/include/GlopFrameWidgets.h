@@ -36,37 +36,17 @@
 //
 // See GlopFrameBase.h.
 
-#ifndef GLOP_FRAME_WIDGETS_H__
-#define GLOP_FRAME_WIDGETS_H__
+#ifndef GLOP_GLOP_FRAME_WIDGETS_H__
+#define GLOP_GLOP_FRAME_WIDGETS_H__
 
 // Includes
 #include "Color.h"
 #include "Font.h"
 #include "GlopFrameBase.h"
+#include "GlopFrameStyle.h"
 #include "Input.h"
 
-// Style constants
-const float kDefaultTextHeight(0.025f);
-
-const Color kDefaultWindowBorderHighlightColor(0.9f, 0.9f, 0.95f);
-const Color kDefaultWindowBorderLowlightColor(0.6f, 0.6f, 0.7f);
-const Color kDefaultWindowInnerColor(0.8f, 0.8f, 0.83f);
-const Color kDefaultWindowTitleColor(0, 0, 0);
-
-const float kDefaultButtonBorderSize = 0.003f;
-const Color kDefaultButtonSelectionColor(0, 0, 1.0f);
-const Color kDefaultButtonBorderColor(0.2f, 0.2f, 0.2f);
-const Color kDefaultButtonHighlightColor(0.95f, 0.95f, 0.95f);
-const Color kDefaultButtonLowlightColor(0.5f, 0.5f, 0.5f);
-const Color kDefaultButtonUnpressedInnerColor(0.85f, 0.85f, 0.88f);
-const Color kDefaultButtonPressedInnerColor(0.75f, 0.75f, 0.77f);
-
-const float kDefaultSliderWidth = 0.03f;
-const Color kDefaultSliderBackgroundColor(0.7f, 0.7f, 0.7f);
-const Color kDefaultSliderBorderColor(0.2f, 0.2f, 0.2f);
-
 // Class declarations
-class InnerSliderFrame;
 class TextRenderer;
 
 // EmptyFrame
@@ -85,19 +65,23 @@ class EmptyFrame: public GlopFrame {
 //
 // This draws a filled box at the recommended size. If a frame is specified, the box is instead
 // drawn behind the frame, and resized to match the frame size. See also HollowBoxFrame.
-class SolidBoxFrame: public PaddedFrame {
+class SolidBoxFrame: public SingleParentFrame {
  public:
   SolidBoxFrame(GlopFrame *frame, const Color &inner_color, const Color &outer_color)
-  : PaddedFrame(frame, 1), has_outer_part_(true), inner_color_(inner_color),
+  : SingleParentFrame(frame), has_outer_part_(true), inner_color_(inner_color),
     outer_color_(outer_color) {}
   SolidBoxFrame(const Color &inner_color, const Color &outer_color)
-  : PaddedFrame(0, 1), has_outer_part_(true), inner_color_(inner_color),
+  : SingleParentFrame(0), has_outer_part_(true), inner_color_(inner_color),
     outer_color_(outer_color) {}
   SolidBoxFrame(GlopFrame *frame, const Color &inner_color)
-  : PaddedFrame(frame, 0), has_outer_part_(false), inner_color_(inner_color) {}
+  : SingleParentFrame(frame), has_outer_part_(false), inner_color_(inner_color) {}
   SolidBoxFrame(const Color &inner_color)
-  : PaddedFrame(0, 0), has_outer_part_(false), inner_color_(inner_color) {}
-  virtual void Render();
+  : SingleParentFrame(0), has_outer_part_(false), inner_color_(inner_color) {}
+
+  virtual void Render() const;
+  void SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2);
+ protected:
+  void RecomputeSize(int rec_width, int rec_height);
 
  private:
   bool has_outer_part_;
@@ -109,12 +93,16 @@ class SolidBoxFrame: public PaddedFrame {
 // ==============
 //
 // This is similar to SolidBoxFrame except that the box has no inner color.
-class HollowBoxFrame: public PaddedFrame {
+class HollowBoxFrame: public SingleParentFrame {
  public:
-  HollowBoxFrame(GlopFrame *frame, const Color &color): PaddedFrame(frame, 1), color_(color) {}
-  HollowBoxFrame(const Color &color): PaddedFrame(0, 1), color_(color) {}
-  virtual void Render();
+  HollowBoxFrame(GlopFrame *frame, const Color &color): SingleParentFrame(frame), color_(color) {}
+  HollowBoxFrame(const Color &color): SingleParentFrame(0), color_(color) {}
 
+  virtual void Render() const ;
+  void SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2);
+ protected:
+  void RecomputeSize(int rec_width, int rec_height);
+ 
  private:
   Color color_;
   DISALLOW_EVIL_CONSTRUCTORS(HollowBoxFrame);
@@ -127,14 +115,17 @@ class HollowBoxFrame: public PaddedFrame {
 // buttons - for example sliders.
 class ArrowImageFrame: public GlopFrame {
  public:
-  enum Direction {Up, Down, Left, Right};
-  ArrowImageFrame(Direction d, const Color &color): direction_(d), color_(color) {}
-  void Render();
+  enum Direction {Up, Right, Down, Left};
+  ArrowImageFrame(Direction d, const ArrowViewFactory *factory)
+  : direction_(d), view_(factory->Create()) {}
+  ~ArrowImageFrame() {delete view_;}
+
+  void Render() const;
  protected:
-  void RecomputeSize(int rec_width, int rec_height) {SetToMaxSize(rec_width, rec_height, 1.0f);}
+  void RecomputeSize(int rec_width, int rec_height);
  private:
+  ArrowView *view_;  
   Direction direction_;
-  Color color_;
   DISALLOW_EVIL_CONSTRUCTORS(ArrowImageFrame);
 };
 
@@ -145,7 +136,7 @@ class ArrowImageFrame: public GlopFrame {
 // styles are not supported. See FancyTextFrame.
 class TextFrame: public GlopFrame {
  public:
-  TextFrame(const string &text, const TextStyle &style = gDefaultStyle->text_style);
+  TextFrame(const string &text, const TextStyle &style = gFrameStyle->text_style);
   virtual ~TextFrame();
   
   // Returns the pixel height we would choose for our text given the relative height as specified
@@ -172,7 +163,7 @@ class TextFrame: public GlopFrame {
   }
 
   // Standard GlopFrame functionality
-  virtual void Render();
+  virtual void Render() const;
  protected:
   virtual void RecomputeSize(int rec_width, int rec_height);
 
@@ -189,7 +180,7 @@ class TextFrame: public GlopFrame {
 // A TextFrame that always displays the current frame rate.
 class FpsFrame: public SingleParentFrame {
  public:
-  FpsFrame(const TextStyle &style = gDefaultStyle->text_style)
+  FpsFrame(const TextStyle &style = gFrameStyle->text_style)
   : SingleParentFrame(new TextFrame("", style)) {}
   const TextStyle &GetStyle() const {return text()->GetStyle();}
   void SetStyle(const TextStyle &style) {text()->SetStyle(style);}
@@ -228,9 +219,9 @@ class FpsFrame: public SingleParentFrame {
 class FancyTextFrame: public MultiParentFrame {
  public:
   // Constructors. horz_justify is used to align different rows of text.
-  FancyTextFrame(const string &text, const TextStyle &style = gDefaultStyle->text_style);
+  FancyTextFrame(const string &text, const TextStyle &style = gFrameStyle->text_style);
   FancyTextFrame(const string &text, bool add_soft_returns, float horz_justify,
-                 const TextStyle &style = gDefaultStyle->text_style);
+                 const TextStyle &style = gFrameStyle->text_style);
 
   // Tags. These can be used as follows: string("Test: " + CTag(kRed) + " red");
   // Note that, they return strings, not char points, so if they are to be used with a call to
@@ -304,7 +295,7 @@ class FancyTextFrame: public MultiParentFrame {
 class AbstractTextPromptFrame: public SingleParentFrame {
  public:
   // Overloaded functions for rendering the flashing cursor
-  void Render();
+  void Render() const;
   void Think(int dt);
 
   // Saves or unsaves the value of the text prompt. This is virtual so that overloaded frames do
@@ -374,7 +365,7 @@ class AbstractTextPromptFrame: public SingleParentFrame {
 class BasicTextPromptFrame: public AbstractTextPromptFrame {
  public:
   // GlopFrame overloads
-  void Render();
+  void Render() const;
   bool OnKeyEvent(const KeyEvent &event, int dt);
   bool IsFocusKeeper(const KeyEvent &event) const;
 
@@ -428,7 +419,7 @@ class BasicTextPromptFrame: public AbstractTextPromptFrame {
 class GlopKeyPromptFrame: public AbstractTextPromptFrame {
  public:
   GlopKeyPromptFrame(const GlopKey &start_value,
-                     const TextStyle &style = gDefaultStyle->text_style)
+                     const TextStyle &style = gFrameStyle->text_style)
   : AbstractTextPromptFrame("", style),
     stored_value_(start_value) {
     RestoreValue();
@@ -464,13 +455,13 @@ class GlopKeyPromptFrame: public AbstractTextPromptFrame {
 class StringPromptFrame: public BasicTextPromptFrame {
  public:
   StringPromptFrame(const string &start_value, int length_limit,
-                    const FrameStyle *style = gDefaultStyle)
+                    const FrameStyle *style = gFrameStyle)
   : BasicTextPromptFrame("", style), length_limit_(length_limit) {
     Set(start_value);
   }
   StringPromptFrame(const string &start_value, int length_limit,
-                    const TextStyle &text_style = gDefaultStyle->text_style,
-                    const Color &selection_color = gDefaultStyle->prompt_highlight_color)
+                    const TextStyle &text_style = gFrameStyle->text_style,
+                    const Color &selection_color = gFrameStyle->prompt_highlight_color)
   : BasicTextPromptFrame("", text_style, selection_color),
     length_limit_(length_limit) {
     Set(start_value);
@@ -493,13 +484,13 @@ class StringPromptFrame: public BasicTextPromptFrame {
 class IntegerPromptFrame: public BasicTextPromptFrame {
  public:
   IntegerPromptFrame(int start_value, int min_value, int max_value,
-                     const FrameStyle *style = gDefaultStyle)
+                     const FrameStyle *style = gFrameStyle)
   : BasicTextPromptFrame("", style), min_value_(min_value), max_value_(max_value) {
     Set(start_value);
   }
   IntegerPromptFrame(int start_value, int min_value, int max_value,
-                     const TextStyle &text_style = gDefaultStyle->text_style,
-                     const Color &selection_color = gDefaultStyle->prompt_highlight_color)
+                     const TextStyle &text_style = gFrameStyle->text_style,
+                     const Color &selection_color = gFrameStyle->prompt_highlight_color)
   : BasicTextPromptFrame("", text_style, selection_color),
     min_value_(min_value), max_value_(max_value) {
     Set(start_value);
@@ -522,71 +513,20 @@ class IntegerPromptFrame: public BasicTextPromptFrame {
 // WindowFrame
 // ===========
 
-// Overloadable renderer
-class WindowRenderer {
- public:
-  WindowRenderer() {}
-
-  // Creates a frame for the title bar. Some (or all) of the rendering can be done here within
-  // Render. However, this frame is, at the very least, required to return an appropriate size for
-  // the title bar.
-  virtual GlopFrame *CreateTitleFrame(const string &title) const = 0;
-
-  // Calculates the padding between the inner frame and the edge of the window (or of the title
-  // bar if has_title == true). Cannot depend on frame/window size currently.
-  virtual void GetInnerFramePadding(bool has_title, int *lp, int *tp, int *rp, int *bp) const = 0;
-
-  // Renders a window with the given coordinates and inner frames. Note that title_frame may be
-  // 0 if the window has no title.
-  virtual void Render(int x1, int y1, int x2, int y2, GlopFrame *title_frame,
-                      GlopFrame *inner_frame) const = 0;
- private:
-  DISALLOW_EVIL_CONSTRUCTORS(WindowRenderer);
-};
-
-class DefaultWindowRenderer: public WindowRenderer {
- public:
-  // Constructors
-  DefaultWindowRenderer(Font *font)
-  : border_highlight_color_(kDefaultWindowBorderHighlightColor),
-    border_lowlight_color_(kDefaultWindowBorderLowlightColor),
-    inner_color_(kDefaultWindowInnerColor),
-    title_style_(kDefaultWindowTitleColor, kDefaultTextHeight, font, 0) {}
-  DefaultWindowRenderer(const Color &border_highlight_color, const Color &border_lowlight_color,
-                        const Color &inner_color, const TextStyle &title_style)
-  : border_highlight_color_(border_highlight_color), border_lowlight_color_(border_lowlight_color),
-    inner_color_(inner_color), title_style_(title_style) {}
-
-  // Mutators
-  void SetBorderHighlightColor(const Color &c) {border_highlight_color_ = c;}
-  void SetBorderLowlightColor(const Color &c) {border_lowlight_color_ = c;}
-  void SetInnerColor(const Color &c) {inner_color_ = c;}
-  void SetTitleStyle(const TextStyle &style) {title_style_ = style;}
-
-  // Operations
-  GlopFrame *CreateTitleFrame(const string &title) const;
-  void GetInnerFramePadding(bool has_title, int *lp, int *tp, int *rp, int *bp) const;
-  void Render(int x1, int y1, int x2, int y2, GlopFrame *title_frame,
-              GlopFrame *inner_frame) const;
-
- private:
-  Color border_highlight_color_, border_lowlight_color_, inner_color_;
-  TextStyle title_style_;
-  DISALLOW_EVIL_CONSTRUCTORS(DefaultWindowRenderer);
-};
-
 class WindowFrame: public SingleParentFrame {
  public:
   WindowFrame(GlopFrame *inner_frame, const string &title,
-              const WindowRenderer *renderer = gDefaultStyle->window_renderer);
+              const WindowViewFactory *view_factory = gFrameStyle->window_view_factory);
   WindowFrame(GlopFrame *inner_frame,
-              const WindowRenderer *renderer = gDefaultStyle->window_renderer);
+              const WindowViewFactory *view_factory = gFrameStyle->window_view_factory);
+  ~WindowFrame() {delete view_;}
 
-  void Render() {renderer_->Render(GetX(), GetY(), GetX2(), GetY2(), title_frame_, inner_frame_);}
- 
+  void Render() const;
+ protected:
+  void RecomputeSize(int rec_width, int rec_height);
  private:
-  const WindowRenderer *renderer_;
-  GlopFrame *title_frame_, *inner_frame_;
+  WindowView *view_;
+  PaddedFrame *padded_title_frame_, *padded_inner_frame_;
   DISALLOW_EVIL_CONSTRUCTORS(WindowFrame);
 };
 
@@ -594,73 +534,17 @@ class WindowFrame: public SingleParentFrame {
 // ButtonWidget
 // ============
 
-// Overloadable renderer
-class ButtonRenderer {
- public:
-  ButtonRenderer() {}
-
-  // Calculates the padding between the inner frame and the edge of the button.
-  virtual void RecomputePadding(bool is_down, int *lp, int *tp, int *rp, int *bp) const = 0;
-
-  // Renders a button with the given metrics. inner_frame MAY be null (for example, while rendering
-  // the tab of a slider frame).
-  virtual void Render(bool is_down, bool is_primary_focus, int x1, int y1, int x2, int y2,
-                      GlopFrame *inner_frame) const = 0;
- private:
-  DISALLOW_EVIL_CONSTRUCTORS(ButtonRenderer);
-};
-
-class DefaultButtonRenderer: public ButtonRenderer {
- public:
-  // Constructors
-  DefaultButtonRenderer()
-  : border_size_(kDefaultButtonBorderSize), selection_color_(kDefaultButtonSelectionColor),
-    border_color_(kDefaultButtonBorderColor), highlight_color_(kDefaultButtonHighlightColor),
-    lowlight_color_(kDefaultButtonLowlightColor),
-    unpressed_inner_color_(kDefaultButtonUnpressedInnerColor),
-    pressed_inner_color_(kDefaultButtonPressedInnerColor) {}
-  DefaultButtonRenderer(float border_size, const Color &selection_color, const Color &border_color,
-                        const Color &highlight_color, const Color &lowlight_color,
-                        const Color &unpressed_inner_color, const Color &pressed_inner_color)
-  : border_size_(border_size), selection_color_(selection_color), border_color_(border_color),
-    highlight_color_(highlight_color), lowlight_color_(lowlight_color),
-    unpressed_inner_color_(unpressed_inner_color), pressed_inner_color_(pressed_inner_color) {}
-
-  // Mutators
-  void SetBorderSize(float border_size) {border_size_ = border_size;}
-  void SetSelectionColor(const Color &c) {selection_color_ = c;}
-  void SetBorderColor(const Color &c) {border_color_ = c;}
-  void SetHighlightColor(const Color &c) {highlight_color_ = c;}
-  void SetLowlightColor(const Color &c) {lowlight_color_ = c;}
-  void SetUnpressedInnerColor(const Color &c) {unpressed_inner_color_ = c;}
-  void SetPressedInnerColor(const Color &c) {pressed_inner_color_ = c;}
-
-  // Operations
-  void RecomputePadding(bool is_down, int *lp, int *tp, int *rp, int *bp) const;
-  void Render(bool is_down, bool is_primary_focus, int x1, int y1, int x2, int y2,
-              GlopFrame *inner_frame) const;
-
- private:
-  float border_size_;
-  Color selection_color_, border_color_, highlight_color_, lowlight_color_, unpressed_inner_color_,
-        pressed_inner_color_;
-  DISALLOW_EVIL_CONSTRUCTORS(DefaultButtonRenderer);
-};
-
 // Unfocusable version of a button with no pushing logic
-class AbstractButtonFrame: public PaddedFrame {
+class AbstractButtonFrame: public SingleParentFrame {
  public:
-  AbstractButtonFrame(GlopFrame *inner_frame, const ButtonRenderer *renderer)
-  : PaddedFrame(inner_frame, 0), renderer_(renderer),
+  AbstractButtonFrame(GlopFrame *inner_frame, const ButtonViewFactory *view_factory)
+  : SingleParentFrame(new PaddedFrame(inner_frame)), view_(view_factory->Create()),
     is_down_(false), full_press_queued_(false), held_down_queued_(false),
-    was_held_down_(false), was_pressed_fully_(false) {
-    RecomputePadding();
-  }
+    was_held_down_(false), was_pressed_fully_(false) {}
+  ~AbstractButtonFrame() {delete view_;}
 
   // Overloaded Glop functions
-  void Render() {
-    renderer_->Render(is_down_, IsPrimaryFocus(), GetX(), GetY(), GetX2(), GetY2(), GetChild());
-  }
+  void Render() const;
   void Think(int dt);
   bool OnKeyEvent(const KeyEvent &event, int dt);
 
@@ -676,10 +560,7 @@ class AbstractButtonFrame: public PaddedFrame {
   bool WasPressedFully() const {return was_pressed_fully_;}
 
  protected:
-  void RecomputeSize(int rec_width, int rec_height) {
-    RecomputePadding();
-    PaddedFrame::RecomputeSize(rec_width, rec_height);
-  }
+  void RecomputeSize(int rec_width, int rec_height);
 
   // Handles a state change on the button. The AbstractButtonFrame will never change whether the
   // button is down by itself. This must be done by an extending class using this function.
@@ -696,9 +577,7 @@ class AbstractButtonFrame: public PaddedFrame {
   void SetIsDown(DownType down_type);
 
  private:
-  void RecomputePadding();
-
-  const ButtonRenderer *renderer_;
+  ButtonView *view_;
   bool is_down_,                // Is the button currently down? Set by extending class.
        full_press_queued_,      // The next value for was_pressed_fully_. Set in OnKeyEvent.
        held_down_queued_,       // The next value for was_held_down_. Set in OnKeyEvent.
@@ -711,8 +590,8 @@ class AbstractButtonFrame: public PaddedFrame {
 class DefaultButtonFrame: public AbstractButtonFrame {
  public:
   DefaultButtonFrame(GlopFrame *inner_frame,
-                     const ButtonRenderer *renderer = gDefaultStyle->button_renderer)
-  : AbstractButtonFrame(inner_frame, renderer),
+                     const ButtonViewFactory *factory = gFrameStyle->button_view_factory)
+  : AbstractButtonFrame(inner_frame, factory),
     is_mouse_locked_on_(false) {}
 
   // Overloaded Glop functions
@@ -741,33 +620,34 @@ class DefaultButtonFrame: public AbstractButtonFrame {
 class ButtonWidget: public FocusFrame {
  public:
   // Basic constructors
-  ButtonWidget(GlopFrame *frame, const ButtonRenderer *renderer = gDefaultStyle->button_renderer)
-  : FocusFrame(button_ = new DefaultButtonFrame(frame, renderer)) {}
+  ButtonWidget(GlopFrame *frame,
+               const ButtonViewFactory *factory = gFrameStyle->button_view_factory)
+  : FocusFrame(button_ = new DefaultButtonFrame(frame, factory)) {}
   ButtonWidget(GlopFrame *frame, const GlopKey &hot_key,
-               const ButtonRenderer *renderer = gDefaultStyle->button_renderer)
-  : FocusFrame(button_ = new DefaultButtonFrame(frame, renderer)) {
+               const ButtonViewFactory *factory = gFrameStyle->button_view_factory)
+  : FocusFrame(button_ = new DefaultButtonFrame(frame, factory)) {
     button_->AddHotKey(hot_key);
   }
   ButtonWidget(GlopFrame *frame, const GlopKey &hot_key1, const GlopKey &hot_key2,
-               const ButtonRenderer *renderer = gDefaultStyle->button_renderer)
-  : FocusFrame(button_ = new DefaultButtonFrame(frame, renderer)) {
+               const ButtonViewFactory *factory = gFrameStyle->button_view_factory)
+  : FocusFrame(button_ = new DefaultButtonFrame(frame, factory)) {
     button_->AddHotKey(hot_key1);
     button_->AddHotKey(hot_key2);
   }
 
   // Convenience constructors for text button frames
-  ButtonWidget(const string &text, const FrameStyle *style = gDefaultStyle)
-    : FocusFrame(button_ = new DefaultButtonFrame(new TextFrame(text, style->text_style),
-               style->button_renderer)) {}
-  ButtonWidget(const string &text, const GlopKey &hot_key, const FrameStyle *style = gDefaultStyle)
+  ButtonWidget(const string &text, const FrameStyle *style = gFrameStyle)
   : FocusFrame(button_ = new DefaultButtonFrame(new TextFrame(text, style->text_style),
-               style->button_renderer)) {
+                                                style->button_view_factory)) {}
+  ButtonWidget(const string &text, const GlopKey &hot_key, const FrameStyle *style = gFrameStyle)
+  : FocusFrame(button_ = new DefaultButtonFrame(new TextFrame(text, style->text_style),
+                                                style->button_view_factory)) {
     button_->AddHotKey(hot_key);
   }
   ButtonWidget(const string &text, const GlopKey &hot_key1, const GlopKey &hot_key2,
-               const FrameStyle *style = gDefaultStyle)
+               const FrameStyle *style = gFrameStyle)
   : FocusFrame(button_ = new DefaultButtonFrame(new TextFrame(text, style->text_style),
-               style->button_renderer)) {
+                                                style->button_view_factory)) {
     button_->AddHotKey(hot_key1);
     button_->AddHotKey(hot_key2);
   }
@@ -789,71 +669,16 @@ class ButtonWidget: public FocusFrame {
 // SliderWidget
 // ============
 
-// Overloadable renderer
-class SliderRenderer {
- public:
-  SliderRenderer(const ButtonRenderer *renderer): button_renderer_(renderer) {}
-  void SetButtonRenderer(const ButtonRenderer *renderer) {button_renderer_ = renderer;}
-  const ButtonRenderer *GetButtonRenderer() const {return button_renderer_;}
-
-  // Make this better
-  virtual Color GetButtonColor() const = 0;
-
-  // Recomputes the minor-axis size of the slider.
-  virtual int RecomputeWidth(bool is_horizontal) const = 0;
-
-  // Recomputes the minimum length of the slider tab. Dimensions are only for the inner part.
-  virtual int RecomputeMinTabLength(bool is_horizontal, int inner_width,
-                                    int inner_height) const = 0;
-
-  // Renders the slider inner frame given coordinates of the inner frame, and coordinates of the
-  // tab relative to the inner frame coordinates.
-  virtual void Render(bool is_horizontal, bool is_primary_focus, int x1, int y1, int x2, int y2,
-                      int tab_x1, int tab_y1, int tab_x2, int tab_y2) const = 0;
-
- private:
-  const ButtonRenderer *button_renderer_;
-  DISALLOW_EVIL_CONSTRUCTORS(SliderRenderer);
-};
-
-class DefaultSliderRenderer: public SliderRenderer {
- public:
-  // Constructors
-  DefaultSliderRenderer(const ButtonRenderer *button_renderer)
-  : SliderRenderer(button_renderer), width_(kDefaultSliderWidth),
-    background_color_(kDefaultSliderBackgroundColor), border_color_(kDefaultSliderBorderColor) {}
-  DefaultSliderRenderer(const ButtonRenderer *button_renderer, float width,
-    const Color &background_color, const Color &border_color)
-  : SliderRenderer(button_renderer), width_(width), background_color_(background_color),
-    border_color_(border_color) {}
-
-  // Mutators
-  void SetWidth(float width) {width_ = width;}
-  void SetBackgroundColor(const Color &c) {background_color_ = c;}
-  void SetBorderColor(const Color &c) {border_color_ = c;}
-
-  // Operations
-  Color GetButtonColor() const {return kBlack;}
-  int RecomputeWidth(bool is_horizontal) const;
-  int RecomputeMinTabLength(bool is_horizontal, int inner_width, int inner_height) const;
-  void Render(bool is_horizontal, bool is_primary_focus, int x1, int y1, int x2, int y2,
-              int tab_x1, int tab_y1, int tab_x2, int tab_y2) const;
-
- private:
-  float width_;
-  Color background_color_, border_color_;
-  DISALLOW_EVIL_CONSTRUCTORS(DefaultSliderRenderer);
-};
-
-class SliderFrame: public SingleParentFrame {
+class SliderFrame: public MultiParentFrame {
  public:
   enum Direction {Horizontal, Vertical};
   
   // Constructor - See SliderWidget
   SliderFrame(Direction direction, int tab_size, int total_size, int position,
               bool has_arrow_hot_keys = true, int step_size = -1,
-              const SliderRenderer *renderer = gDefaultStyle->slider_renderer);
-  
+              const SliderViewFactory *factory = gFrameStyle->slider_view_factory);
+  ~SliderFrame() {delete view_;}
+
   // Hot keys
   LightSetId AddLargeDecHotKey(const GlopKey &key) {return large_dec_keys_.InsertItem(key);}
   LightSetId AddLargeIncHotKey(const GlopKey &key) {return large_inc_keys_.InsertItem(key);}
@@ -865,33 +690,48 @@ class SliderFrame: public SingleParentFrame {
   void RemoveIncHotKey(LightSetId id) {inc_button_->RemoveHotKey(id);}
 
   // State accessors/mutators
-  int GetTabPosition() const;
+  int GetTabPosition() const {return tab_logical_position_;}
   void SetTabPosition(int position);
-  int GetTabSize() const;
-  int GetTotalSize() const;
+  void SmallDec() {SetTabPosition(tab_logical_position_ - step_size_);}
+  void SmallInc() {SetTabPosition(tab_logical_position_ + step_size_);}
+  void LargeDec() {SetTabPosition(tab_logical_position_ - (tab_logical_size_*9+9)/10);}
+  void LargeInc() {SetTabPosition(tab_logical_position_ + (tab_logical_size_*9+9)/10);}
+  int GetTabSize() const {return tab_logical_size_;}
+  int GetTotalSize() const {return total_logical_size_;}
 
   // Overloaded functions
+  void Render() const;
   void Think(int dt);
   bool OnKeyEvent(const KeyEvent &event, int dt);
+  void SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2);
  protected:
   void RecomputeSize(int rec_width, int rec_height);
   void OnChildPing(GlopFrame *child, int x1, int y1, int x2, int y2, bool center);
+  void OnFocusChange();
 
  private:
-  void Init(Direction direction, int tab_size, int total_size, int position,
-            bool has_arrow_hot_keys, int step_size, const SliderRenderer *renderer);
-  
+  int GetLocationPixelStart(int pos) const;
+  int GetLocationByPixel(int pixel_location);
+  void RecomputeTabScreenPosition();
+
   Direction direction_;
   LightSet<GlopKey> large_dec_keys_, large_inc_keys_;
   DefaultButtonFrame *dec_button_, *inc_button_;
-  InnerSliderFrame *inner_slider_;
-  const SliderRenderer *renderer_;
+  SliderView *view_;
+
+  enum MouseLockMode {None, Bar, Tab};
+  int tab_logical_position_, tab_logical_size_, total_logical_size_;
+  int step_size_;
+  MouseLockMode mouse_lock_mode_;
+  int bar_pixel_length_, inner_bar_x_, inner_bar_y_;
+  int tab_pixel_length_, tab_x1_, tab_y1_, tab_x2_, tab_y2_;
+  int tab_grab_position_;
   DISALLOW_EVIL_CONSTRUCTORS(SliderFrame);
 };
 
 class SliderWidget: public FocusFrame {
  public:
-  enum Direction {Horizontal, Vertical};
+  enum Direction {Horizontal, Vertical};  // Should match SliderFrame::Direction
 
   // Constructor.
   //  direction: Is this a horizontal slider or a vertical slider?
@@ -903,9 +743,9 @@ class SliderWidget: public FocusFrame {
   //  renderer: The function uses for rendering the slider
   SliderWidget(Direction direction, int tab_size, int total_size, int position,
                bool has_arrow_hot_keys = true, int step_size = -1,
-               const SliderRenderer *renderer = gDefaultStyle->slider_renderer)
+               const SliderViewFactory *factory = gFrameStyle->slider_view_factory)
   : FocusFrame(slider_ = new SliderFrame((SliderFrame::Direction)direction, tab_size, total_size,
-                                         position, has_arrow_hot_keys, step_size, renderer)) {}
+                                         position, has_arrow_hot_keys, step_size, factory)) {}
 
   // Hot keys
   LightSetId AddLargeDecHotKey(const GlopKey &key) {return slider_->AddLargeDecHotKey(key);}
@@ -928,4 +768,4 @@ class SliderWidget: public FocusFrame {
   DISALLOW_EVIL_CONSTRUCTORS(SliderWidget);
 };
 
-#endif // GLOP_FRAME_WIDGETS_H__
+#endif // GLOP_GLOP_FRAME_WIDGETS_H__
