@@ -22,7 +22,9 @@
 #define GLOP_GLOP_FRAME_STYLE_H__
 
 // Includes
+#include "Base.h"
 #include "Color.h"
+#include "Input.h"
 
 // Class declarations
 class Font;

@@ -6,12 +6,14 @@
 // EmptyFrame: A convenience frame that takes max size and renders nothing.
 // SolidBoxFrame, HollowBoxFrame: Solid or hollow boxes, possibly sized to fit around an existing
 //                                frame.
-// ArrowImageFrame: Renders an arrow in some direction. Used for slider buttons for example.
+// ArrowFrame: Renders an arrow in some direction. Used for slider buttons for example.
 // WindowFrame: A decorative, unmovable window, optionally with a title.
 //  Helper classes: WindowRenderer, DefaultWindowRenderer
 // TextFrame, FancyTextFrame: Text output. TextFrame is faster but requires a uniform text style
 //                            with no new lines. FancyTextFrame can handle new lines and changing
 //                            style within the text.
+// FpsFrame: Text output, always giving the FPS at which Glop is running.
+//
 //
 // Interactive GUI Widgets
 // =======================
@@ -49,10 +51,44 @@
 // Class declarations
 class TextRenderer;
 
-// EmptyFrame
-// ==========
+// HotKeyTracker
+// =============
 //
-// This is the same as a regular GlopFrame - it fills the recommended size with empty space.
+// A utility class for tracking one or more interchangeable "hot keys" for a frame. Interface is
+// similar to Input::KeyTracker. kAnyKey can be used as a hot key, and it is interpreted as
+// anything other than mouse motion or modifiers.
+class HotKeyTracker {
+ public:
+  HotKeyTracker() {}
+  LightSetId AddHotKey(const GlopKey &key) {return hot_keys_.InsertItem(key);}
+  KeyEvent::Type RemoveHotKey(LightSetId id);
+
+  bool OnKeyEvent(const KeyEvent &event, int dt, KeyEvent::Type *result);
+  bool OnKeyEvent(const KeyEvent &event, int dt) {
+    KeyEvent::Type x;
+    return OnKeyEvent(event, dt, &x);
+  }
+  KeyEvent::Type Clear();
+  bool IsFocusMagnet(const KeyEvent &event) const;
+
+  void Think() {tracker_.Think();}
+  bool IsDownNow() const {return tracker_.IsDownNow();}
+  bool IsDownFrame() const {return tracker_.IsDownFrame();}
+  bool WasPressed() const {return tracker_.WasPressed();}
+  bool WasReleased() const {return tracker_.WasReleased();}
+ 
+ private:
+  bool IsMatchingKey(const GlopKey &hot_key, const GlopKey &key) const;
+
+  Input::KeyTracker tracker_;
+  LightSet<GlopKey> hot_keys_, down_hot_keys_;
+  DISALLOW_EVIL_CONSTRUCTORS(HotKeyTracker);
+};
+
+// Basic decorative frames
+// =======================
+//
+// See comment at the top of the file.
 class EmptyFrame: public GlopFrame {
  public:
   EmptyFrame(): GlopFrame() {}
@@ -60,11 +96,6 @@ class EmptyFrame: public GlopFrame {
   DISALLOW_EVIL_CONSTRUCTORS(EmptyFrame);
 };
 
-// SolidBoxFrame
-// =============
-//
-// This draws a filled box at the recommended size. If a frame is specified, the box is instead
-// drawn behind the frame, and resized to match the frame size. See also HollowBoxFrame.
 class SolidBoxFrame: public SingleParentFrame {
  public:
   SolidBoxFrame(GlopFrame *frame, const Color &inner_color, const Color &outer_color)
@@ -89,10 +120,6 @@ class SolidBoxFrame: public SingleParentFrame {
   DISALLOW_EVIL_CONSTRUCTORS(SolidBoxFrame);
 };
 
-// HollowBoxFrame
-// ==============
-//
-// This is similar to SolidBoxFrame except that the box has no inner color.
 class HollowBoxFrame: public SingleParentFrame {
  public:
   HollowBoxFrame(GlopFrame *frame, const Color &color): SingleParentFrame(frame), color_(color) {}
@@ -108,17 +135,12 @@ class HollowBoxFrame: public SingleParentFrame {
   DISALLOW_EVIL_CONSTRUCTORS(HollowBoxFrame);
 };
 
-// ArrowImageFrame
-// ===============
-//
-// Helper class that renders a black arrow covering about 80% of the frame. This is often on
-// buttons - for example sliders.
-class ArrowImageFrame: public GlopFrame {
+class ArrowFrame: public GlopFrame {
  public:
   enum Direction {Up, Right, Down, Left};
-  ArrowImageFrame(Direction d, const ArrowViewFactory *factory)
+  ArrowFrame(Direction d, const ArrowViewFactory *factory)
   : direction_(d), view_(factory->Create()) {}
-  ~ArrowImageFrame() {delete view_;}
+  ~ArrowFrame() {delete view_;}
 
   void Render() const;
  protected:
@@ -126,14 +148,14 @@ class ArrowImageFrame: public GlopFrame {
  private:
   ArrowView *view_;  
   Direction direction_;
-  DISALLOW_EVIL_CONSTRUCTORS(ArrowImageFrame);
+  DISALLOW_EVIL_CONSTRUCTORS(ArrowFrame);
 };
 
-// TextFrame
-// =========
+////////////////////////////////////////////////////////////////////////////////////////////////////
+// Text frames
+// ===========
 //
-// This renders a string text in a single TextStyle. Hard returns, soft returns, and multiple
-// styles are not supported. See FancyTextFrame.
+// See comment at the top of the file.
 class TextFrame: public GlopFrame {
  public:
   TextFrame(const string &text, const TextStyle &style = gFrameStyle->text_style);
@@ -174,27 +196,6 @@ class TextFrame: public GlopFrame {
   DISALLOW_EVIL_CONSTRUCTORS(TextFrame);
 };
 
-// FpsFrame
-// ========
-//
-// A TextFrame that always displays the current frame rate.
-class FpsFrame: public SingleParentFrame {
- public:
-  FpsFrame(const TextStyle &style = gFrameStyle->text_style)
-  : SingleParentFrame(new TextFrame("", style)) {}
-  const TextStyle &GetStyle() const {return text()->GetStyle();}
-  void SetStyle(const TextStyle &style) {text()->SetStyle(style);}
-
-  virtual void Think(int dt);
- private:
-  const TextFrame *text() const {return (TextFrame*)GetChild();}
-  TextFrame *text() {return (TextFrame*)GetChild();}
-  DISALLOW_EVIL_CONSTRUCTORS(FpsFrame);
-};
-
-// FancyTextFrame
-// ==============
-//
 // A TextFrame with additional formatting options. In particular, it supports:
 //  - New lines. These may either be added explicitly with "\n", or they can be added automatically
 //    as soft returns so that the FancyTextFrame will not exceed its recommended width. The latter
@@ -267,10 +268,11 @@ class FancyTextFrame: public MultiParentFrame {
     TextRenderer *renderer;
   };
   ParseStatus CreateParseStatus();
-  void StartParsing(ParseStatus *status);
-  void StopParsing(ParseStatus *status);
+  void StartParsing(ParseStatus *status, vector<ParseStatus> *active_parsers);
+  void StopParsing(vector<ParseStatus> *active_parsers);
   enum ParseResult {Normal, NewRenderer, Error};
-  ParseResult ParseNextCharacter(const string &s, ParseStatus *status, char *ch);
+  ParseResult ParseNextCharacter(const string &s, ParseStatus *status,
+                                 vector<ParseStatus> *active_parsers, char *ch);
 
   // Data
   string text_;
@@ -285,6 +287,21 @@ class FancyTextFrame: public MultiParentFrame {
   DISALLOW_EVIL_CONSTRUCTORS(FancyTextFrame);
 };
 
+class FpsFrame: public SingleParentFrame {
+ public:
+  FpsFrame(const TextStyle &style = gFrameStyle->text_style)
+  : SingleParentFrame(new TextFrame("", style)) {}
+  const TextStyle &GetStyle() const {return text()->GetStyle();}
+  void SetStyle(const TextStyle &style) {text()->SetStyle(style);}
+
+  virtual void Think(int dt);
+ private:
+  const TextFrame *text() const {return (TextFrame*)GetChild();}
+  TextFrame *text() {return (TextFrame*)GetChild();}
+  DISALLOW_EVIL_CONSTRUCTORS(FpsFrame);
+};
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
 // AbstractTextPromptFrame
 // =======================
 //
@@ -509,9 +526,9 @@ class IntegerPromptFrame: public BasicTextPromptFrame {
   DISALLOW_EVIL_CONSTRUCTORS(IntegerPromptFrame);
 };
 
-///////////////////////////////////////////////////////////////////////////////////////////////////
-// WindowFrame
-// ===========
+////////////////////////////////////////////////////////////////////////////////////////////////////
+// Window
+// ======
 
 class WindowFrame: public SingleParentFrame {
  public:
@@ -530,91 +547,75 @@ class WindowFrame: public SingleParentFrame {
   DISALLOW_EVIL_CONSTRUCTORS(WindowFrame);
 };
 
-//////////////////////////////////////////////////////////////////////////////////////////////////
-// ButtonWidget
-// ============
+////////////////////////////////////////////////////////////////////////////////////////////////////
+// Button
+// ======
 
-// Unfocusable version of a button with no pushing logic
-class AbstractButtonFrame: public SingleParentFrame {
+class DummyButtonFrame: public SingleParentFrame {
  public:
-  AbstractButtonFrame(GlopFrame *inner_frame, const ButtonViewFactory *view_factory)
-  : SingleParentFrame(new PaddedFrame(inner_frame)), view_(view_factory->Create()),
-    is_down_(false), full_press_queued_(false), held_down_queued_(false),
-    was_held_down_(false), was_pressed_fully_(false) {}
-  ~AbstractButtonFrame() {delete view_;}
+  DummyButtonFrame(GlopFrame *inner_frame, bool is_down, const ButtonViewFactory *view_factory)
+  : SingleParentFrame(new PaddedFrame(inner_frame)), is_down_(is_down),
+    view_(view_factory->Create()) {}
+  ~DummyButtonFrame() {delete view_;}
+  bool IsDown() const {return is_down_;}
+  void SetIsDown(bool is_down);
 
-  // Overloaded Glop functions
+  // Glop overloads
   void Render() const;
-  void Think(int dt);
-  bool OnKeyEvent(const KeyEvent &event, int dt);
+ protected:
+  void RecomputeSize(int rec_width, int rec_height);
+ private:
+  bool is_down_;
+  ButtonView *view_;
+  DISALLOW_EVIL_CONSTRUCTORS(DummyButtonFrame);
+};
+
+class ButtonFrame: public SingleParentFrame {
+ public:
+  ButtonFrame(GlopFrame *inner_frame, const ButtonViewFactory *view_factory)
+  : SingleParentFrame(new DummyButtonFrame(inner_frame, false, view_factory)),
+    ping_on_press_(true), is_confirm_key_down_(false), was_pressed_fully_(false),
+    is_mouse_locked_on_(false) {}
+
+  // Hot keys
+  LightSetId AddHotKey(const GlopKey &key) {return hot_key_tracker_.AddHotKey(key);}
+  void RemoveHotKey(LightSetId id) {hot_key_tracker_.RemoveHotKey(id);}
 
   // Returns whether the button is currently in the down state.
-  bool IsDown() const {return is_down_;}
+  bool IsDown() const {return button()->IsDown();}
 
   // If the button generated events similar to a key on the keyboard, this returns whether a down
   // event would have been generated this frame. It will be true if a button is just pressed or
   // it will be true periodically while a button is held down.
-  bool WasHeldDown() const {return was_held_down_;}
+  bool WasHeldDown() const {return button_tracker_.WasPressed();}
 
-  // Returns whether a full press and release of the button was completed this frame.
+  // Returns whether a full press and release of the button has completed this frame.
   bool WasPressedFully() const {return was_pressed_fully_;}
 
+  // Glop overloaded functions
+  void Think(int dt);
+  bool OnKeyEvent(const KeyEvent &event, int dt);
+  bool IsFocusMagnet(const KeyEvent &event) const {return hot_key_tracker_.IsFocusMagnet(event);}
  protected:
-  void RecomputeSize(int rec_width, int rec_height);
+  void OnFocusChange();
 
-  // Handles a state change on the button. The AbstractButtonFrame will never change whether the
-  // button is down by itself. This must be done by an extending class using this function.
-  //  UpNoFullRelease: The button is now in the not-pressed state. Do not mark it as having been
-  //                   pressed fully this farme.
-  //  UpFullRelease: The button is now in the not-pressed state. If it was just in the pressed
-  //                 state, mark it as having been pressed fully this frame.
-  //  Down: The button is now in the pressed state. If it was not pressed before, queue a
-  //        WasHeldDown repeat event with a long delay (similar to a key just being pressed).
-  //  DownRepeatSoon: The button is now in the pressed state. If it was not pressed before, queue a
-  //                  WasHeldDown repeat event with a short delay (similar to a key being held
-  //                  down).
-  enum DownType {UpNoFullRelease, UpFullRelease, Down, DownRepeatSoon};
+  // Sets whether we should generate a ping when the button is pressed. Normally this is true, but
+  // overloaded classes are allowed to overwrite it if they desire.
+  void SetPingOnPress(bool ping_on_press) {ping_on_press_ = ping_on_press;}
+ private:
+  const DummyButtonFrame *button() const {return (DummyButtonFrame*)GetChild();}
+  DummyButtonFrame *button() {return (DummyButtonFrame*)GetChild();}
+
+  enum DownType {Down, DownRepeatSoon, UpCancelPress, UpConfirmPress};
   void SetIsDown(DownType down_type);
 
- private:
-  ButtonView *view_;
-  bool is_down_,                // Is the button currently down? Set by extending class.
-       full_press_queued_,      // The next value for was_pressed_fully_. Set in OnKeyEvent.
-       held_down_queued_,       // The next value for was_held_down_. Set in OnKeyEvent.
-       was_held_down_,          // Was a down event generated this frame? (similar to key down)
-       was_pressed_fully_;      // Was a full press and release completed this frame?
-  int held_down_repeat_delay_;  // The time in ms before was_held_down_ is set to true
-  DISALLOW_EVIL_CONSTRUCTORS(AbstractButtonFrame);
-};
-
-class DefaultButtonFrame: public AbstractButtonFrame {
- public:
-  DefaultButtonFrame(GlopFrame *inner_frame,
-                     const ButtonViewFactory *factory = gFrameStyle->button_view_factory)
-  : AbstractButtonFrame(inner_frame, factory),
-    is_mouse_locked_on_(false) {}
-
-  // Overloaded Glop functions
-  bool OnKeyEvent(const KeyEvent &event, int dt);
-  bool IsFocusMagnet(const KeyEvent &event) const {return hot_keys_.Find(event.key) != 0;}
-
-  // Button functions
-  LightSetId AddHotKey(const GlopKey &key) {return hot_keys_.InsertItem(key);}
-  void RemoveHotKey(LightSetId id) {
-    SetIsHotKeyDown(hot_keys_[id], false);
-    hot_keys_.RemoveItem(id);
-  }
-
- protected:
-  virtual void OnFocusChange();
-
- private:
-  void SetIsHotKeyDown(const GlopKey &key, bool is_down);
-
-  LightSet<GlopKey> down_hot_keys_;
-  LightSet<GlopKey> hot_keys_;
+  bool ping_on_press_;
+  bool is_confirm_key_down_;
+  HotKeyTracker hot_key_tracker_;
+  Input::KeyTracker button_tracker_;
+  bool was_pressed_fully_;
   bool is_mouse_locked_on_;
-  DISALLOW_EVIL_CONSTRUCTORS(DefaultButtonFrame);
+  DISALLOW_EVIL_CONSTRUCTORS(ButtonFrame);
 };
 
 class ButtonWidget: public FocusFrame {
@@ -622,149 +623,165 @@ class ButtonWidget: public FocusFrame {
   // Basic constructors
   ButtonWidget(GlopFrame *frame,
                const ButtonViewFactory *factory = gFrameStyle->button_view_factory)
-  : FocusFrame(button_ = new DefaultButtonFrame(frame, factory)) {}
+  : FocusFrame(new ButtonFrame(frame, factory)) {}
   ButtonWidget(GlopFrame *frame, const GlopKey &hot_key,
                const ButtonViewFactory *factory = gFrameStyle->button_view_factory)
-  : FocusFrame(button_ = new DefaultButtonFrame(frame, factory)) {
-    button_->AddHotKey(hot_key);
-  }
-  ButtonWidget(GlopFrame *frame, const GlopKey &hot_key1, const GlopKey &hot_key2,
-               const ButtonViewFactory *factory = gFrameStyle->button_view_factory)
-  : FocusFrame(button_ = new DefaultButtonFrame(frame, factory)) {
-    button_->AddHotKey(hot_key1);
-    button_->AddHotKey(hot_key2);
-  }
+  : FocusFrame(new ButtonFrame(frame, factory)) {button()->AddHotKey(hot_key);}
 
   // Convenience constructors for text button frames
-  ButtonWidget(const string &text, const FrameStyle *style = gFrameStyle)
-  : FocusFrame(button_ = new DefaultButtonFrame(new TextFrame(text, style->text_style),
-                                                style->button_view_factory)) {}
-  ButtonWidget(const string &text, const GlopKey &hot_key, const FrameStyle *style = gFrameStyle)
-  : FocusFrame(button_ = new DefaultButtonFrame(new TextFrame(text, style->text_style),
-                                                style->button_view_factory)) {
-    button_->AddHotKey(hot_key);
-  }
-  ButtonWidget(const string &text, const GlopKey &hot_key1, const GlopKey &hot_key2,
-               const FrameStyle *style = gFrameStyle)
-  : FocusFrame(button_ = new DefaultButtonFrame(new TextFrame(text, style->text_style),
-                                                style->button_view_factory)) {
-    button_->AddHotKey(hot_key1);
-    button_->AddHotKey(hot_key2);
+  ButtonWidget(const string &text, const TextStyle &text_style = gFrameStyle->text_style,
+               const ButtonViewFactory *factory = gFrameStyle->button_view_factory)
+  : FocusFrame(new ButtonFrame(new TextFrame(text, text_style), factory)) {}
+  ButtonWidget(const string &text, const GlopKey &hot_key,
+               const TextStyle &text_style = gFrameStyle->text_style,
+               const ButtonViewFactory *factory = gFrameStyle->button_view_factory)
+  : FocusFrame(new ButtonFrame(new TextFrame(text, text_style), factory)) {
+    button()->AddHotKey(hot_key);
   }
 
   // Utilities
-  bool IsDown() const {return button_->IsDown();}
-  bool WasHeldDown() const {return button_->WasHeldDown();}
-  bool WasPressedFully() const {return button_->WasPressedFully();}
-  
-  LightSetId AddHotKey(const GlopKey &key) {return button_->AddHotKey(key);}
-  void RemoveHotKey(LightSetId id) {button_->RemoveHotKey(id);}
-
+  LightSetId AddHotKey(const GlopKey &key) {return button()->AddHotKey(key);}
+  void RemoveHotKey(LightSetId id) {button()->RemoveHotKey(id);}
+  bool IsDown() const {return button()->IsDown();}
+  bool WasHeldDown() const {return button()->WasHeldDown();}
+  bool WasPressedFully() const {return button()->WasPressedFully();}
  private:
-  DefaultButtonFrame *button_;
+  const ButtonFrame *button() const {return (const ButtonFrame*)GetChild();}
+  ButtonFrame *button() {return (ButtonFrame*)GetChild();}
   DISALLOW_EVIL_CONSTRUCTORS(ButtonWidget);
 };
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
-// SliderWidget
-// ============
-
-class SliderFrame: public MultiParentFrame {
+// Slider
+// ======
+class DummySliderFrame: public MultiParentFrame {
  public:
   enum Direction {Horizontal, Vertical};
-  
-  // Constructor - See SliderWidget
-  SliderFrame(Direction direction, int tab_size, int total_size, int position,
-              bool has_arrow_hot_keys = true, int step_size = -1,
-              const SliderViewFactory *factory = gFrameStyle->slider_view_factory);
-  ~SliderFrame() {delete view_;}
+  DummySliderFrame(Direction direction, int logical_tab_size, int logical_total_size,
+                   int logical_tab_position,
+                   GlopFrame*(*button_factory)(ArrowFrame::Direction,
+                                               const ArrowViewFactory *,
+                                               const ButtonViewFactory *),
+                   const SliderViewFactory *factory = gFrameStyle->slider_view_factory);
+  ~DummySliderFrame() {delete view_;}
+  const GlopFrame *GetDecButton() const {return dec_button_;}
+  GlopFrame *GetDecButton() {return dec_button_;}
+  const GlopFrame *GetIncButton() const {return inc_button_;}
+  GlopFrame *GetIncButton() {return inc_button_;}
 
-  // Hot keys
-  LightSetId AddLargeDecHotKey(const GlopKey &key) {return large_dec_keys_.InsertItem(key);}
-  LightSetId AddLargeIncHotKey(const GlopKey &key) {return large_inc_keys_.InsertItem(key);}
-  LightSetId AddDecHotKey(const GlopKey &key) {return dec_button_->AddHotKey(key);}
-  LightSetId AddIncHotKey(const GlopKey &key) {return inc_button_->AddHotKey(key);}
-  void RemoveLargeDecHotKey(LightSetId id) {large_dec_keys_.RemoveItem(id);}
-  void RemoveLargeIncHotKey(LightSetId id) {large_inc_keys_.RemoveItem(id);}
-  void RemoveDecHotKey(LightSetId id) {dec_button_->RemoveHotKey(id);}
-  void RemoveIncHotKey(LightSetId id) {inc_button_->RemoveHotKey(id);}
-
-  // State accessors/mutators
-  int GetTabPosition() const {return tab_logical_position_;}
+  // Logical state accessors/mutators
+  int GetTabPosition() const {return logical_tab_position_;}
+  int GetTabSize() const {return logical_tab_size_;}
+  int GetTotalSize() const {return logical_total_size_;}
   void SetTabPosition(int position);
-  void SmallDec() {SetTabPosition(tab_logical_position_ - step_size_);}
-  void SmallInc() {SetTabPosition(tab_logical_position_ + step_size_);}
-  void LargeDec() {SetTabPosition(tab_logical_position_ - (tab_logical_size_*9+9)/10);}
-  void LargeInc() {SetTabPosition(tab_logical_position_ + (tab_logical_size_*9+9)/10);}
-  int GetTabSize() const {return tab_logical_size_;}
-  int GetTotalSize() const {return total_logical_size_;}
+  void SetTabSize(int size);
+  void SetTotalSize(int size);
 
-  // Overloaded functions
+  // Pixel accessors - Note that all pixel coordinates are relative to this frame.
+  void GetTabCoordinates(int *x1, int *y1, int *x2, int *y2) const;
+  int GetMaxPixelLocation() const {return bar_pixel_length_ - 1;}
+  int PixelToPixelLocation(int x, int y) const;
+  int LogicalPositionToFirstPixelLocation(int logical_position) const;
+  int PixelLocationToLogicalPosition(int pixel_location) const;
+
+  // Glop overloads
   void Render() const;
-  void Think(int dt);
-  bool OnKeyEvent(const KeyEvent &event, int dt);
   void SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2);
  protected:
   void RecomputeSize(int rec_width, int rec_height);
-  void OnChildPing(GlopFrame *child, int x1, int y1, int x2, int y2, bool center);
-  void OnFocusChange();
 
  private:
-  int GetLocationPixelStart(int pos) const;
-  int GetLocationByPixel(int pixel_location);
   void RecomputeTabScreenPosition();
 
   Direction direction_;
-  LightSet<GlopKey> large_dec_keys_, large_inc_keys_;
-  DefaultButtonFrame *dec_button_, *inc_button_;
+  GlopFrame *dec_button_, *inc_button_;
   SliderView *view_;
+  int logical_tab_size_, logical_total_size_, logical_tab_position_;
+  int tab_x1_, tab_y1_, tab_x2_, tab_y2_;
+  int tab_pixel_length_, bar_pixel_length_;
+  DISALLOW_EVIL_CONSTRUCTORS(DummySliderFrame);
+};
+
+class SliderFrame: public SingleParentFrame {
+ public:
+  enum Direction {Horizontal, Vertical};  // Must match DummySliderFrame::Direction
+  SliderFrame(Direction direction, int logical_tab_size, int logical_total_size,
+              int logical_tab_position,
+              const SliderViewFactory *factory = gFrameStyle->slider_view_factory);
+  LightSetId AddDecHotKey(const GlopKey &key) {return GetDecButton()->AddHotKey(key);}
+  void RemoveDecHotKey(LightSetId id) {GetDecButton()->RemoveHotKey(id);}
+  LightSetId AddBigDecHotKey(const GlopKey &key) {return big_dec_tracker_.AddHotKey(key);}
+  void RemoveBigDecHotKey(LightSetId id) {big_dec_tracker_.RemoveHotKey(id);}
+  LightSetId AddIncHotKey(const GlopKey &key) {return GetIncButton()->AddHotKey(key);}
+  void RemoveIncHotKey(LightSetId id) {GetIncButton()->RemoveHotKey(id);}
+  LightSetId AddBigIncHotKey(const GlopKey &key) {return big_inc_tracker_.AddHotKey(key);}
+  void RemoveBigIncHotKey(LightSetId id) {big_inc_tracker_.RemoveHotKey(id);}
+
+  // State accessors/mutators
+  int GetTabPosition() const {return slider()->GetTabPosition();}
+  void SetTabPosition(int position) {slider()->SetTabPosition(position);}
+  void SmallDec() {SetTabPosition(GetTabPosition() - GetStepSize());}
+  void SmallInc() {SetTabPosition(GetTabPosition() + GetStepSize());}
+  void BigDec() {SetTabPosition(GetTabPosition() - (GetTabSize()*9+9)/10);}
+  void BigInc() {SetTabPosition(GetTabPosition() + (GetTabSize()*9+9)/10);}
+  int GetTabSize() const {return slider()->GetTabSize();}
+  void SetTabSize(int size) {slider()->SetTabSize(size);}
+  int GetTotalSize() const {return slider()->GetTotalSize();}
+  void SetTotalSize(int size) {slider()->SetTotalSize(size);}
+
+  // Overloaded functions
+  void Think(int dt);
+  bool OnKeyEvent(const KeyEvent &event, int dt);
+ protected:
+  void OnFocusChange();
+
+ private:
+  int GetStepSize() const {return (GetTabSize() + 9) / 10;}
+  const DummySliderFrame *slider() const {return (const DummySliderFrame*)GetChild();}
+  DummySliderFrame *slider() {return (DummySliderFrame*)GetChild();}
+  const ButtonFrame *GetDecButton() const {return (const ButtonFrame*)slider()->GetDecButton();}
+  ButtonFrame *GetDecButton() {return (ButtonFrame*)slider()->GetDecButton();}
+  const ButtonFrame *GetIncButton() const {return (const ButtonFrame*)slider()->GetIncButton();}
+  ButtonFrame *GetIncButton() {return (ButtonFrame*)slider()->GetIncButton();}
 
   enum MouseLockMode {None, Bar, Tab};
-  int tab_logical_position_, tab_logical_size_, total_logical_size_;
   int step_size_;
   MouseLockMode mouse_lock_mode_;
-  int bar_pixel_length_, inner_bar_x_, inner_bar_y_;
-  int tab_pixel_length_, tab_x1_, tab_y1_, tab_x2_, tab_y2_;
   int tab_grab_position_;
+  HotKeyTracker big_dec_tracker_, big_inc_tracker_;
   DISALLOW_EVIL_CONSTRUCTORS(SliderFrame);
 };
 
 class SliderWidget: public FocusFrame {
  public:
-  enum Direction {Horizontal, Vertical};  // Should match SliderFrame::Direction
-
-  // Constructor.
-  //  direction: Is this a horizontal slider or a vertical slider?
-  //  tab_size: The logical length of the tab (at least 1)
-  //  total_size: The logical length of the entire slider bar
-  //  position: The logical position where the tab start
-  //  has_arrow_hot_keys: Whether the slider should respond to arrow keys
-  //  step_size: How much pushing a button will move the slider (-1 sets a default value)
-  //  renderer: The function uses for rendering the slider
-  SliderWidget(Direction direction, int tab_size, int total_size, int position,
-               bool has_arrow_hot_keys = true, int step_size = -1,
+  enum Direction {Horizontal, Vertical};  // Must match DummySliderFrame::Direction
+  SliderWidget(Direction direction, int logical_tab_size, int logical_total_size,
+               int logical_tab_position,
                const SliderViewFactory *factory = gFrameStyle->slider_view_factory)
-  : FocusFrame(slider_ = new SliderFrame((SliderFrame::Direction)direction, tab_size, total_size,
-                                         position, has_arrow_hot_keys, step_size, factory)) {}
+  : FocusFrame(new SliderFrame((SliderFrame::Direction)direction, logical_tab_size,
+                               logical_total_size, logical_tab_position, factory)) {}
 
-  // Hot keys
-  LightSetId AddLargeDecHotKey(const GlopKey &key) {return slider_->AddLargeDecHotKey(key);}
-  LightSetId AddLargeIncHotKey(const GlopKey &key) {return slider_->AddLargeIncHotKey(key);}
-  LightSetId AddDecHotKey(const GlopKey &key) {return slider_->AddDecHotKey(key);}
-  LightSetId AddIncHotKey(const GlopKey &key) {return slider_->AddIncHotKey(key);}
-  void RemoveLargeDecHotKey(LightSetId id) {slider_->RemoveLargeDecHotKey(id);}
-  void RemoveLargeIncHotKey(LightSetId id) {slider_->RemoveLargeIncHotKey(id);}
-  void RemoveDecHotKey(LightSetId id) {slider_->RemoveDecHotKey(id);}
-  void RemoveIncHotKey(LightSetId id) {slider_->RemoveIncHotKey(id);}
-
-  // State accessors/mutators
-  int GetTabPosition() const {return slider_->GetTabPosition();}
-  void SetTabPosition(int position) {slider_->SetTabPosition(position);}
-  int GetTabSize() const {return slider_->GetTabSize();}
-  int GetTotalSize() const {return slider_->GetTotalSize();}
+  // Utilities
+  LightSetId AddDecHotKey(const GlopKey &key) {return slider()->AddDecHotKey(key);}
+  void RemoveDecHotKey(LightSetId id) {slider()->RemoveDecHotKey(id);}
+  LightSetId AddBigDecHotKey(const GlopKey &key) {return slider()->AddBigDecHotKey(key);}
+  void RemoveBigDecHotKey(LightSetId id) {slider()->RemoveBigDecHotKey(id);}
+  LightSetId AddIncHotKey(const GlopKey &key) {return slider()->AddIncHotKey(key);}
+  void RemoveIncHotKey(LightSetId id) {slider()->RemoveIncHotKey(id);}
+  LightSetId AddBigIncHotKey(const GlopKey &key) {return slider()->AddBigIncHotKey(key);}
+  void RemoveBigIncHotKey(LightSetId id) {slider()->RemoveBigIncHotKey(id);}
+  int GetTabPosition() const {return slider()->GetTabPosition();}
+  void SetTabPosition(int position) {slider()->SetTabPosition(position);}
+  void SmallDec() {slider()->SmallDec();}
+  void SmallInc() {slider()->SmallInc();}
+  void BigDec() {slider()->BigDec();}
+  void BigInc() {slider()->BigInc();}
+  int GetTabSize() const {return slider()->GetTabSize();}
+  int GetTotalSize() const {return slider()->GetTotalSize();}
 
  private:
-  SliderFrame *slider_;
+  const SliderFrame *slider() const {return (const SliderFrame*)GetChild();}
+  SliderFrame *slider() {return (SliderFrame*)GetChild();}
   DISALLOW_EVIL_CONSTRUCTORS(SliderWidget);
 };
 

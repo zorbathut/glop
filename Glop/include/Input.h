@@ -1,7 +1,7 @@
 // The interface for all keyboard, mouse, and joystick I/O under Glop using a unified GlopKey
 // mechanism that includes everything from keyboard keys to joystick axes to mouse motion.
 //
-// Input can be tracked in two very different ways, depending on whether one wants simplicity or
+// Input can be tracked in two very different ways, depending on whether you want simplicity or
 // more fine-grained control. The simplest mechanism is to query the Input class after a call
 // to gSystem->Think. This is simple and usually effective. However, this approach does not allow
 // you to gain any context information about the input state when a key was pressed. For example,
@@ -12,15 +12,16 @@
 //   - Determining how often or at what time a key was pressed during a single frame.
 //
 // If it is necessary to know the answers to these questions, as is often the case for GUI
-// controls, a KeyListener must be used. A KeyListener receives notification on any key "event",
-// annotated with the time elapsed since the last event:
+// controls, a KeyListener must be used. (Note that a GlopFrame can use KeyListeners implicitly via
+// its OnKeyDown method.) A KeyListener receives notification on any key "event", annotated with the
+// time elapsed since the last event:
 //   - Nothing: These events are sent periodically (many times a second) whenever Input has
 //     potentially changed state. This is the only event where dt > 0.
 //   - KeyPress: A key has gone from up to down. See also KeyDoublePress.
 //   - KeyDoublePress: A key has been pressed twice rapidly in succession. Also generates a KeyPress
-//                     for the first time (and potentially more KeyDoublePresses in the future).
+//                     for the first press.
 //   - KeyRepeat: A key has been held down for a long period of time, and a pseudo-key press is
-//                registered. Similar to text editors that detect key presses while a key is held
+//                registered. Similar to text editors that detect key "presses" while a key is held
 //                down.
 //   - KeyRelease: A key has gone from down to up.
 // The KeyListener can then perform any logic it desires, and during this time, the Input class can
@@ -29,7 +30,7 @@
 // other. All other keys could be misordered with an error of about 5 ms.
 //
 // Once it comes times to actually query the Input, several options are available:
-//  GetMouseX, IsNumLockSet, etc.: Various input state independent of the individual GlopKeys.
+//  GetMouseX, IsNumLockSet, etc.: Input state independent of the individual GlopKeys.
 //  GetAsciiValue: Converts a key to ASCII. This should be used in a KeyListener. Otherwise, the
 //                 shift, alt, control, num lock & caps lock state may be out of date.
 //  GetKeyPressAmount: Returns the degree to which a key is down (usually between 0 and 1). Fully
@@ -47,6 +48,14 @@
 //  WasKeyPressed, WasKeyReleased: Convenience functions that return whether a given key event
 //                                 was generated this frame.
 //
+// Finally, it is not always convenient to work directly with one input key at a time. For example,
+// it is sometimes useful to consider two keys linked together as one - e.g. kKeyEitherShift is the
+// same as kKeyLeftShift || kKeyRightShift. These are called derived keys. Manually checking if a
+// derived key is down would be easy, but generating events for them is a little more complicated.
+// To facilitate this, DerivedKeys may be defined directly wihin Input and then events will be
+// generated for them as if they were normal keys. Alternatively, Input::KeyTracker can be used to
+// simulate events for a a user-controlled "key". This is used, for example, Gui buttons.
+//
 // Note that the Input class silently uses a separate thread for polling the Os input. This ensures
 // that the input will be accurate even if the frame rate is bad.
 
@@ -60,16 +69,22 @@
 #include <vector>
 using namespace std;
 
-// Constants
-const int kRepeatDelay = 500;  // Time (in ms) between key down event #1 and #2 while a key is down
-                               //   Provided so that key behavior can be emulated.
-const int kRepeatRate = 60;    // Time (in ms) between later key down events while a key is down
-
 // Class declarations
 class Input;
 class InputPollingThread;
 struct OsKeyEvent;
 struct OsWindowData;
+
+// Key repeat-rate constants
+const int kRepeatDelay = 500;  // Time (in ms) between key down event #1 and #2 while a key is down
+                               //   Provided so that key behavior can be emulated.
+const int kRepeatRate = 60;    // Time (in ms) between later key down events while a key is down
+
+// GlopKey device and key iteration - See also GlopKey::GetMaxDevice() and GetNumKeys()
+const int kDeviceKeyboard = -1;
+const int kDeviceAnyJoystick = -2;
+const int kDeviceDerived = -3;
+const int kMinDevice = -3;
 
 // GlopKey
 // =======
@@ -78,19 +93,18 @@ struct OsWindowData;
 // To refer to a specific key, use the static methods and constants below.
 struct GlopKey {
   // Constructor
-  GlopKey(int _index = -2): joystick(-1), index(_index) {}
-  GlopKey(int _joystick, int _index): joystick(_joystick), index(_index) {}
-  short joystick, index;
+  GlopKey(int _index = -2, int _device = kDeviceKeyboard): device(_device), index(_index) {}
+  short index, device;
 
   // Comparators
   bool operator==(const GlopKey &rhs) const {
-    return joystick == rhs.joystick && index == rhs.index;
+    return device == rhs.device && index == rhs.index;
   }
   bool operator!=(const GlopKey &rhs) const {
-    return joystick != rhs.joystick || index != rhs.index;
+    return device != rhs.device || index != rhs.index;
   }
   bool operator<(const GlopKey &rhs) const {
-    return (joystick == rhs.joystick? joystick < rhs.joystick : index < rhs.index);
+    return (device == rhs.device? device < rhs.device : index < rhs.index);
   }
 
   // Key property queries. Most are self-explanatory, but:
@@ -98,8 +112,10 @@ struct GlopKey {
   //           "Joystick #1 - Button #4".
   //  IsTrackable: All "keys" generate key press events when they are first pressed. Our other
   //               functionality (IsKeyDown, GetKeyPressAmount, and repeat events) requires being
-  //               able to track the key's. This tests whether we can track a given key's state.
-  //               Currently, only Pause fails this test.
+  //               able to track the key's state. This returns whether that is possible on all OSes.
+  //  IsDerivedKey: Certain GlopKeys do not correspond to a single key - for example,
+  //                kKeyEitherShift or any key with kAnyJoystick. This returns whether that applies
+  //                to this key.
   //  IsMouseMotion: Includes mouse wheel.
   //  IsMotionKey: Does this key correspond to something that a user likely would consider more
   //               like scrolling or moving a pointer, rather than an actual key? Currently, this
@@ -110,6 +126,7 @@ struct GlopKey {
   //                            it tied to?
   const string GetName() const;
   bool IsTrackable() const;
+  bool IsDerivedKey() const;
   bool IsKeyboardKey() const;
   bool IsMouseKey() const;
   bool IsJoystickKey() const;
@@ -201,7 +218,7 @@ const GlopKey kMouseLButton(297);
 const GlopKey kMouseMButton(298);
 const GlopKey kMouseRButton(299);
 const int kFirstMouseKeyIndex = 291;
-const int kNumKeys = 300;
+const int kNumKeyboardKeys = 300;
 
 // Key constants - joystick
 const int kJoystickAxisStart = 0;
@@ -223,34 +240,68 @@ const int kJoystickHatEnd = kJoystickHatStart + 4 * kJoystickHatStart;
 const int kJoystickButtonStart = kJoystickHatEnd;
 const int kJoystickNumButtons = 32;
 const int kJoystickButtonEnd = kJoystickButtonStart + kJoystickNumButtons;
-const int kJoystickNumKeys = kJoystickButtonEnd;
+const int kNumJoystickKeys = kJoystickButtonEnd;
 
 // Joystick key creators
-inline GlopKey GetJoystickUp(int joystick) {return GlopKey(joystick, kJoystickAxisUp);}
-inline GlopKey GetJoystickRight(int joystick) {return GlopKey(joystick, kJoystickAxisRight);}
-inline GlopKey GetJoystickDown(int joystick) {return GlopKey(joystick, kJoystickAxisDown);}
-inline GlopKey GetJoystickLeft(int joystick) {return GlopKey(joystick, kJoystickAxisLeft);}
-inline GlopKey GetJoystickAxisPos(int joystick, int axis) {
-  return GlopKey(joystick, kJoystickAxisPos + 2*axis);
+inline GlopKey GetJoystickUp(int joystick = kDeviceAnyJoystick) {
+  return GlopKey(kJoystickAxisUp, joystick);
 }
-inline GlopKey GetJoystickAxisNeg(int joystick, int axis) {
-  return GlopKey(joystick, kJoystickAxisNeg + 2*axis);
+inline GlopKey GetJoystickRight(int joystick = kDeviceAnyJoystick) {
+  return GlopKey(kJoystickAxisRight, joystick);
 }
-inline GlopKey GetJoystickHatUp(int joystick, int hat) {
-  return GlopKey(joystick, kJoystickHatUp + hat*4);
+inline GlopKey GetJoystickDown(int joystick = kDeviceAnyJoystick) {
+  return GlopKey(kJoystickAxisDown, joystick);
 }
-inline GlopKey GetJoystickHatRight(int joystick, int hat) {
-  return GlopKey(joystick, kJoystickHatRight + hat*4);
+inline GlopKey GetJoystickLeft(int joystick = kDeviceAnyJoystick) {
+  return GlopKey(kJoystickAxisLeft, joystick);
 }
-inline GlopKey GetJoystickHatDown(int joystick, int hat) {
-  return GlopKey(joystick, kJoystickHatDown + hat*4);
+inline GlopKey GetJoystickAxisPos(int axis, int joystick = kDeviceAnyJoystick) {
+  return GlopKey(kJoystickAxisPos + 2*axis, joystick);
 }
-inline GlopKey GetJoystickHatLeft(int joystick, int hat) {
-  return GlopKey(joystick, kJoystickHatLeft + hat*4);
+inline GlopKey GetJoystickAxisNeg(int axis, int joystick = kDeviceAnyJoystick) {
+  return GlopKey(kJoystickAxisNeg + 2*axis, joystick);
 }
-inline GlopKey GetJoystickButton(int joystick, int button) {
-  return GlopKey(joystick, kJoystickButtonStart + button);
+inline GlopKey GetJoystickHatUp(int hat, int joystick = kDeviceAnyJoystick) {
+  return GlopKey(kJoystickHatUp + hat*4, joystick);
 }
+inline GlopKey GetJoystickHatRight(int hat, int joystick = kDeviceAnyJoystick) {
+  return GlopKey(kJoystickHatRight + hat*4, joystick);
+}
+inline GlopKey GetJoystickHatDown(int hat, int joystick = kDeviceAnyJoystick) {
+  return GlopKey(kJoystickHatDown + hat*4, joystick);
+}
+inline GlopKey GetJoystickHatLeft(int hat, int joystick = kDeviceAnyJoystick) {
+  return GlopKey(kJoystickHatLeft + hat*4, joystick);
+}
+inline GlopKey GetJoystickButton(int button, int joystick = kDeviceAnyJoystick) {
+  return GlopKey(kJoystickButtonStart + button, joystick);
+}
+
+// Non-editable derived keys
+const GlopKey kKeyEitherShift(0, kDeviceDerived);
+const GlopKey kKeyEitherControl(1, kDeviceDerived);
+const GlopKey kKeyEitherAlt(2, kDeviceDerived);
+const int kNumFixedDerivedKeys = 3;
+
+// User-editable derived keys
+const GlopKey kGuiKeyPageUp(kNumFixedDerivedKeys + 0, kDeviceDerived);
+const GlopKey kGuiKeyPageRight(kNumFixedDerivedKeys + 1, kDeviceDerived);
+const GlopKey kGuiKeyPageDown(kNumFixedDerivedKeys + 2, kDeviceDerived);
+const GlopKey kGuiKeyPageLeft(kNumFixedDerivedKeys + 3, kDeviceDerived);
+const GlopKey kGuiKeyScrollUp(kNumFixedDerivedKeys + 4, kDeviceDerived);
+const GlopKey kGuiKeyScrollRight(kNumFixedDerivedKeys + 5, kDeviceDerived);
+const GlopKey kGuiKeyScrollDown(kNumFixedDerivedKeys + 6, kDeviceDerived);
+const GlopKey kGuiKeyScrollLeft(kNumFixedDerivedKeys + 7, kDeviceDerived);
+const GlopKey kGuiKeyUp(kNumFixedDerivedKeys + 8, kDeviceDerived);
+const GlopKey kGuiKeyRight(kNumFixedDerivedKeys + 9, kDeviceDerived);
+const GlopKey kGuiKeyDown(kNumFixedDerivedKeys + 10, kDeviceDerived);
+const GlopKey kGuiKeyLeft(kNumFixedDerivedKeys + 11, kDeviceDerived);
+const GlopKey kGuiKeyConfirm(kNumFixedDerivedKeys + 12, kDeviceDerived);
+const GlopKey kGuiKeyPrimaryClick(kNumFixedDerivedKeys + 13, kDeviceDerived);
+const GlopKey kGuiKeySecondaryClick(kNumFixedDerivedKeys + 14, kDeviceDerived);
+const GlopKey kGuiKeySelectNext(kNumFixedDerivedKeys + 15, kDeviceDerived);
+const GlopKey kGuiKeySelectPrev(kNumFixedDerivedKeys + 16, kDeviceDerived);
+const int kNumBasicDerivedKeys = kNumFixedDerivedKeys + 17;
 
 // KeyEvent
 // ========
@@ -268,7 +319,7 @@ struct KeyEvent {
   bool IsRepeatPress() const {return type_ == RepeatPress;}
   bool IsDoublePress() const {return type_ == DoublePress;}
 
-private:
+ private:
   Type type_;
 };
 
@@ -284,10 +335,13 @@ class KeyListener {
   ~KeyListener() {StopKeyListening();}
 
  protected:
+  // Overload this to take action on a KeyEvent.
   virtual void OnKeyEvent(const KeyEvent &event, int dt) = 0;
+
+  // Utility functions that start and stop KeyEvent messages from being sent here. These are called
+  // automatically on creation and deletion, but are provided as a convenience at all times.
   void BeginKeyListening();
   void StopKeyListening();
-
  private:
   LightSetId listener_id_;
   friend class Input;
@@ -302,6 +356,65 @@ Input *input();
 
 class Input {
  public:
+  int GetMaxDevice() const {return GetNumJoysticks() - 1;}
+
+  // KeyTracker
+  // ==========
+  //
+  // A KeyTracker simulates the logic that generates key events based on whether a given key is up
+  // or down (e.g. repeat events and double-clicks). This is used internally by Input, but it is
+  // also provided publicly.
+  class KeyTracker {
+  public:
+    // Creates a new key - release_delay is an optional artifical delay that ensures the key is
+    // registered as down for a little while even after it is marked as up. This is useful for very
+    // choppy "keys", such as mouse motion.
+    KeyTracker(int release_delay = 0);
+    void SetReleaseDelay(int delay) {release_delay_ = delay;}
+
+    // Marks the key as up, ignoring the release_delay. Useful, for example, when focus is lost.
+    // Returns any event caused by this: None or Release.
+    KeyEvent::Type Clear();
+    
+    // Sets the current key press amount.
+    // Returns any event caused by this: None, Press, Release (if release_delay == 0) or DoublePress.
+    KeyEvent::Type SetPressAmount(float amount);
+    KeyEvent::Type SetIsDown(bool is_down) {return SetPressAmount(is_down? 1.0f : 0.0f);}
+
+    // Registers that a certain time has passed.
+    // Returns any event caused by this: None, RepeatPress, or Release (if release_delay > 0).
+    KeyEvent::Type OnKeyEventDt(int dt);
+
+    // Registers the start of a new frame.
+    void Think();
+
+    // Instantaneous status - see top of the file and Input class below.
+    float GetPressAmountNow() const {return press_amount_now_;}
+    bool IsDownNow() const {return is_down_now_;}
+
+    // Frame status - see top of the file and Input class below.
+    float GetPressAmountFrame() const {return press_amount_frame_;}
+    bool IsDownFrame() const {return is_down_frame_;}
+    bool WasPressed(bool count_repeats = true) const {
+      return count_repeats? was_pressed_ : was_pressed_no_repeats_;
+    }
+    bool WasReleased() const {return was_released_;}
+    
+  private:
+    float press_amount_now_,      // Instantaneous press_amount for the key
+          press_amount_frame_;    // Total press_amount for the key this frame
+    bool is_down_now_,            // Is the key down now - not quite the same as cur_press_amount > 0
+        is_down_frame_;          // Was the key down at any point this frame (See IsKeyDown)
+    int total_frame_time_;        // Total time spent during this frame
+    int release_delay_left_,      // Minimum time until cur_is_down can be reverted to false
+        release_delay_;           // The max value for release_delay_left_
+    int double_press_time_left_;  // Used for tracking double presses
+    int repeat_delay_left_;       // Time remaining until we generate a repeat event
+    bool was_pressed_,            // Was a key press event generated for this key this frame
+        was_pressed_no_repeats_, // Was a key press (no repeat) event generated this frame
+        was_released_;           // Was a key release event generated for this key this frame
+  };
+
   // Gets/sets a sensitivity which is used to scale kMouseLeft, kMouseTop, etc. every frame. This
   // has no effect on mouse cursor position.
   float GetMouseSensitivity() const {return mouse_sensitivity_;}
@@ -331,12 +444,12 @@ class Input {
   // Queries whether a particular key is down, or how far down it is. See comment at the top of
   // the file.
   float GetKeyPressAmountNow(const GlopKey &key) const {
-    const KeyInfo *info = LocateKeyInfo(key);
-    return (info == 0? 0.0f : info->press_amount_now);
+    const KeyTracker *info = GetKeyTracker(key);
+    return (info == 0? 0.0f : info->GetPressAmountNow());
   }
   bool IsKeyDownNow(const GlopKey &key) const {
-    const KeyInfo *info = LocateKeyInfo(key);
-    return (info == 0? false : info->is_down_now);
+    const KeyTracker *info = GetKeyTracker(key);
+    return (info == 0? false : info->IsDownNow());
   }
 
   // Gets/sets mouse position. All coordinates are relative to the top-left corner of the window
@@ -353,33 +466,35 @@ class Input {
 
   // Frame key status
   // ================
-
+  //
   // Queries whether a particular key was down this frame, or how far down it was. See comment at
   // the top of the file.
   float GetKeyPressAmountFrame(const GlopKey &key) const {
-    const KeyInfo *info = LocateKeyInfo(key);
-    return (info == 0? 0.0f : info->press_amount_frame);
+    const KeyTracker *info = GetKeyTracker(key);
+    return (info == 0? 0.0f : info->GetPressAmountFrame());
   }
   bool IsKeyDownFrame(const GlopKey &key) const {
-    const KeyInfo *info = LocateKeyInfo(key);
-    return (info == 0? false : info->is_down_frame);
+    const KeyTracker *info = GetKeyTracker(key);
+    return (info == 0? false : info->IsDownFrame());
   }
   const vector<GlopKey> &GetDownKeysFrame() const {return down_keys_frame_;}
 
   // Was a key event generated for this key during this frame? WasKeyPressed counts repeat events
   // only if count_repeats == true.
   bool WasKeyPressed(const GlopKey &key, bool count_repeats = true) const {
-    const KeyInfo *info = LocateKeyInfo(key);
-    return (info == 0? false : count_repeats? info->was_pressed : info->was_pressed_no_repeats); 
+    const KeyTracker *info = GetKeyTracker(key);
+    return (info == 0? false : info->WasPressed(count_repeats));
   }
   bool WasKeyReleased(const GlopKey &key) const {
-    const KeyInfo *info = LocateKeyInfo(key);
-    return (info == 0? false : info->was_released);
+    const KeyTracker *info = GetKeyTracker(key);
+    return (info == 0? false : info->WasReleased());
   }
 
   // Returns a single key that has been pressed this frame (including repeat events). If no key
-  // has been pressed, kNoKey is returned. accept_clicks can be used to filter out mouse clicks,
-  // accept_modifiers and accept_motion filter out modifier and motion keys respectively/
+  // has been pressed, kNoKey is returned. Derived keys will never be returned - a corresponding
+  // normal key will be returned instead.
+  // accept_clicks can be used to filter out mouse clicks, accept_modifiers and accept_motion
+  // filter out modifier and motion keys respectively.
   const GlopKey &GetKeyPress(bool accept_clicks = true, bool accept_modifiers = false,
                              bool accept_motion = false);
 
@@ -387,8 +502,23 @@ class Input {
   const GlopKey &WaitForKeyPress(bool accept_clicks = true, bool accept_modifiers = false,
                                  bool accept_motion = false);
 
+  // Derived Keys
+  // ============
+  static int GetNumDerivedKeys() {return (int)derived_key_names_.size();}
+  static void ConfigureGuiKeys(bool keyboard_bindings, bool mouse_bindings, bool joystick_bindings);
+  static GlopKey AllocateDerivedKey(const string &key_name);
+  static void UnbindDerivedKey(const GlopKey &derived_key);
+  static void BindDerivedKey(const GlopKey &derived_key, const GlopKey &binding, bool down = true);
+  static void BindDerivedKey(const GlopKey &derived_key, const GlopKey &binding1,
+                             const GlopKey &binding2, bool down1 = true, bool down2 = true);
+  static void BindDerivedKey(const GlopKey &derived_key, const vector<GlopKey> &binding,
+                             const vector<bool> &down = vector<bool>(0));
+  static void ClearDerivedKeys();
+
  private:
-  int GetMinDownTime(const GlopKey &key);
+  // Interface to System
+  friend class System;
+  static void InitDerivedKeys();
 
   // Interface to GlopWindow
   friend class GlopWindow;
@@ -415,51 +545,36 @@ class Input {
   int joystick_refresh_time_;                     // The length of time since we last did a joystick
                                                   //  refresh. Used to prevent doing refreshes too
                                                   //  often.
-  bool requested_joystick_refresh_;               // Whether the uses wants to do a joystick refresh
+  bool requested_joystick_refresh_;               // Whether the user wants to do a joystick refresh
+  LightSet<KeyListener*> key_listeners_;
 
   // Key status
-  struct KeyInfo {
-    KeyInfo()
-    : press_amount_now(0),
-      press_amount_frame(0),
-      is_down_now(false),
-      is_down_frame(false),
-      release_delay(0),
-      is_press_time_valid(false),
-      press_time(0),
-      was_pressed(false),
-      was_pressed_no_repeats(false),
-      was_released(false) {}
-    float press_amount_now,      // Instantaneous press_amount for the key
-          press_amount_frame;    // Total press_amount for the key this frame
-    bool is_down_now,            // Is the key down now - not quite the same as cur_press_amount > 0
-         is_down_frame;          // Was the key down at any point this frame (See IsKeyDown)
-    int release_delay;           // Minimum time until cur_is_down can be reverted to false
-    bool is_press_time_valid;    // Used for tracking double presses
-    int press_time;              // "                              "
-    bool was_pressed,            // Was a key press event generated for this key this frame
-         was_pressed_no_repeats, // Was a key press (no repeat) even generated this frame
-         was_released;           // Was a key release event generated for this key this frame
-  };
   vector<GlopKey> down_keys_frame_, pressed_keys_frame_;
-  KeyInfo keyboard_state_[kNumKeys];
-  vector<vector<KeyInfo> > joystick_state_;
+  KeyTracker keyboard_key_trackers_[kNumKeyboardKeys];
+  vector<vector<KeyTracker> > joystick_key_trackers_;
+  KeyTracker any_joystick_key_trackers_[kNumJoystickKeys];
+  vector<KeyTracker> derived_key_trackers_;
 
-  // Key event status
-  struct RepeatEvent {
-    GlopKey key;
-    int delay;
-  };
-  LightSet<KeyListener*> key_listeners_;
-  LightSet<RepeatEvent> repeat_events_;
-  
+  // Derived key configuration
+  friend struct GlopKey;
+  static vector<string> derived_key_names_;
+  static vector<vector<vector<GlopKey> > > derived_key_bindings_;
+  static vector<vector<vector<bool> > > derived_key_bindings_down_;
+
   // Utility functions
+  void UpdateDerivedKey(const GlopKey &key);
   void OnKeyEvent(const KeyEvent &event, int dt);
-  KeyInfo *LocateKeyInfo(const GlopKey &key);
-  const KeyInfo *LocateKeyInfo(const GlopKey &key) const;
+  KeyTracker *GetKeyTracker(const GlopKey &key);
+  const KeyTracker *GetKeyTracker(const GlopKey &key) const;
   void UpdateOsCursorVisibility();
   friend class KeyListener;
   DISALLOW_EVIL_CONSTRUCTORS(Input);
 };
+
+// Key iteration
+inline int GetNumKeys(int device) {
+  return device == kDeviceKeyboard? kNumKeyboardKeys :
+         device == kDeviceDerived? input()->GetNumDerivedKeys() : kNumJoystickKeys;
+}
 
 #endif // GLOP_INPUT_H__

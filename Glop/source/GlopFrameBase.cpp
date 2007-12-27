@@ -132,7 +132,8 @@ void MultiParentFrame::Render() const {
 bool MultiParentFrame::OnKeyEvent(const KeyEvent &event, int dt) {
   bool result = false;
   for (LightSetId id = children_.GetFirstId(); id != 0; id = children_.GetNextId(id))
-    result |= (!children_[id]->IsFocusFrame() && children_[id]->OnKeyEvent(event, dt));
+  if (!children_[id]->IsFocusFrame())
+    result |= children_[id]->OnKeyEvent(event, dt);
   return result;
 }
 
@@ -978,89 +979,80 @@ class UnfocusableScrollingFrame: public MultiParentFrame {
     double old_vert_position = (vert_slider_? 
       (vert_slider_->GetTabPosition() + 0.5*inner_view_height_) / old_inner_total_height : 0);
 
-    // Compute the size of our inner frame
-    SliderView *temp_view = view_factory_->Create();
-    int sb_width = temp_view->GetWidthOnResize(rec_width, rec_height, false);
-    int sb_height = temp_view->GetWidthOnResize(rec_width, rec_height, true);
-    delete temp_view;
-    SetSize(rec_width, rec_height);
-    clipped_inner_frame_->UpdateSize(rec_width, rec_height);
-
-    // A nasty special case: suppose our inner frame uses rec_width to set width, but scrolls
-    // vertically. Then it will generate a horizontal scroll bar which shouldn't be there.
-    // A cludge here prevents that.
-    if (clipped_inner_frame_->GetWidth() <= rec_width &&
-        clipped_inner_frame_->GetHeight() > rec_height)
-      clipped_inner_frame_->UpdateSize(rec_width - sb_width, rec_height);
-    else if (clipped_inner_frame_->GetHeight() <= rec_height &&
-            clipped_inner_frame_->GetWidth() > rec_width)
-      clipped_inner_frame_->UpdateSize(rec_width, rec_height - sb_height);
-
-    // Compute our maximum width and height, stored in myWidth and myHeight
-    // Also compute the size of a scroll bar
-    inner_view_width_ = inner_frame_->GetWidth();
-    inner_view_height_ = inner_frame_->GetHeight();
-    int sb_width_used = 0, sb_height_used = 0;
-
-    // Figure out which scroll bars we need and determine the amount of the inner
-    // frame to display each time   
-    while (GetWidth() < sb_width_used + inner_view_width_ ||
-          GetHeight() < sb_height_used + inner_view_height_) {
-      if (GetWidth() < sb_width_used + inner_view_width_) {
-        inner_view_width_ = GetWidth() - sb_width_used;
-        sb_height_used = sb_height;
+    // Figure out which sliders need to exist, and create place-holders
+    inner_view_width_ = rec_width;
+    inner_view_height_ = rec_height;
+    SliderFrame *old_horz_slider = horz_slider_, *old_vert_slider = vert_slider_;
+    horz_slider_ = vert_slider_ = 0;
+    while (1) {
+      bool made_change = false;
+      clipped_inner_frame_->UpdateSize(inner_view_width_, inner_view_height_);
+      if (clipped_inner_frame_->GetWidth() > inner_view_width_ && horz_slider_ == 0) {
+        horz_slider_ = old_horz_slider;
+        if (horz_slider_ == 0) {
+          horz_slider_ = new SliderFrame(SliderFrame::Horizontal, 0, 0, 0, view_factory_);
+          horz_slider_->AddDecHotKey(kGuiKeyScrollLeft);
+          horz_slider_->AddBigDecHotKey(kGuiKeyPageLeft);
+          horz_slider_->AddIncHotKey(kGuiKeyScrollRight);
+          horz_slider_->AddBigIncHotKey(kGuiKeyPageRight);
+          horz_slider_id_ = AddChild(horz_slider_);
+        }
+        horz_slider_->UpdateSize(rec_width, rec_height);
+        inner_view_height_ -= horz_slider_->GetHeight();
+        made_change = true;
       }
-      if (GetHeight() < sb_height_used + inner_view_height_) {
-        inner_view_height_ = GetHeight() - sb_height_used;
-        sb_width_used = sb_width;
+      if (clipped_inner_frame_->GetHeight() > inner_view_height_ && vert_slider_ == 0) {
+        vert_slider_ = old_vert_slider;
+        if (vert_slider_ == 0) {
+          vert_slider_ = new SliderFrame(SliderFrame::Vertical, 0, 0, 0, view_factory_);
+          vert_slider_->AddDecHotKey(kGuiKeyScrollUp);
+          vert_slider_->AddBigDecHotKey(kGuiKeyPageUp);
+          vert_slider_->AddIncHotKey(kGuiKeyScrollDown);
+          vert_slider_->AddBigIncHotKey(kGuiKeyPageDown);
+          vert_slider_id_ = AddChild(vert_slider_);
+        }
+        vert_slider_->UpdateSize(rec_width, rec_height);
+        inner_view_width_ -= vert_slider_->GetWidth();
+        made_change = true;
       }
+      if (!made_change)
+        break;
     }
 
-    // Set our actual width and height
-    SetSize(inner_view_width_ + sb_width_used, inner_view_height_ + sb_height_used);
+    // Set our width and height
+    if (horz_slider_ == 0)
+      inner_view_width_ = clipped_inner_frame_->GetWidth();
+    if (vert_slider_ == 0)
+      inner_view_height_ = clipped_inner_frame_->GetHeight();
+    int total_width = inner_view_width_, total_height = inner_view_height_;
+    if (horz_slider_ != 0)
+      total_height += horz_slider_->GetHeight();
+    if (vert_slider_ != 0)
+      total_width += vert_slider_->GetWidth();
+    SetSize(total_width, total_height);
 
-    // Update the horizontal scroll bar if necessary
-    if (inner_view_width_ != old_inner_view_width ||
-        inner_frame_->GetWidth() != old_inner_total_width) {
-      if (horz_slider_)
-        RemoveChild(horz_slider_id_);
-      if (sb_height_used) {
-        horz_slider_ = new SliderFrame(SliderFrame::Horizontal, inner_view_width_,
-                                       inner_frame_->GetWidth(), 0, true, -1,
-                                       view_factory_);
-        horz_slider_id_ = AddChild(horz_slider_);
-      } else {
-        horz_slider_ = 0;
-      }
+    // Delete old, unused sliders
+    if (old_horz_slider != 0 && horz_slider_ == 0) {
+      RemoveChild(horz_slider_id_);
+      horz_slider_id_ = 0;
     }
+    if (old_vert_slider != 0 && vert_slider_ == 0) {
+      RemoveChild(vert_slider_id_);
+      vert_slider_id_ = 0;
+    }
+
+    // Configure the new sliders
     if (horz_slider_) {
-      horz_slider_->UpdateSize(inner_view_width_, rec_height);
+      horz_slider_->SetTabSize(inner_view_width_);
+      horz_slider_->SetTotalSize(clipped_inner_frame_->GetWidth());
       horz_slider_->SetTabPosition(int(
-        old_horz_position*inner_frame_->GetWidth() - 0.5*inner_view_width_ + 0.5));
-    }
-
-    // Update the vertical scroll bar if necessary
-    if (inner_view_height_ != old_inner_view_height ||
-        inner_frame_->GetHeight() != old_inner_total_height) {
-      if (vert_slider_)
-        RemoveChild(vert_slider_id_);
-      if (sb_width_used) {
-        vert_slider_ = new SliderFrame(SliderFrame::Vertical, inner_view_height_,
-                                      inner_frame_->GetHeight(), 0, true, -1,
-                                      view_factory_);
-        vert_slider_id_ = AddChild(vert_slider_);
-      } else {
-        vert_slider_ = 0;
-      }
+        old_horz_position*clipped_inner_frame_->GetWidth() - 0.5*inner_view_width_ + 0.5));
     }
     if (vert_slider_) {
-      vert_slider_->UpdateSize(rec_width, inner_view_height_);
+      vert_slider_->SetTabSize(inner_view_height_);
+      vert_slider_->SetTotalSize(clipped_inner_frame_->GetHeight());
       vert_slider_->SetTabPosition(int(
-        old_vert_position*inner_frame_->GetHeight() - 0.5*inner_view_height_ + 0.5));
-      vert_slider_->AddIncHotKey(kMouseWheelDown);
-      vert_slider_->AddDecHotKey(kMouseWheelUp);
-      vert_slider_->AddLargeIncHotKey(kKeyPageDown);
-      vert_slider_->AddLargeDecHotKey(kKeyPageUp);
+        old_vert_position*clipped_inner_frame_->GetHeight() - 0.5*inner_view_height_ + 0.5));
     }
   }
 

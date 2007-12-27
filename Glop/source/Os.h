@@ -120,6 +120,8 @@ class Os {
   //    - Redundant events (e.g. a key down event when a key is already down) may be returned, but
   //      they will be ignored. Repeat events, as seen by the Glop user, are generated elsewhere.
   //    - press_amount may be negative in KeyEvents. This is equivalent to 0.
+  //  - Derived keys (e.g. kKeyLeftShift or joystick == kDeviceAnyJoystick) should not have events
+  //    generated for them. That is done in Input.
   struct KeyEvent {
     KeyEvent(const GlopKey &_key, bool is_pressed)
       : key(_key), press_amount(is_pressed? 1.0f : 0.0f) {}
@@ -132,7 +134,6 @@ class Os {
                                     int *mouse_dx, int *mouse_dy);
 
   // Warps the mouse cursor to the given screen coordinates (NOT window coordinates).
-  // TODO(jwills): Should this work even when the application does not have focus?
   static void SetMousePosition(int x, int y);
 
   // Switches the mouse cursor to be visible/invisible. Glop will ensure that if the cursor leaves

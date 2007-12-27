@@ -182,6 +182,8 @@ class GlopWindow {
                                     //  Values of -1 indicate no value has ever been recorded.
 
   // Content data
+  enum TabDirection {Forward, Backward, None};
+  TabDirection tab_direction_;  // Used to prevent too-rapid switching between tab & shift+tab
   LightSet<GlopFrame::Ping*> ping_list_;
   vector<FocusFrame*> focus_stack_;
   TableauFrame *frame_;

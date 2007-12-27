@@ -7,13 +7,9 @@
 //  - Boxed text prompt frames
 //  - Pinging on text prompt frames.
 //  - Should text prompts really track enter, escape?
-//  - Fix up gui frame styles
 //  - Rework file stuff
 //  - Why is object slightly visible even when deep in the fog?
 //  - Add general GlopFrame comments, and formalize render expectations vis a vis gl settings
-//  - FancyTextFrame parser don't constantly create/delete font reference
-//  - RecomputePadding for buttons
-//  - Clean up scroll frame onresize
 
 // Includes
 #include "../Glop/include/Base.h"
@@ -36,13 +32,7 @@ void IntroScreen() {
                                        "Select tests to verify that Glop performs as expected.",
                                        kWhite);
   gWindow->AddFrame(info, 0.5f, 0.3f, 0.5f, 0.3f);
-  gWindow->AddFrame(new SliderWidget(SliderWidget::Horizontal, 100, 1000, 500));
-  gWindow->AddFrame(new SliderWidget(SliderWidget::Horizontal, 100, 1000, 500), 0.5f, 0.7f, 0.5f, 0.5f);
-  gWindow->AddFrame(new TextFrame("Press any key to continue...", kYellow),
-                     0.5f, 1.0f, kJustifyCenter, kJustifyBottom);
-
-  while (!input()->WasKeyPressed(27))
-    input()->WaitForKeyPress();
+  input()->WaitForKeyPress();
   gWindow->ClearFrames();
 }
 
@@ -328,7 +318,7 @@ class CubeFrame: public CameraFrame {
 };
 
 void CameraTest() {
-  GlopFrame *info = new FancyTextFrame("Rotating Cube with Fog\n\n"
+  GlopFrame *info = new FancyTextFrame("Rotating Cube with fog\n\n"
                                        "Move the camera with the mouse and with W,A,D,S\n\n\n"
                                        "\1cFFFF00\1Press Escape to continue",
                                        kWhite);
@@ -358,7 +348,9 @@ void BuildMainMenu() {
 
 int main(int argc, char **argv) {
   Font *font;
+  
   System::Init();
+  gSystem->SetMaxFps(0);
   
   ASSERT((font = Font::Load("thames.ttf")) != 0);
   ASSERT((gIcon = Image::Load("Icon.bmp", kRed, 1)) != 0);
@@ -367,7 +359,6 @@ int main(int argc, char **argv) {
   gWindow->SetIcon(gIcon);
   ASSERT(gWindow->Create(1024, 768, false));
   IntroScreen();
-
   BuildMainMenu();
   while (!input()->WasKeyPressed(27)) {
     int selection = 0;

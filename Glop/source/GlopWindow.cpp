@@ -168,6 +168,7 @@ GlopWindow::GlopWindow()
   recreated_this_frame_(false),
   windowed_x_(-1),
   windowed_y_(-1),
+  tab_direction_(None),
   focus_stack_(1, (FocusFrame*)0),
   frame_(new TableauFrame()) {
   input_ = new Input(this);
@@ -224,12 +225,19 @@ void GlopWindow::Think(int dt) {
   if (!is_full_screen_)
     Os::GetWindowPosition(os_data_, &windowed_x_, &windowed_y_);
 
+  // Allow frames to think - intentionally done before KeyEvents. This makes it easier to use
+  // VirtualKeys.
+  frame_->Think(dt);
+
   // Perform input logic, and reset all input key presses if the window has gone out of focus
   // (either naturally or it has been destroyed). If we do not do this, we might miss a key up
   // event and a key could be registered as stuck down. When done, perform all frame logic.
+  if (tab_direction_ == Forward && !input()->IsKeyDownNow(kGuiKeySelectNext))
+    tab_direction_ = None;
+  else if (tab_direction_ == Backward && !input()->IsKeyDownNow(kGuiKeySelectPrev))
+    tab_direction_ = None;
   input_->Think(recreated_this_frame_ || !is_in_focus_ || focus_changed, dt);
   recreated_this_frame_ = false;
-  frame_->Think(dt);
 
   // Update our content frames. All pings are handled in batch here after frames have resized. This
   // is so that a frame can be guaranteed of it's size being current when it handles a ping, even
@@ -311,7 +319,8 @@ void GlopWindow::OnKeyEvent(const KeyEvent &event, int dt) {
     return;
 
   // Handle mouse clicks
-  if (event.IsNonRepeatPress() && event.key.IsMouseKey() && !event.key.IsMouseMotion()) {
+  if (event.IsNonRepeatPress() &&
+      (event.key == kGuiKeyPrimaryClick || event.key == kGuiKeySecondaryClick)) {
     // Find all clicked frames
     vector<FocusFrame*> clicked_frames;
     set<FocusFrame*> parent_frames;
@@ -361,15 +370,18 @@ void GlopWindow::OnKeyEvent(const KeyEvent &event, int dt) {
 
   // Handle tabbing - note that we prevent tabbing to focus frames that have other focus frames
   // as children (e.g. a scrolling frame with a button child).
-  if (event.IsPress() && event.key == '\t' && !input()->IsKeyDownNow(kKeyLeftAlt) &&
-      !input()->IsKeyDownNow(kKeyRightAlt) && !input()->IsKeyDownNow(kKeyLeftControl) &&
-      !input()->IsKeyDownNow(kKeyRightControl)) {
+  if (event.IsPress())
+  if ((event.key == kGuiKeySelectNext && tab_direction_ != Backward) ||
+      (event.key == kGuiKeySelectPrev && tab_direction_ != Forward)) {
     frame = focus_frame;
     while (1) {
-      if (input()->IsKeyDownNow(kKeyLeftShift) || input()->IsKeyDownNow(kKeyRightShift))
-        frame = frame->prev_;
-      else
+      if (event.key == kGuiKeySelectNext) {
+        tab_direction_ = Forward;
         frame = frame->next_;
+      } else {
+        tab_direction_ = Backward;
+        frame = frame->prev_;
+      }
       bool is_parent = false;
       for (FocusFrame *temp = frame->next_; temp != frame; temp = temp->next_)
       if (temp->GetParent()->GetFocusFrame() == frame)

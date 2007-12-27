@@ -16,6 +16,7 @@ System *gSystem = 0;
 void System::Init() {
   Os::Init();
   gSystem = new System();
+  Input::InitDerivedKeys();
   atexit(System::ShutDown);
 }
 
@@ -40,8 +41,11 @@ int System::Think() {
     fps_frame_history_[fps_array_index_] = frame_count_;
     fps_time_history_[fps_array_index_] = ticks;
     int oldest_fps_index = (fps_history_filled_? (fps_array_index_ + 1) % kFpsHistorySize: 0);
-    fps_ = (fps_frame_history_[fps_array_index_] - fps_frame_history_[oldest_fps_index]) * 1000.0f /
-           (fps_time_history_[fps_array_index_] - fps_time_history_[oldest_fps_index]);
+    if (fps_array_index_ != oldest_fps_index) {
+      fps_ =
+        (fps_frame_history_[fps_array_index_] - fps_frame_history_[oldest_fps_index]) * 1000.0f /
+        (fps_time_history_[fps_array_index_] - fps_time_history_[oldest_fps_index]);
+    }
     fps_array_index_ = (fps_array_index_ + 1) % kFpsHistorySize;
     fps_history_filled_ |= (fps_array_index_ == 0);
   }

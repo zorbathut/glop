@@ -5,8 +5,11 @@
 #include "../include/GlopWindow.h"
 #include "../include/OpenGl.h"
 
-// FrameStyle
-// ==========
+// Globals
+FrameStyle *gFrameStyle = 0;
+
+// TextStyle
+// =========
 
 TextStyle::TextStyle()
 : color(gFrameStyle->text_style.color), size(gFrameStyle->text_style.size),
@@ -19,24 +22,6 @@ TextStyle::TextStyle(const Color &_color, float _size)
   flags(gFrameStyle->text_style.flags) {}
 TextStyle::TextStyle(const Color &_color, float _size, Font *_font)
 : color(_color), size(_size), font(_font), flags(gFrameStyle->text_style.flags) {}
-
-FrameStyle::FrameStyle(Font *font)
-: text_style(kBlack, 0.025f, font, 0),
-  prompt_highlight_color(0.6f, 0.6f, 1.0f) {
-  arrow_view_factory = new DefaultArrowViewFactory();
-  button_view_factory = new DefaultButtonViewFactory();
-  slider_view_factory = new DefaultSliderViewFactory(arrow_view_factory, button_view_factory);
-  window_view_factory = new DefaultWindowViewFactory(font);
-}
-
-FrameStyle::~FrameStyle() {
-  delete arrow_view_factory;
-  delete button_view_factory;
-  delete slider_view_factory;
-  delete window_view_factory;
-}
-
-FrameStyle *gFrameStyle = 0;
 
 // WindowView
 // ==========
@@ -279,4 +264,23 @@ void DefaultSliderView::Render(int x1, int y1, int x2, int y2, bool is_horizonta
     GlUtils2d::DrawLine(x2, y1, x2, y2);
   }
   GlUtils::SetColor(kWhite);
+}
+
+// FrameStyle
+// ==========
+
+FrameStyle::FrameStyle(Font *font)
+: text_style(kBlack, 0.025f, font, 0),
+  prompt_highlight_color(0.6f, 0.6f, 1.0f) {
+  arrow_view_factory = new DefaultArrowViewFactory();
+  button_view_factory = new DefaultButtonViewFactory();
+  slider_view_factory = new DefaultSliderViewFactory(arrow_view_factory, button_view_factory);
+  window_view_factory = new DefaultWindowViewFactory(font);
+}
+
+FrameStyle::~FrameStyle() {
+  delete arrow_view_factory;
+  delete button_view_factory;
+  delete slider_view_factory;
+  delete window_view_factory;
 }

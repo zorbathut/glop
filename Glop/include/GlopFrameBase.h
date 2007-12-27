@@ -2,11 +2,12 @@
 // be positioned and sized, think each tick, and trap input events. The exact pipeline is as
 // follows:
 //  - The Glop client calls gSystem->Think()
+//    - All frames receive OnWindowResize messages if appropriate.
+//    - All frames think.
 //    - All focus is updated from tabs, magnet keys, etc. (see below)
 //    - All frames receive OnKeyEvent notifications from Input.
 //    - All other KeyListeners receive OnKeyEvent notifications from Input.
-//    - All frames think.
-//    - All frames resize themselves.
+//    - All frames resize themselves if necessary.
 //    - All pings are resolved.
 //    - All frames reposition themselves and update their clipping rectangle.
 //    - All frames render.
@@ -16,15 +17,17 @@
 //   All focus is handled within the context of FocusFrames. A Focus Frame and anything descended
 //   from it is considered an autonomous unit of focus. If the FocusFrame gains focus, so do all
 //   of its children. One exception to this is if a FocusFrame contains another FocusFrame, they
-//   are considered different. For example, a scrolling window might control a button. 
+//   are considered different. For example, a scrolling window might contain a button, but they are
+//   treated as separate units of focus.
 //   A frame will only ever be given focus if it is wrapped inside a FocusFrame. The GlopWindow
 //   maintains a list of FocusFrames, and controls which one has focus (possibly none of them, if
 //   the entire GlopWindow is out of focus), taking into account the tab key and mouse clicking.
 //   This focus is then immediately propogated down to descendants of the FocusFrame. Also:
-//     - Whenever a KeyEvent occurs, a FocusFrame queries its children. If any of them call this a
+//     - Whenever a key press occurs, a FocusFrame queries its children. If any of them call this a
 //       "magnet" KeyEvent, and no child of the active FocusFrame calls it a "focus keeper"
 //       KeyEvent, the FocusFrame immediately takes focus. This occurs before the children receive
-//       the KeyEvent, so they can now process the event normally.
+//       the KeyEvent, so they can now process the event normally. Note: only presses can be magnets
+//       but new presses, repeat presses & double-presses can be distinguished.
 //     - A GlopFrame is notified via OnFocusChange whenever its focus changed. It can use this
 //       opportunity to respond.
 //     - A GlopWindow may PushFocus. If this happens, all current FocusFrames lose focus, and will
@@ -181,6 +184,8 @@ class GlopFrame {
   //    handle all values of 1 or above.
   //  - SetToMaxSize sets width_ and height_ to be as large as possible while respecting the
   //    size limits and an aspect ratio. Like SetSize, this should only be used within UpdateSize.
+  int GetOldRecWidth() const {return old_rec_width_;}
+  int GetOldRecHeight() const {return old_rec_height_;}
   virtual void RecomputeSize(int rec_width, int rec_height) {SetSize(rec_width, rec_height);}
   void SetSize(int width, int height) {
     width_ = width;
@@ -287,7 +292,10 @@ class SingleParentFrame: public GlopFrame {
   // Child delegation functions
   virtual void Render() const {if (child_ != 0) child_->Render();}
   virtual bool OnKeyEvent(const KeyEvent &event, int dt) {
-    return (child_ != 0 && !child_->IsFocusFrame() && child_->OnKeyEvent(event, dt));
+    if (child_ != 0 && !child_->IsFocusFrame())
+      return child_->OnKeyEvent(event, dt);
+    else
+      return false;
   }
   virtual void Think(int dt) {if (child_ != 0) child_->Think(dt);}
   virtual void SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2) {

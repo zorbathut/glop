@@ -11,14 +11,70 @@
 const int kTextPromptCursorCycleTime = 800;
 const int kTextPromptCursorFadeTime = 80;
 
+// HotKeyTracker
+// =============
+KeyEvent::Type HotKeyTracker::RemoveHotKey(LightSetId id) {
+  for (LightSetId tmp = down_hot_keys_.GetFirstId(); tmp != 0; tmp = down_hot_keys_.GetNextId(id))
+  if (down_hot_keys_[tmp] == hot_keys_[id])
+    tmp = down_hot_keys_.RemoveItem(tmp);
+  hot_keys_.RemoveItem(id);
+  return tracker_.SetIsDown(down_hot_keys_.GetSize() > 0);
+}
+
+bool HotKeyTracker::OnKeyEvent(const KeyEvent &event, int dt, KeyEvent::Type *result) {
+  if (dt > 0) {
+    *result = tracker_.OnKeyEventDt(dt);
+    return false;
+  }
+
+  bool key_used = false;
+  if (event.IsPress()) {
+    for (LightSetId id = hot_keys_.GetFirstId(); id != 0; id = hot_keys_.GetNextId(id))
+    if (IsMatchingKey(hot_keys_[id], event.key)) {
+      key_used = true;
+      if (event.IsNonRepeatPress()) {
+        down_hot_keys_.InsertItem(hot_keys_[id]);
+      }
+    }
+  } else if (event.IsRelease()) {
+    for (LightSetId id = down_hot_keys_.GetFirstId(); id != 0; id = down_hot_keys_.GetNextId(id))
+    if (IsMatchingKey(down_hot_keys_[id], event.key)) {
+      key_used = true;
+      id = down_hot_keys_.RemoveItem(id);
+    }
+  }
+
+  *result = tracker_.SetIsDown(down_hot_keys_.GetSize() > 0);
+  return key_used;
+}
+
+KeyEvent::Type HotKeyTracker::Clear() {
+  down_hot_keys_.Clear();
+  return tracker_.SetIsDown(false);
+}
+
+bool HotKeyTracker::IsFocusMagnet(const KeyEvent &event) const {
+  for (LightSetId id = hot_keys_.GetFirstId(); id != 0; id = hot_keys_.GetNextId(id))
+  if (IsMatchingKey(hot_keys_[id], event.key))
+    return true;
+  return false;
+}
+
+bool HotKeyTracker::IsMatchingKey(const GlopKey &hot_key, const GlopKey &key) const {
+  if (hot_key == kAnyKey)
+    return !key.IsModifierKey() && !key.IsMotionKey();
+  else
+    return key == hot_key;
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // Basic widgets
 // =============
 
-void ArrowImageFrame::Render() const {
+void ArrowFrame::Render() const {
   view_->Render(GetX(), GetY(), GetX2(), GetY2(), (ArrowView::Direction)direction_);
 }
-void ArrowImageFrame::RecomputeSize(int rec_width, int rec_height) {
+void ArrowFrame::RecomputeSize(int rec_width, int rec_height) {
   int width, height;
   view_->OnResize(rec_width, rec_height, (ArrowView::Direction)direction_, &width, &height);
   SetSize(width, height);
@@ -90,7 +146,7 @@ void TextFrame::Render() const {
 }
 
 void TextFrame::RecomputeSize(int rec_width, int rec_height) {
-  // Obtain a new font if need be
+  // Obtain a new font if necessary
   TextRenderer *new_renderer = 0;
   if (text_style_.font != 0) {
     new_renderer = text_style_.font->AddRef(GetFontPixelHeight(text_style_.size),
@@ -137,14 +193,18 @@ FancyTextFrame::ParseStatus FancyTextFrame::CreateParseStatus() {
   return result;
 }
 
-void FancyTextFrame::StartParsing(ParseStatus *status) {
+// Utilities for parsing. Note that we keep many parsers "started" at the same time. In effect,
+// this means we keeps the font bitmaps in memory until they are transferred over to TextFrames.
+void FancyTextFrame::StartParsing(ParseStatus *status, vector<ParseStatus> *active_parsers) {
   status->renderer = status->style.font->AddRef(
     TextFrame::GetFontPixelHeight(status->style.size), status->style.color, status->style.flags);
+  active_parsers->push_back(*status);
 }
 
-void FancyTextFrame::StopParsing(ParseStatus *status) {
-  TextRenderer::FreeRef(status->renderer);
-  status->renderer = 0;
+void FancyTextFrame::StopParsing(vector<ParseStatus> *active_parsers) {
+  for (int i = 0; i < (int)active_parsers->size(); i++)
+    TextRenderer::FreeRef((*active_parsers)[i].renderer);
+  active_parsers->clear();
 }
 
 // Given a string to parse, and our current status, this read the next ASCII character in the
@@ -159,7 +219,7 @@ void FancyTextFrame::StopParsing(ParseStatus *status) {
 //  - status.pos gives the first character index AFTER ch
 //  - status.style, etc. gives the status FOR ch
 FancyTextFrame::ParseResult FancyTextFrame::ParseNextCharacter(
-  const string &s, ParseStatus *status, char *ch) {
+  const string &s, ParseStatus *status, vector<ParseStatus> *active_parsers, char *ch) {
   // Handle regular characters
   if (s[status->pos] != '\1') {
     *ch = s[status->pos++];
@@ -167,7 +227,6 @@ FancyTextFrame::ParseResult FancyTextFrame::ParseNextCharacter(
   }
 
   // Handle tags
-  StopParsing(status);
   while (s[status->pos] == '\1') {
     // Read until the end of the tag
     int pos2;
@@ -239,7 +298,7 @@ FancyTextFrame::ParseResult FancyTextFrame::ParseNextCharacter(
 
   // Read the next ASCII character
   *ch = s[status->pos++];
-  StartParsing(status);
+  StartParsing(status, active_parsers);
   return NewRenderer;
 }
 
@@ -255,6 +314,7 @@ void FancyTextFrame::SetPosition(int screen_x, int screen_y, int cx1, int cy1, i
 
 // Rebuilds the fancy text frame as a collection of standard text frames.
 void FancyTextFrame::RecomputeSize(int rec_width, int rec_height) {
+  vector<ParseStatus> active_parsers;
   int lines = 0;
 
   // If soft returns are enabled, do a first pass to add them. Regardless, we output text2, which
@@ -269,7 +329,7 @@ void FancyTextFrame::RecomputeSize(int rec_width, int rec_height) {
     while (!is_done) {
       int start_pos = status.pos, x = 0;
       bool is_soft_return;
-      StartParsing(&status);
+      StartParsing(&status, &active_parsers);
       ParseStatus word_start_status = status, dash_status = status;
 
       // Read a line of text, maintaining the following:
@@ -283,7 +343,8 @@ void FancyTextFrame::RecomputeSize(int rec_width, int rec_height) {
 
         // Get the next character and check for errors
         ParseStatus look_ahead_status = status;
-        if (ParseNextCharacter(text_, &look_ahead_status, &ch) == Error) {
+        if (ParseNextCharacter(text_, &look_ahead_status, &active_parsers, &ch) == Error) {
+          StopParsing(&active_parsers);
           text_blocks_.clear();
           ClearChildren();
           MultiParentFrame::RecomputeSize(rec_width, rec_height);
@@ -295,7 +356,6 @@ void FancyTextFrame::RecomputeSize(int rec_width, int rec_height) {
           status = look_ahead_status;
           is_soft_return = false;
           is_done = (ch == 0);
-          StopParsing(&look_ahead_status);
           break;
         }
 
@@ -307,7 +367,6 @@ void FancyTextFrame::RecomputeSize(int rec_width, int rec_height) {
           dash_status = look_ahead_status;
         if (x + look_ahead_status.renderer->GetCharWidth(ch, x == 0, true) > rec_width) {
           is_soft_return = true;
-          StopParsing(&look_ahead_status);
           break;
         }
         x += look_ahead_status.renderer->GetCharWidth(ch, x == 0, false);
@@ -347,7 +406,7 @@ void FancyTextFrame::RecomputeSize(int rec_width, int rec_height) {
   vector<vector<TextFrame*> > new_frames(lines);
   vector<float> row_justify(lines);
   ParseStatus status = CreateParseStatus();
-  StartParsing(&status);
+  StartParsing(&status, &active_parsers);
   string cur_part = "";
   for (int row_num = 0; row_num < lines; row_num++) {
     
@@ -358,8 +417,9 @@ void FancyTextFrame::RecomputeSize(int rec_width, int rec_height) {
       ParseStatus old_status = status;
 
       // Get the next character and check for errors
-      ParseResult parse_result = ParseNextCharacter(text2, &status, &ch);
+      ParseResult parse_result = ParseNextCharacter(text2, &status, &active_parsers, &ch);
       if (parse_result == Error) {
+        StopParsing(&active_parsers);
         for (int i = 0; i < (int)new_frames.size(); i++)
         for (int j = 0; j < (int)new_frames[i].size(); j++)
           delete new_frames[i][j];
@@ -385,7 +445,6 @@ void FancyTextFrame::RecomputeSize(int rec_width, int rec_height) {
       is_row_justify_fixed = true;
     }
   }
-  StopParsing(&status);
 
   // Update our children.
   // Pass #1: Add the frames as children, and calculate each frame dx, each row width, and each
@@ -426,6 +485,7 @@ void FancyTextFrame::RecomputeSize(int rec_width, int rec_height) {
     row_pos = next_row_pos;
   }
   SetSize(total_width, row_pos);
+  StopParsing(&active_parsers);
 }
 
 // AbstractTextPromptFrame
@@ -735,252 +795,198 @@ void WindowFrame::RecomputeSize(int rec_width, int rec_height) {
 // ButtonWidget
 // ============
 
-void AbstractButtonFrame::Render() const {
+void DummyButtonFrame::Render() const {
   view_->Render(GetX(), GetY(), GetX2(), GetY2(), is_down_, IsPrimaryFocus(),
                 (PaddedFrame*)GetChild());
 }
 
-void AbstractButtonFrame::Think(int dt) {
-  was_held_down_ = held_down_queued_;
-  was_pressed_fully_ = full_press_queued_;
-  held_down_queued_ = full_press_queued_ = false;
-}
-
-bool AbstractButtonFrame::OnKeyEvent(const KeyEvent &event, int dt) {
-  if (is_down_) {
-    held_down_repeat_delay_ -= dt;
-    while (held_down_repeat_delay_ <= 0) {
-      held_down_queued_ = true;
-      held_down_repeat_delay_ += kRepeatRate;
-    }
-  }
-  return false;
-}
-
-void AbstractButtonFrame::SetIsDown(DownType down_type) {
-  bool is_down = (down_type == Down || down_type == DownRepeatSoon);
-  if (is_down == is_down_) return;
-  is_down_ = is_down;
-  DirtySize();
-  if (is_down_) {
-    NewRelativePing(0, 0, 1, 1);
-    held_down_queued_ = true;
-    held_down_repeat_delay_ = (down_type == Down? kRepeatDelay : kRepeatRate);
-  } else if (down_type == UpFullRelease) {
-    full_press_queued_ = true;
+void DummyButtonFrame::SetIsDown(bool is_down) {
+  if (is_down_ != is_down) {
+    is_down_ = is_down;
+    int lp, tp, rp, bp;
+    view_->OnResize(GetOldRecWidth(), GetOldRecHeight(), is_down, &lp, &tp, &rp, &bp);
+    ((PaddedFrame*)GetChild())->SetPadding(lp, tp, rp, bp);
   }
 }
 
-void AbstractButtonFrame::RecomputeSize(int rec_width, int rec_height) {
+void DummyButtonFrame::RecomputeSize(int rec_width, int rec_height) {
   int lp, tp, rp, bp;
   view_->OnResize(rec_width, rec_height, is_down_, &lp, &tp, &rp, &bp);
   ((PaddedFrame*)GetChild())->SetPadding(lp, tp, rp, bp);
   SingleParentFrame::RecomputeSize(rec_width, rec_height);
 }
 
-bool DefaultButtonFrame::OnKeyEvent(const KeyEvent &event, int dt) {
-  bool handled_key = false, was_mouse_locked_on = is_mouse_locked_on_;
-  if (event.IsPress() || event.IsRelease()) {
-    // Handle enter and hot keys
-    bool is_hot_key = (hot_keys_.Find(event.key) != 0) ||
-      (hot_keys_.Find(kAnyKey) && !event.key.IsMotionKey() && !event.key.IsModifierKey() &&
-      !event.key.IsMouseKey());
-    if (((event.key == 13 || event.key == kKeyPadEnter) && IsPrimaryFocus()) || is_hot_key) {
-      handled_key = true;
-      SetIsHotKeyDown(event.key, event.IsPress());
-    }
+void ButtonFrame::Think(int dt) {
+  button_tracker_.Think();
+  hot_key_tracker_.Think();
+  was_pressed_fully_ = false;
+}
 
-    // Handle mouse clicks
-    else if (event.key == kMouseLButton && event.IsNonRepeatPress()) {
-      is_mouse_locked_on_ = IsPointVisible(input()->GetMouseX(), input()->GetMouseY());
+bool ButtonFrame::OnKeyEvent(const KeyEvent &event, int dt) {
+  // Generate held-down repeat events
+  if (dt > 0)
+    button_tracker_.OnKeyEventDt(dt);
+
+  // Handle hot keys
+  bool handled_key = hot_key_tracker_.OnKeyEvent(event, dt);
+  if (IsPrimaryFocus() && event.key == kGuiKeyConfirm) {
+    if (event.IsNonRepeatPress()) {
+      is_confirm_key_down_ = true;
       handled_key = true;
-    } else if (event.key == kMouseLButton && event.IsRelease()) {
-      is_mouse_locked_on_ = false;
-      handled_key = false;
+    } else if (event.IsRelease()) {
+      is_confirm_key_down_ = false;
+      handled_key = true;
+    }
+  }
+
+  // Handle mouse lock
+  bool was_mouse_locked_on = is_mouse_locked_on_;
+  if (event.IsNonRepeatPress() || event.IsRelease()) {
+    if (event.key == kGuiKeyPrimaryClick) {
+      if (event.IsNonRepeatPress() && IsPointVisible(input()->GetMouseX(), input()->GetMouseY())) {
+        is_mouse_locked_on_ = true;
+        handled_key = true;
+      } else if (event.IsRelease()) {
+        is_mouse_locked_on_ = false;
+        handled_key = true;
+      }
     }
   }
 
   // Set whether we are up or down based on the key event.
-  if (down_hot_keys_.GetSize()) {
-    SetIsDown(event.IsNonRepeatPress()? Down : DownRepeatSoon);
+  if (hot_key_tracker_.IsDownNow() || is_confirm_key_down_) {
+    SetIsDown(Down);
   } else if (IsPointVisible(input()->GetMouseX(), input()->GetMouseY())) {
     if (is_mouse_locked_on_)
       SetIsDown(was_mouse_locked_on? DownRepeatSoon : Down);
     else {
-      SetIsDown(UpFullRelease);
+      SetIsDown(UpConfirmPress);
     }
   } else {
-    SetIsDown(was_mouse_locked_on? UpNoFullRelease : UpFullRelease);
+    SetIsDown(was_mouse_locked_on? UpCancelPress : UpConfirmPress);
   }
-  AbstractButtonFrame::OnKeyEvent(event, dt);
+
+  // Delegate and return
+  handled_key |= SingleParentFrame::OnKeyEvent(event, dt);
   return handled_key;
 }
 
-void DefaultButtonFrame::OnFocusChange() {
+void ButtonFrame::OnFocusChange() {
   if (!IsInFocus()) {
+    is_confirm_key_down_ = false;
     is_mouse_locked_on_ = false;
-    down_hot_keys_.Clear();
-    SetIsDown(UpNoFullRelease);
+    hot_key_tracker_.Clear();
+    SetIsDown(UpCancelPress);
   }
-  AbstractButtonFrame::OnFocusChange();
+  SingleParentFrame::OnFocusChange();
 }
 
-void DefaultButtonFrame::SetIsHotKeyDown(const GlopKey &key, bool is_down) {
-  for (LightSetId id = down_hot_keys_.GetFirstId(); id != 0; id = down_hot_keys_.GetNextId(id))
-  if (down_hot_keys_[id] == key)
-    id = down_hot_keys_.RemoveItem(id);
-  if (is_down)
-    down_hot_keys_.InsertItem(key);
+void ButtonFrame::SetIsDown(DownType down_type) {
+  bool is_down = (down_type == Down || down_type == DownRepeatSoon);
+  if (is_down == button()->IsDown())
+    return;
+  button()->SetIsDown(is_down);
+  button_tracker_.SetIsDown(is_down);
+  if (is_down) {
+    if (ping_on_press_)
+      NewRelativePing(0, 0, 1, 1);
+    if (down_type == DownRepeatSoon)
+      button_tracker_.OnKeyEventDt(kRepeatDelay - kRepeatRate);
+  } else if (down_type == UpConfirmPress) {
+    was_pressed_fully_ = true;
+  }
 }
 
-///////////////////////////////////////////////////////////////////////////////////////////////////
-// SliderWidget
-// ============
+////////////////////////////////////////////////////////////////////////////////////////////////////
+// Slider
+// ======
 
-SliderFrame::SliderFrame(Direction direction, int tab_size, int total_size, int position,
-                         bool has_arrow_hot_keys, int step_size, const SliderViewFactory *factory)
-: MultiParentFrame(),
-  direction_(direction),
-  tab_logical_position_(position),
-  tab_logical_size_(tab_size),
-  total_logical_size_(total_size),
-  step_size_(step_size == -1? (tab_size + 9) / 10 : step_size),  
-  mouse_lock_mode_(None),
-  bar_pixel_length_(0),
-  view_(factory->Create()) {
-
-  // Create the buttons
+DummySliderFrame::DummySliderFrame(
+  Direction direction, int logical_tab_size, int logical_total_size, int logical_tab_position,
+  GlopFrame*(*button_factory)(ArrowFrame::Direction, const ArrowViewFactory *,
+                              const ButtonViewFactory *),
+  const SliderViewFactory *factory)
+: direction_(direction),
+  view_(factory->Create()),
+  logical_tab_size_(logical_tab_size), logical_total_size_(logical_total_size),
+  logical_tab_position_(logical_tab_position) {
   if (direction == Horizontal) {
-    dec_button_ = new DefaultButtonFrame(new ArrowImageFrame(ArrowImageFrame::Left,
-      view_->GetArrowViewFactory()), view_->GetButtonViewFactory());
-    inc_button_ = new DefaultButtonFrame(new ArrowImageFrame(ArrowImageFrame::Right,
-      view_->GetArrowViewFactory()), view_->GetButtonViewFactory());
+    dec_button_ = button_factory(ArrowFrame::Left, view_->GetArrowViewFactory(),
+                                 view_->GetButtonViewFactory());
+    inc_button_ = button_factory(ArrowFrame::Right, view_->GetArrowViewFactory(),
+                                 view_->GetButtonViewFactory());
   } else {
-    dec_button_ = new DefaultButtonFrame(new ArrowImageFrame(ArrowImageFrame::Up,
-      view_->GetArrowViewFactory()), view_->GetButtonViewFactory());
-    inc_button_ = new DefaultButtonFrame(new ArrowImageFrame(ArrowImageFrame::Down,
-      view_->GetArrowViewFactory()), view_->GetButtonViewFactory());
+    dec_button_ = button_factory(ArrowFrame::Up, view_->GetArrowViewFactory(),
+                                 view_->GetButtonViewFactory());
+    inc_button_ = button_factory(ArrowFrame::Down, view_->GetArrowViewFactory(),
+                                 view_->GetButtonViewFactory());
   }
   AddChild(dec_button_);
   AddChild(inc_button_);
-
-  // Set the hot keys
-  if (has_arrow_hot_keys) {
-    if (direction == Horizontal) {
-      AddDecHotKey(kKeyLeft);
-      AddIncHotKey(kKeyRight);
-    } else {
-      AddDecHotKey(kKeyUp);
-      AddIncHotKey(kKeyDown);
-    }
-  }
 }
 
-void SliderFrame::SetTabPosition(int position) {
-  tab_logical_position_ = min(max(position, 0), total_logical_size_ - tab_logical_size_);
+void DummySliderFrame::SetTabPosition(int position) {
+  logical_tab_position_ = min(max(position, 0), logical_total_size_ - logical_tab_size_);
   RecomputeTabScreenPosition();
 }
 
-void SliderFrame::Render() const {
-  view_->Render(GetX(), GetY(), GetX2(), GetY2(), direction_ == Horizontal,
-                GetParent()->IsPrimaryFocus(), tab_x1_ + inner_bar_x_, tab_y1_ + inner_bar_y_,
-                tab_x2_ + inner_bar_x_, tab_y2_ + inner_bar_y_, dec_button_, inc_button_);
+void DummySliderFrame::SetTabSize(int size) {
+  logical_tab_size_ = size;
+  SetTabPosition(logical_tab_position_);
 }
 
-void SliderFrame::Think(int dt) {
-  MultiParentFrame::Think(dt);
-  if (dec_button_->WasHeldDown() && !inc_button_->IsDown())
-    SmallDec();
-  if (inc_button_->WasHeldDown() && !dec_button_->IsDown())
-    SmallInc();
+void DummySliderFrame::SetTotalSize(int size) {
+  logical_total_size_ = size;
+  SetTabPosition(logical_tab_position_);
 }
 
-bool SliderFrame::OnKeyEvent(const KeyEvent &event, int dt) {
-  // Delegate to the decrement and increment buttons
-  bool result = false;
-  bool dec_result = dec_button_->OnKeyEvent(event, dt);
-  bool inc_result = inc_button_->OnKeyEvent(event, dt);
+void DummySliderFrame::GetTabCoordinates(int *x1, int *y1, int *x2, int *y2) const {
+  *x1 = tab_x1_;
+  *y1 = tab_y1_;
+  *x2 = tab_x2_;
+  *y2 = tab_y2_;
+}
 
-  // Handle decrement requests - do not mark a key as used if it is used by a currently irrelevant
-  // decrement button
-  if (tab_logical_position_ != 0) {
-    result |= dec_result;
-    if (event.IsPress() && large_dec_keys_.Find(event.key)) {
-      LargeDec();
-      result = true;
-      NewRelativePing(0, 0, 1, 1);
-    }
-  }
+int DummySliderFrame::PixelToPixelLocation(int x, int y) const {
+  if (direction_ == Horizontal)
+    return x - dec_button_->GetWidth();
+  else
+    return y - dec_button_->GetHeight();
+}
 
-  // Handle increment requests - do not mark a key as used if it is used by a currently irrelevant
-  // increment button
-  if (tab_logical_position_ != total_logical_size_ - tab_logical_size_) {
-    result |= inc_result;
-    if (event.IsPress() && large_inc_keys_.Find(event.key)) {
-      LargeInc();
-      result = true;
-      NewRelativePing(0, 0, 1, 1);
-    }
-  }
-
-  // Compute the mouse pixel position on the slider
-  int mouse_pixel, tab_start_pixel, tab_end_pixel;
-  if (direction_ == Horizontal) {
-    tab_start_pixel = tab_x1_;
-    tab_end_pixel = tab_x2_;
-    mouse_pixel = input()->GetMouseX() - inner_bar_x_;
+int DummySliderFrame::LogicalPositionToFirstPixelLocation(int logical_position) const {
+  if (logical_total_size_ > logical_tab_size_) {
+    return logical_position * (bar_pixel_length_ - tab_pixel_length_) /
+                              (logical_total_size_ - logical_tab_size_);
   } else {
-    tab_start_pixel = tab_y1_;
-    tab_end_pixel = tab_y2_;
-    mouse_pixel = input()->GetMouseY() - inner_bar_y_;
+    return 0;
   }
-
-  // Handle mouse first clicks
-  if (event.key == kMouseLButton && event.IsNonRepeatPress() &&
-      IsPointVisible(input()->GetMouseX(), input()->GetMouseY()) &&
-      mouse_pixel >= 0 && mouse_pixel < bar_pixel_length_) {
-    if (mouse_pixel >= tab_start_pixel && mouse_pixel <= tab_end_pixel) {
-      mouse_lock_mode_ = Tab;
-      tab_grab_position_ = GetLocationPixelStart(GetLocationByPixel(mouse_pixel)) -
-                                                  tab_start_pixel;
-    } else {
-      mouse_lock_mode_ = Bar; 
-    }
-  } else if (event.key == kMouseLButton && event.IsRelease()) {
-    mouse_lock_mode_ = None;
-  }
-
-  // Handle mouse repeat clicks
-  if (event.key == kMouseLButton && event.IsPress() && mouse_lock_mode_ == Bar &&
-      IsPointVisible(input()->GetMouseX(), input()->GetMouseY())) {
-    if (mouse_pixel < tab_start_pixel)
-      LargeDec();
-    else if (mouse_pixel > tab_end_pixel)
-      LargeInc();
-  }
-
-  // Handle mouse dragging
-  if (mouse_lock_mode_ == Tab)
-    SetTabPosition(GetLocationByPixel(mouse_pixel - tab_grab_position_));
-  result |= (event.key == kMouseLButton);
-  return result;
 }
 
-void SliderFrame::SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2) {
+int DummySliderFrame::PixelLocationToLogicalPosition(int pixel_location) const {
+ if (bar_pixel_length_ <= tab_pixel_length_)
+    return 0;
+  int pos = pixel_location * (logical_total_size_ - logical_tab_size_) /
+            (bar_pixel_length_ - tab_pixel_length_) - 1;
+  while (LogicalPositionToFirstPixelLocation(pos+1) <= pixel_location)
+    pos++;
+  return pos;
+}
+
+void DummySliderFrame::Render() const {
+  view_->Render(GetX(), GetY(), GetX2(), GetY2(), direction_ == Horizontal, IsPrimaryFocus(),
+                tab_x1_ + GetX(), tab_y1_ + GetY(), tab_x2_ + GetX(), tab_y2_ + GetY(),
+                dec_button_, inc_button_);
+}
+
+void DummySliderFrame::SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2) {
   dec_button_->SetPosition(screen_x, screen_y, cx1, cy1, cx2, cy2);
   inc_button_->SetPosition(screen_x + GetWidth() - inc_button_->GetWidth(),
                            screen_y + GetHeight() - inc_button_->GetHeight(), cx1, cy1, cx2, cy2);
-  if (direction_ == Horizontal) {
-    inner_bar_x_ = dec_button_->GetX2() + 1;
-    inner_bar_y_ = screen_y;
-  } else {
-    inner_bar_x_ = screen_x;
-    inner_bar_y_ = dec_button_->GetY2() + 1;
-  }
   GlopFrame::SetPosition(screen_x, screen_y, cx1, cy1, cx2, cy2);
 }
 
-void SliderFrame::RecomputeSize(int rec_width, int rec_height) {
+void DummySliderFrame::RecomputeSize(int rec_width, int rec_height) {
   int width = view_->GetWidthOnResize(rec_width, rec_height, direction_ == Horizontal);
   int bar_pixel_length;
   if (direction_ == Horizontal) {
@@ -996,57 +1002,20 @@ void SliderFrame::RecomputeSize(int rec_width, int rec_height) {
   }
   if (bar_pixel_length != bar_pixel_length_) {
     bar_pixel_length_ = bar_pixel_length;
-    mouse_lock_mode_ = None;
     RecomputeTabScreenPosition();
   }
 }
 
-void SliderFrame::OnChildPing(GlopFrame *child, int x1, int y1, int x2, int y2, bool center) {
-  if ((child == dec_button_ && tab_logical_position_ == 0) ||
-      (child == inc_button_ && tab_logical_position_ == total_logical_size_ - tab_logical_size_))
-    return;
-  MultiParentFrame::OnChildPing(child, x1, y1, x2, y2, center);
-}
-
-void SliderFrame::OnFocusChange() {
-  if (!IsInFocus())
-    mouse_lock_mode_ = None;
-  MultiParentFrame::OnFocusChange();
-}
-
-// Given a logical position, this returns the pixel on the slider where that position starts
-int SliderFrame::GetLocationPixelStart(int pos) const {
-  return pos * (bar_pixel_length_ - tab_pixel_length_) / (total_logical_size_ - tab_logical_size_);
-}
-
-// Given a pixel on the slider, this returns the corresponding logical position. We are extra
-// careful to make sure rounding does not not prevent total consistency with
-// getLocationPixelStart. Otherwise, the scroll bar can have weird jumps when it is being
-// dragged.
-int SliderFrame::GetLocationByPixel(int pixel_location) {
-  if (bar_pixel_length_ <= tab_pixel_length_)
-    return 0;	// A truly degenerate case
-  int pos = pixel_location * (total_logical_size_ - tab_logical_size_) /
-            (bar_pixel_length_ - tab_pixel_length_) - 1;
-  while (GetLocationPixelStart(pos+1) <= pixel_location)
-    pos++;
-  return pos;
-}
-
-// Recomputes the screen coordinates for the tab rectangle
-void SliderFrame::RecomputeTabScreenPosition() {
+void DummySliderFrame::RecomputeTabScreenPosition() {
   int min_tab_length;
-  if (direction_ == Horizontal) {
-    min_tab_length = view_->GetMinTabLengthOnResize(
-      GetWidth() - dec_button_->GetWidth() - inc_button_->GetWidth(), GetHeight(), true);
-  } else {
-    min_tab_length = view_->GetMinTabLengthOnResize(
-      GetWidth(), GetHeight() - dec_button_->GetHeight() - inc_button_->GetHeight(), false);
-  }
+  if (direction_ == Horizontal)
+    min_tab_length = view_->GetMinTabLengthOnResize(bar_pixel_length_, GetHeight(), true);
+  else
+    min_tab_length = view_->GetMinTabLengthOnResize( GetWidth(), bar_pixel_length_, false);
 
   // Compute the length of the tab
-  if (tab_logical_size_ < total_logical_size_) {
-    tab_pixel_length_ = max(tab_logical_size_ * (bar_pixel_length_ - 1) / total_logical_size_,
+  if (logical_tab_size_ < logical_total_size_) {
+    tab_pixel_length_ = max(logical_tab_size_ * (bar_pixel_length_ - 1) / logical_total_size_,
                             min_tab_length);
   } else {
     tab_pixel_length_ = bar_pixel_length_;
@@ -1054,14 +1023,143 @@ void SliderFrame::RecomputeTabScreenPosition() {
 
   // Compute its coordinates
   if (direction_ == Horizontal) {
-    tab_x1_ = GetLocationPixelStart(tab_logical_position_);
+    tab_x1_ = LogicalPositionToFirstPixelLocation(logical_tab_position_) + dec_button_->GetWidth();
     tab_x2_ = tab_x1_ + tab_pixel_length_ - 1;
     tab_y1_ = 0;
     tab_y2_ = GetHeight() - 1;
   } else {
-    tab_y1_ = GetLocationPixelStart(tab_logical_position_);
+    tab_y1_ = LogicalPositionToFirstPixelLocation(logical_tab_position_) + dec_button_->GetHeight();
     tab_y2_ = tab_y1_ + tab_pixel_length_ - 1;
     tab_x1_ = 0;
     tab_x2_ = GetWidth() - 1;
   }
+}
+
+// A SliderButtonFrame is a small wrapper around ButtonFrames - it ignores pings and handled keys
+// if pressing the button has no effect. Useful, for example, in the case of one ScrollingFrame
+// contained within another.
+class SliderButtonFrame: public ButtonFrame {
+ public:
+  static GlopFrame *Factory(ArrowFrame::Direction direction,
+                            const ArrowViewFactory *arrow_view_factory,
+                            const ButtonViewFactory *button_view_factory) {
+    return new SliderButtonFrame(direction, arrow_view_factory, button_view_factory);
+  }
+  SliderButtonFrame(ArrowFrame::Direction direction,
+                    const ArrowViewFactory *arrow_view_factory,
+                    const ButtonViewFactory *button_view_factory)
+  : ButtonFrame(new ArrowFrame(direction, arrow_view_factory), button_view_factory),
+    is_dec_(direction == ArrowFrame::Left || direction == ArrowFrame::Up) {
+    if (direction == ArrowFrame::Up)
+      AddHotKey(kGuiKeyUp);
+    else if (direction == ArrowFrame::Right)
+      AddHotKey(kGuiKeyRight);
+    else if (direction == ArrowFrame::Down)
+      AddHotKey(kGuiKeyDown);
+    else 
+      AddHotKey(kGuiKeyLeft);
+  }
+  bool OnKeyEvent(const KeyEvent &event, int dt) {
+    bool active = IsActive();
+    SetPingOnPress(active);
+    return ButtonFrame::OnKeyEvent(event, dt) && active;
+  }
+ private:
+  bool IsActive() const {
+    const DummySliderFrame *slider = (const DummySliderFrame*)GetParent();
+    if (is_dec_)
+      return slider->GetTabPosition() > 0;
+    else
+      return slider->GetTabPosition() + slider->GetTabSize() < slider->GetTotalSize();
+  }
+  bool is_dec_;
+  DISALLOW_EVIL_CONSTRUCTORS(SliderButtonFrame);
+};
+
+SliderFrame::SliderFrame(Direction direction, int logical_tab_size, int logical_total_size,
+                        int logical_tab_position, const SliderViewFactory *factory)
+: SingleParentFrame(new DummySliderFrame((DummySliderFrame::Direction)direction, logical_tab_size,
+                                         logical_total_size, logical_tab_position,
+                                         SliderButtonFrame::Factory, factory)),
+  mouse_lock_mode_(None) {}
+
+void SliderFrame::Think(int dt) {
+  if (GetDecButton()->WasHeldDown() && !GetIncButton()->IsDown())
+    SmallDec();
+  if (GetIncButton()->WasHeldDown() && !GetDecButton()->IsDown())
+    SmallInc();
+  SingleParentFrame::Think(dt);
+}
+
+bool SliderFrame::OnKeyEvent(const KeyEvent &event, int dt) {
+  bool result = false;
+
+  // Handle big decrements
+  KeyEvent::Type tracker_event;
+  bool can_dec = (GetTabPosition() != 0);
+  result |= (big_dec_tracker_.OnKeyEvent(event, dt, &tracker_event) && can_dec);
+  if (can_dec && (tracker_event == KeyEvent::Press || tracker_event == KeyEvent::RepeatPress)) {
+    BigDec();
+    NewRelativePing(0, 0, 1, 1);
+  }
+
+  // Handle big increments
+  bool can_inc = (GetTabPosition() != GetTotalSize() - GetTabSize());
+  result |= (big_inc_tracker_.OnKeyEvent(event, dt, &tracker_event) && can_inc);
+  if (can_inc && (tracker_event == KeyEvent::Press || tracker_event == KeyEvent::RepeatPress)) {
+    BigInc();
+    NewRelativePing(0, 0, 1, 1);
+  }
+
+  // Compute the mouse pixel position on the slider
+  int mouse_pos = slider()->PixelToPixelLocation(input()->GetMouseX() - GetX(),
+                                                 input()->GetMouseY() - GetY());
+  if (event.key == kGuiKeyPrimaryClick) {
+    result = true;
+    int tab_x1, tab_y1, tab_x2, tab_y2;
+    slider()->GetTabCoordinates(&tab_x1, &tab_y1, &tab_x2, &tab_y2);
+    int tab_pos1 = slider()->PixelToPixelLocation(tab_x1, tab_y1);
+    int tab_pos2 = slider()->PixelToPixelLocation(tab_x2, tab_y2);
+
+    // Handle mouse first clicks
+    if (event.IsNonRepeatPress() && IsPointVisible(input()->GetMouseX(), input()->GetMouseY()) &&
+        mouse_pos >= 0 && mouse_pos <= slider()->GetMaxPixelLocation()) {
+      if (mouse_pos >= tab_pos1 && mouse_pos <= tab_pos2) {
+        mouse_lock_mode_ = Tab;
+        tab_grab_position_ = slider()->LogicalPositionToFirstPixelLocation(
+          slider()->PixelLocationToLogicalPosition(mouse_pos)) - tab_pos1;
+      } else {
+        mouse_lock_mode_ = Bar; 
+      }
+    }
+
+    // Handle repeat clicks
+    if (event.IsPress() && mouse_lock_mode_ == Bar &&
+        IsPointVisible(input()->GetMouseX(), input()->GetMouseY()) &&
+        mouse_pos >= 0 && mouse_pos <= slider()->GetMaxPixelLocation()) {
+      if (mouse_pos < tab_pos1)
+        BigDec();
+      else if (mouse_pos > tab_pos2)
+        BigInc();
+    }
+
+    // Handle releases
+    else if (event.IsRelease()) {
+      mouse_lock_mode_ = None;
+    }
+  }
+
+  // Handle mouse dragging
+  if (mouse_lock_mode_ == Tab) {
+    slider()->SetTabPosition(slider()->PixelLocationToLogicalPosition(
+      mouse_pos - tab_grab_position_));
+  }
+  result |= SingleParentFrame::OnKeyEvent(event, dt);
+  return result;
+}
+
+void SliderFrame::OnFocusChange() {
+  if (!IsInFocus())
+    mouse_lock_mode_ = None;
+  SingleParentFrame::OnFocusChange();
 }
