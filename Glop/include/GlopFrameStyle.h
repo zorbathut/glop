@@ -5,18 +5,18 @@
 //
 // Generically, a View is structured as follows:
 //  - There is a ViewFactory class. This has one purpose - to instantiate Views.
-//  - A View contains three kinds of methods:
+//  - By convention, a View contains three kinds of methods:
 //     OnResize: Any method with OnResize in it will be guaranteed to be called whenever either the
 //               frame or the window resizes. Generally OnResize is given the option of reserving
 //               some space for the frame.
 //     Render: If a frame has a View, it likely delegates to the View for ALL rendering. The View
 //             is responsible for rendering the frame and all of its children.
 //     Other methods: These are generally used to construct child frames. For example, a WindowView
-//                    can specify the TextStyle used for the window text.
+//                    can specify the GuiTextStyle used for the window text.
 //  - Default___View and Default___ViewFactory classes are provided.
 //
-// In addition to the View classes, we all include TextStyle, which is full font information - a
-// Font object, size, color, and flags (underline, italics, etc.)
+// In addition to the View classes, we also include GuiTextStyle, which is full font specification -
+// a Font object, size, color, and flags (underline, italics, etc.)
 
 #ifndef GLOP_GLOP_FRAME_STYLE_H__
 #define GLOP_GLOP_FRAME_STYLE_H__
@@ -30,9 +30,18 @@
 class Font;
 class GlopFrame;
 class PaddedFrame;
+class TextFrame;
 
 // Style constants
 const float kDefaultTextHeight(0.025f);
+const Color kDefaultTextColor(kBlack);
+const Color kDefaultTextPromptColor(0, 0, 0.5f);
+const Color kDefaultTextPromptCursorColor(0, 0, 0.75f);
+const Color kDefaultTextHighlightColor(0.6f, 0.6f, 1.0f);
+const Color kDefaultTextHighlightColorNoFocus(0.8f, 0.8f, 1.0f);
+
+const Color kDefaultInputBoxBackgroundColor(1.0f, 1.0f, 1.0f);
+const Color kDefaultInputBoxBorderColor(0.2f, 0.2f, 0.2f);
 
 const Color kDefaultWindowBorderHighlightColor(0.9f, 0.9f, 0.95f);
 const Color kDefaultWindowBorderLowlightColor(0.6f, 0.6f, 0.7f);
@@ -53,17 +62,18 @@ const float kDefaultSliderWidth = 0.03f;
 const Color kDefaultSliderBackgroundColor(0.7f, 0.7f, 0.7f);
 const Color kDefaultSliderBorderColor(0.2f, 0.2f, 0.2f);
 
-// TextStyle
-// =========
-struct TextStyle {
-  // Every TextStyle object requires a color, size, font and flags. The size is given as a fraction
-  // of the window height. The flags are specified as in Font.h.
-  // When types are omitted, they are copied from the TextStyle in gDefaultStyle.
-  TextStyle();
-  TextStyle(const Color &_color);
-  TextStyle(const Color &_color, float _size);
-  TextStyle(const Color &_color, float _size, Font *_font);
-  TextStyle(const Color &_color, float _size, Font *_font, unsigned int _flags)
+// GuiTextStyle
+// ============
+struct GuiTextStyle {
+  // Every GuiTextStyle object requires a color, size, font and flags. The size is given as a
+  // fraction of the window height. Flags are bitwise combinations of kFontBold, kFontItalics and
+  // kFontUnderline (or kFontNormal).
+  // When values are omitted, they are copied from gGuiTextStyle.
+  GuiTextStyle();
+  GuiTextStyle(const Color &_color);
+  GuiTextStyle(const Color &_color, float _size);
+  GuiTextStyle(const Color &_color, float _size, Font *_font);
+  GuiTextStyle(const Color &_color, float _size, Font *_font, unsigned int _flags)
   : color(_color), size(_size), font(_font), flags(_flags) {}
 
   // Data
@@ -73,14 +83,144 @@ struct TextStyle {
   unsigned int flags;
 };
 
+// InputBoxView
+// ============
+class InputBoxView {
+ public:
+  virtual ~InputBoxView() {}
+
+  // Returns the padding reserved around the inner frame.
+  virtual void OnResize(int rec_width, int rec_height,
+                        int *lp, int *tp, int *rp, int *bp) const = 0;
+
+  // Renders the input box. Note the frame already includes the padding given above.
+  virtual void Render(int x1, int y1, int x2, int y2, const PaddedFrame *padded_frame) const = 0;
+
+ protected:
+  InputBoxView() {}
+ private:
+  DISALLOW_EVIL_CONSTRUCTORS(InputBoxView);
+};
+class InputBoxViewFactory {
+ public:
+  virtual InputBoxView *Create() const = 0;
+  virtual ~InputBoxViewFactory() {}
+ protected:
+  InputBoxViewFactory() {}
+ private:
+  DISALLOW_EVIL_CONSTRUCTORS(InputBoxViewFactory);
+};
+
+// Default implementation
+class DefaultInputBoxView: public InputBoxView {
+ public:
+  void OnResize(int rec_width, int rec_height, int *lp, int *tp, int *rp, int *bp) const;
+  void Render(int x1, int y1, int x2, int y2, const PaddedFrame *padded_frame) const;
+
+ private:
+  friend class DefaultInputBoxViewFactory;
+  DefaultInputBoxView(const DefaultInputBoxViewFactory *factory): factory_(factory) {}
+  const DefaultInputBoxViewFactory *factory_;
+  DISALLOW_EVIL_CONSTRUCTORS(DefaultInputBoxView);
+};
+class DefaultInputBoxViewFactory: public InputBoxViewFactory {
+ public:
+  // Main operations
+  DefaultInputBoxViewFactory()
+  : background_color_(kDefaultInputBoxBackgroundColor),
+    border_color_(kDefaultInputBoxBorderColor) {}
+  InputBoxView *Create() const {return new DefaultInputBoxView(this);}
+
+  // Accessors and mutators
+  const Color &GetBackgroundColor() const {return background_color_;}
+  void SetBackgroundColor(const Color &c) {background_color_ = c;}
+  const Color &GetBorderColor() const {return border_color_;}
+  void SetBorderColor(const Color &c) {border_color_ = c;}
+
+ private:
+  Color background_color_, border_color_;
+  DISALLOW_EVIL_CONSTRUCTORS(DefaultInputBoxViewFactory);
+};
+
+// TextPromptView
+// ==============
+class TextPromptView {
+ public:
+  virtual ~TextPromptView() {}
+
+  // Returns the GuiTextStyle that will be used for the text.
+  virtual const GuiTextStyle GetTextStyle() const = 0;
+
+  // Returns the padding reserved around the prompt. The text_frame will already be resized, so
+  // the TextRenderer there can be used for setting the padding.
+  virtual void OnResize(int rec_width, int rec_height, const TextFrame *text_frame, int *lp,
+                        int *tp, int *rp, int *bp) const = 0;
+
+  // Renders the text prompt. cursor_pos and selection_start, selection_end are gaps between
+  // characters ranging from 0 to length. cursor_time is the number of milliseconds since this
+  // frame last gained focus. Render is free to change that value itself.
+  virtual void Render(int x1, int y1, int x2, int y2, int cursor_pos, int *cursor_time,
+                      int selection_start, int selection_end, bool is_in_focus,
+                      const TextFrame *text_frame) const = 0;
+ protected:
+  TextPromptView() {}
+ private:
+  DISALLOW_EVIL_CONSTRUCTORS(TextPromptView);
+};
+class TextPromptViewFactory {
+ public:
+  virtual TextPromptView *Create() const = 0;
+  virtual ~TextPromptViewFactory() {}
+ protected:
+  TextPromptViewFactory() {}
+ private:
+  DISALLOW_EVIL_CONSTRUCTORS(TextPromptViewFactory);
+};
+
+// Default implementation
+class DefaultTextPromptView: public TextPromptView {
+ public:
+  const GuiTextStyle GetTextStyle() const ;
+  void OnResize(int rec_width, int rec_height, const TextFrame *text_frame, int *lp, int *tp,
+                int *rp, int *bp) const;
+  void Render(int x1, int y1, int x2, int y2, int cursor_pos, int *cursor_time, int selection_start,
+              int selection_end, bool is_in_focus, const TextFrame *text_frame) const;
+ private:
+  friend class DefaultTextPromptViewFactory;
+  DefaultTextPromptView(const DefaultTextPromptViewFactory *factory): factory_(factory) {}
+  const DefaultTextPromptViewFactory *factory_;
+  DISALLOW_EVIL_CONSTRUCTORS(DefaultTextPromptView);
+};
+class DefaultTextPromptViewFactory: public TextPromptViewFactory {
+ public:
+  // Main operations
+  DefaultTextPromptViewFactory(Font *font)
+  : highlight_color_(kDefaultTextHighlightColor), cursor_color_(kDefaultTextPromptCursorColor),
+    text_style_(kDefaultTextPromptColor, kDefaultTextHeight, font, 0) {}
+  TextPromptView *Create() const {return new DefaultTextPromptView(this);}
+
+  // Accessors and mutators
+  const Color &GetHighlightColor() const {return highlight_color_;}
+  void SetHighlightColor(const Color &c) {highlight_color_ = c;}
+  const GuiTextStyle &GetTextStyle() const {return text_style_;}
+  void SetTextStyle(const GuiTextStyle &style) {text_style_ = style;}
+  const Color &GetCursorColor() const {return cursor_color_;}
+  void SetCursorColor(const Color &c) {cursor_color_ = c;}
+
+ private:
+  Color highlight_color_, cursor_color_;
+  GuiTextStyle text_style_;
+  DISALLOW_EVIL_CONSTRUCTORS(DefaultTextPromptViewFactory);
+};
+
 // WindowView
 // ==========
 class WindowView {
  public:
   virtual ~WindowView() {}
 
-  // Returns the TextStyle that will be used for rendering the title.
-  virtual const TextStyle GetTitleStyle() const = 0;
+  // Returns the GuiTextStyle that will be used for rendering the title.
+  virtual const GuiTextStyle GetTitleStyle() const = 0;
 
   // Returns the padding reserved around the title frame and around the inner frame.
   // If has_title is false, the title padding is ignored.
@@ -110,12 +250,12 @@ class WindowViewFactory {
 // Default implementation
 class DefaultWindowView: public WindowView {
  public:
-  virtual const TextStyle GetTitleStyle() const;
-  virtual void OnResize(int rec_width, int rec_height, bool has_title,
-    int *title_l, int *title_t, int *title_r, int *title_b,
-    int *inner_l, int *inner_t, int *inner_r, int *inner_b) const;
-  virtual void Render(int x1, int y1, int x2, int y2, const PaddedFrame *padded_title_frame,
-                      const PaddedFrame *padded_inner_frame) const;
+  const GuiTextStyle GetTitleStyle() const;
+  void OnResize(int rec_width, int rec_height, bool has_title,
+                int *title_l, int *title_t, int *title_r, int *title_b,
+                int *inner_l, int *inner_t, int *inner_r, int *inner_b) const;
+  void Render(int x1, int y1, int x2, int y2, const PaddedFrame *padded_title_frame,
+              const PaddedFrame *padded_inner_frame) const;
  private:
   friend class DefaultWindowViewFactory;
   DefaultWindowView(const DefaultWindowViewFactory *factory): factory_(factory) {}
@@ -139,11 +279,11 @@ class DefaultWindowViewFactory: public WindowViewFactory {
   void SetBorderLowlightColor(const Color &c) {border_lowlight_color_ = c;}
   const Color &GetInnerColor() const {return inner_color_;}
   void SetInnerColor(const Color &c) {inner_color_ = c;}
-  const TextStyle &GetTitleStyle() const {return title_style_;}
-  void SetTitleStyle(const TextStyle &style) {title_style_ = style;}
+  const GuiTextStyle &GetTitleStyle() const {return title_style_;}
+  void SetTitleStyle(const GuiTextStyle &style) {title_style_ = style;}
  private:
   Color border_highlight_color_, border_lowlight_color_, inner_color_;
-  TextStyle title_style_;
+  GuiTextStyle title_style_;
   DISALLOW_EVIL_CONSTRUCTORS(DefaultWindowViewFactory);
 };
 
@@ -372,23 +512,21 @@ class DefaultSliderViewFactory: public SliderViewFactory {
   DISALLOW_EVIL_CONSTRUCTORS(DefaultSliderViewFactory);
 };
 
-// This specifies various constants that are used for constructing GUI frames (e.g. font color &
-// size). A new FrameStyle can be created to override existing settings. If a FrameStyle is already
-// in use, changing it may or may not affect existing frames. The results are undefined.
-struct FrameStyle {
-  FrameStyle(Font *font);
-  ~FrameStyle();
+// Global frame style
+// ==================
+extern GuiTextStyle *gGuiTextStyle;
+extern InputBoxViewFactory *gInputBoxViewFactory;
+extern TextPromptViewFactory *gTextPromptViewFactory;
+extern ArrowViewFactory *gArrowViewFactory;
+extern ButtonViewFactory *gButtonViewFactory;
+extern SliderViewFactory *gSliderViewFactory;
+extern WindowViewFactory *gWindowViewFactory;
 
-  // General style
-  TextStyle text_style;
-  Color prompt_highlight_color;       // Background color of text we highlight in a TextPrompt
+// Deletes all global frame styles that is initialized.
+void ClearFrameStyle();
 
-  // Renderers
-  ArrowViewFactory *arrow_view_factory;
-  ButtonViewFactory *button_view_factory;
-  SliderViewFactory *slider_view_factory;
-  WindowViewFactory *window_view_factory;
-};
-extern FrameStyle *gFrameStyle;
+// Deletes any pre-existing global frame styles, and replaces them with default values. This is
+// called automatically at program start with font == 0.
+void InitDefaultFrameStyle(Font *font);
 
 #endif // GLOP_GLOP_FRAME_STYLE_H__

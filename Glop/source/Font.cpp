@@ -5,6 +5,8 @@
 #include "GlopInternalData.h"
 #include "third_party/freetype/ftglyph.h"
 #include "third_party/freetype/ftoutln.h"
+#include <map>
+using namespace std;
 
 // FontOutline
 // ===========
@@ -30,15 +32,26 @@ FontOutline *FontOutline::Load(BinaryFileReader reader) {
   }
 }
 
+FontOutline::~FontOutline() {
+  map<pair<int, unsigned int>, FontBitmap*> *bm_map =
+    (map<pair<int, unsigned int>, FontBitmap*>*)bitmaps_;
+  ASSERT(bm_map->size() == 0);
+  delete bm_map;
+  FT_Done_Face((FT_Face)face_);
+  delete[] data_;
+}
+
 FontBitmap *FontOutline::AddRef(int size, unsigned int flags) {
   const int kScale = 80;
 
   // Check if the bitmap is already loaded. Note that underline is ignored by the FontBitmap, so
   // we can ignore that flag.
+  map<pair<int, unsigned int>, FontBitmap*> *bm_map =
+    (map<pair<int, unsigned int>, FontBitmap*>*)bitmaps_;
   pair<int, unsigned int> key = make_pair(size, flags & (~kFontUnderline));
-  if (bitmaps_.count(key)) {
-    bitmaps_[key]->ref_count_++;
-    return bitmaps_[key];
+  if (bm_map->count(key)) {
+    (*bm_map)[key]->ref_count_++;
+    return (*bm_map)[key];
   }
 
   // Data
@@ -117,7 +130,7 @@ FontBitmap *FontOutline::AddRef(int size, unsigned int flags) {
 
   // Create the font bitmap
   FontBitmap *result = new FontBitmap(bitmaps, x1, y1, x2, y2, dx);
-  bitmaps_[key] = result;
+  (*bm_map)[key] = result;
 
   // Clean up
   for (int i = 0; i < kNumFontCharacters; i++)
@@ -127,16 +140,19 @@ FontBitmap *FontOutline::AddRef(int size, unsigned int flags) {
 }
 
 void FontOutline::FreeRef(int size, unsigned int flags) {
+  map<pair<int, unsigned int>, FontBitmap*> *bm_map =
+    (map<pair<int, unsigned int>, FontBitmap*>*)bitmaps_;
   pair<int, unsigned int> key = make_pair(size, flags & (~kFontUnderline));
-  ASSERT(bitmaps_.count(key) > 0);
-  bitmaps_[key]->ref_count_--;
-  if (bitmaps_[key]->ref_count_ == 0) {
-    delete bitmaps_[key];
-    bitmaps_.erase(key);
+  ASSERT(bm_map->count(key) > 0);
+  (*bm_map)[key]->ref_count_--;
+  if ((*bm_map)[key]->ref_count_ == 0) {
+    delete (*bm_map)[key];
+    bm_map->erase(key);
   }
 }
 
-FontOutline::FontOutline(unsigned char *data, void *face): data_(data), face_(face) {}
+FontOutline::FontOutline(unsigned char *data, void *face)
+: bitmaps_((void*)new map<pair<int, unsigned int>, FontBitmap*>()), face_(face), data_(data) {}
 
 // FontBitmap
 // ==========
@@ -232,34 +248,48 @@ Font *Font::Load(BinaryFileReader reader) {
   return (outline != 0? new Font(outline, true) : 0);
 }
 
+Font::Font(FontOutline *outline)
+: renderers_((void*)new map<pair<int, unsigned int>, TextRenderer*>()),
+  outline_(outline), is_outline_owned_(false) {}
+
+Font::Font(FontOutline *outline, bool is_outline_owned)
+: renderers_((void*)new map<pair<int, unsigned int>, TextRenderer*>()),
+  outline_(outline), is_outline_owned_(is_outline_owned) {}
+
 Font::~Font() {
+  map<pair<int, unsigned int>, TextRenderer*> *rend_map =
+    (map<pair<int, unsigned int>, TextRenderer*>*)renderers_;
   if (is_outline_owned_)
     delete outline_;
-  ASSERT(renderers_.size() == 0);
+  ASSERT(rend_map->size() == 0);
+  delete rend_map;
 }
 
-TextRenderer *Font::AddRef(int size, const Color &color, unsigned int flags) {
-  pair<pair<int, Color>, unsigned int> key = make_pair(make_pair(size, color), flags);
-  if (renderers_.count(key))
-    renderers_[key]->ref_count_++;
+TextRenderer *Font::AddRef(int size, unsigned int flags) {
+  map<pair<int, unsigned int>, TextRenderer*> *rend_map =
+    (map<pair<int, unsigned int>, TextRenderer*>*)renderers_;
+  pair<int, unsigned int> key = make_pair(size, flags);
+  if (rend_map->count(key))
+    (*rend_map)[key]->ref_count_++;
   else
-    renderers_[key] = new TextRenderer(this, outline_->AddRef(size, flags), size, color, flags);
-  return renderers_[key];
+    (*rend_map)[key] = new TextRenderer(this, outline_->AddRef(size, flags), size, flags);
+  return (*rend_map)[key];
 }
 
-void Font::FreeRef(int size, const Color &color, unsigned int flags) {
-  pair<pair<int, Color>, unsigned int> key = make_pair(make_pair(size, color), flags);
-  ASSERT(renderers_.count(key) > 0);
-  renderers_[key]->ref_count_--;
-  if (renderers_[key]->ref_count_ == 0) {
-    delete renderers_[key];
+void Font::FreeRef(int size, unsigned int flags) {
+  map<pair<int, unsigned int>, TextRenderer*> *rend_map =
+    (map<pair<int, unsigned int>, TextRenderer*>*)renderers_;
+  pair<int, unsigned int> key = make_pair(size, flags);
+  ASSERT(rend_map->count(key) > 0);
+  (*rend_map)[key]->ref_count_--;
+  if ((*rend_map)[key]->ref_count_ == 0) {
+    delete (*rend_map)[key];
     outline_->FreeRef(size, flags);
-    renderers_.erase(key);
+    rend_map->erase(key);
   }
 }
 
-void Font::RenderChar(const FontBitmap *bitmap, const Texture *bitmap_texture, const Color &color,
-                      char ch) const {
+void Font::RenderChar(const FontBitmap *bitmap, const Texture *bitmap_texture, char ch) const {
   int x1 = bitmap->GetX1(ch), y1 = bitmap->GetY1(ch),
       x2 = bitmap->GetX2(ch)+1, y2 = bitmap->GetY2(ch)+1;
   float tu1, tv1, tu2, tv2;
@@ -276,10 +306,9 @@ void Font::RenderChar(const FontBitmap *bitmap, const Texture *bitmap_texture, c
   glEnd();
 }
 
-void Font::RenderUnderline(const FontBitmap *bitmap, int x, int y, int len,
-                           const Color &color) const {
+void Font::RenderUnderline(const FontBitmap *bitmap, int x, int y, int len) const {
   int y1 = bitmap->GetUnderlineStart() + y, y2 = y1 + bitmap->GetUnderlineHeight() - 1;
-  GlUtils2d::FillRectangle(x, y1, x+len-1, y2, color);
+  GlUtils2d::FillRectangle(x, y1, x+len-1, y2);
 }
 
 // TextRendererDisplayLists
@@ -289,13 +318,13 @@ void Font::RenderUnderline(const FontBitmap *bitmap, int x, int y, int len,
 class TextRendererDisplayLists: public DisplayLists {
  public:
   TextRendererDisplayLists(const Font *font, const FontBitmap *bitmap,
-                           const Texture *bitmap_texture, const Color &color)
+                           const Texture *bitmap_texture)
   : DisplayLists(kNumFontCharacters), font_(font), bitmap_(bitmap),
-    bitmap_texture_(bitmap_texture), color_(color) {}
+    bitmap_texture_(bitmap_texture) {}
 
  protected:
   void Render(int i) const {
-    font_->RenderChar(bitmap_, bitmap_texture_, color_, i);
+    font_->RenderChar(bitmap_, bitmap_texture_, i);
     glTranslatef((float)font_->GetDx(bitmap_, i), 0, 0);
   }
 
@@ -303,7 +332,6 @@ class TextRendererDisplayLists: public DisplayLists {
   const Font *font_;
   const FontBitmap *bitmap_;
   const Texture *bitmap_texture_;
-  Color color_;
   DISALLOW_EVIL_CONSTRUCTORS(TextRendererDisplayLists);
 };
 
@@ -311,34 +339,59 @@ class TextRendererDisplayLists: public DisplayLists {
 // ============
 
 void TextRenderer::FreeRef(TextRenderer *renderer) {
-  renderer->font_->FreeRef(renderer->size_, renderer->color_, renderer->flags_);
+  renderer->font_->FreeRef(renderer->size_, renderer->flags_);
 }
 
-void TextRenderer::Print(int x, int y, const string &text) const {
-  if (text.size() > 0) {
-    // Adjust so that x and y are the baseline beginning
-    x -= GetX1(text[0]);
-    y += GetAscent();
+void TextRenderer::Print(int x, int y, const string &text, const Color &color) const {
+  if (text.size() == 0)
+    return;
 
-    // Begin with the underline - this way the font overlaps the underline, not vice-versa
-    GlUtils::SetColor(color_);
-    if ((flags_ & kFontUnderline) > 0) {
-      GlUtils::SetNoTexture();
-      int w = GetTextWidth(text);
-      font_->RenderUnderline(bitmap_, x, y, w, color_);
-    }
+  // Set up fog
+  bool is_fog_enabled = (glIsEnabled(GL_FOG) == GL_TRUE);
+  int fog_mode;
+  float fog_color[4], fog_start, fog_end;
+  if (is_fog_enabled) {
+    glGetFloatv(GL_FOG_COLOR, fog_color);
+    glGetFloatv(GL_FOG_START, &fog_start);
+    glGetFloatv(GL_FOG_END, &fog_end);
+    glGetIntegerv(GL_FOG_MODE, &fog_mode);
+  } else {
+    glEnable(GL_FOG);
+  }
+  glFogfv(GL_FOG_COLOR, kBlack.GetData());
+	glFogf(GL_FOG_START, 0);
+	glFogf(GL_FOG_END, 1);
+	glFogi(GL_FOG_MODE, GL_LINEAR);
 
-    // Render the text
-    glEnable(GL_BLEND);
-    GlUtils::SetTexture(bitmap_->texture_);
-    glPushMatrix();
-    glTranslatef(float(x), float(y), 0);
-    display_lists_->Call((int)text.size(), GL_BYTE, text.c_str());
-    glPopMatrix();
+  // Adjust so that x and y are the baseline beginning
+  x -= GetX1(text[0]);
+  y += GetAscent();
 
-    // Clear the settings
+  // Begin with the underline - this way the font overlaps the underline, not vice-versa
+  GlUtils::SetColor(color);
+  if ((flags_ & kFontUnderline) > 0) {
     GlUtils::SetNoTexture();
-    glDisable(GL_BLEND);
+    int w = GetTextWidth(text);
+    font_->RenderUnderline(bitmap_, x, y, w);
+  }
+
+  // Render the text
+  glEnable(GL_BLEND);
+  GlUtils::SetTexture(bitmap_->texture_);
+  glPushMatrix();
+  glTranslatef(float(x), float(y), 0);
+  display_lists_->Call((int)text.size(), GL_BYTE, text.c_str());
+  glPopMatrix();
+
+  // Clear the settings
+  GlUtils::SetNoTexture();
+  glDisable(GL_BLEND);
+  glDisable(GL_FOG);
+  if (is_fog_enabled) {
+    glFogfv(GL_FOG_COLOR, fog_color);
+	  glFogf(GL_FOG_START, fog_start);
+	  glFogf(GL_FOG_END, fog_end);
+	  glFogi(GL_FOG_MODE, fog_mode);
   }
 }
 
@@ -361,43 +414,182 @@ int TextRenderer::GetTextWidth(const string &s, bool is_first_text, bool is_last
   return total_width;
 }
 
-TextRenderer::TextRenderer(Font *font, FontBitmap *bitmap, int size, const Color &color,
-                           unsigned int flags)
-: font_(font), bitmap_(bitmap), size_(size), color_(color), flags_(flags), ref_count_(1) {
-  display_lists_ = new TextRendererDisplayLists(font, bitmap, bitmap->texture_, color);
+TextRenderer::TextRenderer(Font *font, FontBitmap *bitmap, int size, unsigned int flags)
+: font_(font), bitmap_(bitmap), size_(size), flags_(flags), ref_count_(1) {
+  display_lists_ = new TextRendererDisplayLists(font, bitmap, bitmap->texture_);
 }
 
 TextRenderer::~TextRenderer() {
   delete display_lists_;
 }
 
+// GradientFont
+// ============
+
+GradientFont *GradientFont::Load(BinaryFileReader reader, float top_brightness,
+                                 float bottom_brightness, const vector<float> &mid_pos,
+                                 const vector<float> &mid_brightness) {
+  FontOutline *outline = FontOutline::Load(reader);
+  return (outline != 0? new GradientFont(outline, true, top_brightness, bottom_brightness,
+                                         mid_pos, mid_brightness) : 0);
+}
+
+GradientFont::GradientFont(FontOutline *outline, float top_brightness, float bottom_brightness)
+: Font(outline) {
+  Init(top_brightness, bottom_brightness, vector<float>(0), vector<float>(0));
+}
+
+GradientFont::GradientFont(FontOutline *outline, float top_brightness, float bottom_brightness,
+                           float mid_pos, float mid_brightness): Font(outline) {
+  Init(top_brightness, bottom_brightness, vector<float>(1, mid_pos),
+       vector<float>(1, mid_brightness));
+}
+
+GradientFont::GradientFont(FontOutline *outline, float top_brightness, float bottom_brightness,
+                           const vector<float> &mid_pos, const vector<float> &mid_brightness)
+: Font(outline) {
+  Init(top_brightness, bottom_brightness, mid_pos, mid_brightness);
+}
+
+GradientFont::GradientFont(FontOutline *outline, bool is_outline_owned, float top_brightness,
+                           float bottom_brightness, const vector<float> &mid_pos,
+                           const vector<float> &mid_brightness)
+: Font(outline, is_outline_owned) {
+  Init(top_brightness, bottom_brightness, mid_pos, mid_brightness);
+}
+
+void GradientFont::RenderChar(const FontBitmap *bitmap, const Texture *bitmap_texture,
+                              char ch) const {
+  int x1 = bitmap->GetX1(ch), y1 = bitmap->GetY1(ch),
+      x2 = bitmap->GetX2(ch), y2 = bitmap->GetY2(ch);
+  vector<int> ypos;
+  vector<float> yc;
+  GetColors(bitmap, y1, y2, &ypos, &yc);
+  float tu1, tv1, tu2, tv2;
+  bitmap->GetTexCoords(ch, &tu1, &tv1, &tu2, &tv2);
+  glBegin(GL_QUAD_STRIP);
+  for (int i = 0; i < (int)ypos.size(); i++) {
+    float tv = (y2 == y1? tv1 : tv1 + (ypos[i] - y1) * (tv2 - tv1) / (y2 - y1));
+    glTexCoord2f(tu1, tv); 
+    glVertex3f(float(x1), float(ypos[i] + (i == 0? 0 : 1)), 1 - yc[i]);
+    glTexCoord2f(tu2, tv);
+    glVertex3f(float(x2 + 1), float(ypos[i] + (i == 0? 0 : 1)), 1 - yc[i]);
+  }
+  glEnd();
+}
+
+void GradientFont::RenderUnderline(const FontBitmap *bitmap, int x, int y, int len) const {
+  int y1 = bitmap->GetUnderlineStart(), y2 = y1 + bitmap->GetUnderlineHeight() - 1;
+  vector<int> ypos;
+  vector<float> yc;
+  GetColors(bitmap, y1, y2, &ypos, &yc);
+  glBegin(GL_QUAD_STRIP);
+  for (int i = 0; i < (int)ypos.size(); i++) {
+    glVertex3f(float(x), y + float(ypos[i] + (i == 0? 0 : 1)), 1 - yc[i]);
+    glVertex3f(float(x + len), y + float(ypos[i] + (i == 0? 0 : 1)), 1 - yc[i]);
+  }
+  glEnd();
+}
+
+void GradientFont::Init(float top_brightness, float bottom_brightness, const vector<float> &mid_pos,
+                        const vector<float> &mid_brightness) {
+  ASSERT(mid_pos.size() == mid_brightness.size());
+  brightness_pos_.push_back(-1);
+  brightness_.push_back(top_brightness);
+  for (int i = 0; i < (int)mid_pos.size(); i++) {
+    ASSERT(mid_pos[i] > -1 && mid_pos[i] < 1 && (i == 0 || mid_pos[i] < mid_pos[i-1]));
+    brightness_pos_.push_back(mid_pos[i]);
+    brightness_.push_back(mid_brightness[i]);
+  }
+  brightness_pos_.push_back(1);
+  brightness_.push_back(bottom_brightness);
+}
+
+void GradientFont::GetColors(const FontBitmap *bitmap, int y1, int y2, vector<int> *y,
+                             vector<float> *yc) const {
+  y->clear();
+  yc->clear();
+  
+  vector<int> brightness_pixel;
+  for (int i = 0; i < (int)brightness_pos_.size(); i++) {
+    int scale = (brightness_pos_[i] < 0? bitmap->GetAscent() : bitmap->GetDescent());
+    brightness_pixel.push_back(int(scale * brightness_pos_[i]));
+  }
+
+  for (int i = 0; i < (int)brightness_pixel.size(); i++) {
+    if (brightness_pixel[i] > y1 && y->size() == 0) {
+      y->push_back(y1);
+      yc->push_back(brightness_[i-1] + (brightness_[i] - brightness_[i-1]) *
+                    (y1 - brightness_pixel[i-1]) / (brightness_pixel[i] - brightness_pixel[i-1]));
+    }
+    if (brightness_pixel[i] >= y1 && brightness_pixel[i] <= y2) {
+      y->push_back(brightness_pixel[i]);
+      yc->push_back(brightness_[i]);
+    }
+    if (brightness_pixel[i] > y2) {
+      y->push_back(y2);
+      yc->push_back(brightness_[i-1] + (brightness_[i] - brightness_[i-1]) *
+                    (y2 - brightness_pixel[i-1]) / (brightness_pixel[i] - brightness_pixel[i-1]));
+      break;
+    }
+  }
+}
+
 // ShadowFont
 // ==========
 
 ShadowFont *ShadowFont::Load(BinaryFileReader reader, float shadow_dx, float shadow_dy,
-                             const Color &shadow_color) {
+                             float shadow_brightness) {
   FontOutline *outline = FontOutline::Load(reader);
-  return (outline != 0? new ShadowFont(outline, true, shadow_dx, shadow_dy, shadow_color) : 0);
+  return (outline != 0? new ShadowFont(outline, true, shadow_dx, shadow_dy, shadow_brightness) : 0);
 }
 
 void ShadowFont::RenderChar(const FontBitmap *bitmap, const Texture *bitmap_texture,
-                            const Color &color, char ch) const {
-  GlUtils::SetColor(shadow_color_);
-  glPushMatrix();
-  glTranslatef((float)GetShadowDx(bitmap), (float)GetShadowDy(bitmap), 0);
-  Font::RenderChar(bitmap, bitmap_texture, shadow_color_, ch);
-  glPopMatrix();
-  GlUtils::SetColor(color);
-  Font::RenderChar(bitmap, bitmap_texture, shadow_color_, ch);
+                            char ch) const {
+  int x1 = bitmap->GetX1(ch), y1 = bitmap->GetY1(ch),
+      x2 = bitmap->GetX2(ch)+1, y2 = bitmap->GetY2(ch)+1;
+  float dx = float(GetShadowDx(bitmap)), dy = float(GetShadowDy(bitmap)),
+        dz = 1 - shadow_brightness_;
+  float tu1, tv1, tu2, tv2;
+  bitmap->GetTexCoords(ch, &tu1, &tv1, &tu2, &tv2);
+
+  // Render the shadow
+  glBegin(GL_QUADS);
+  glTexCoord2f(tu1, tv1);
+  glVertex3f(x1 + dx, y1 + dy, dz);
+  glTexCoord2f(tu2, tv1);
+  glVertex3f(x2 + dx, y1 + dy, dz);
+  glTexCoord2f(tu2, tv2);
+  glVertex3f(x2 + dx, y2 + dy, dz);
+  glTexCoord2f(tu1, tv2);
+  glVertex3f(x1 + dx, y2 + dy, dz);
+
+  // Render the main character
+  glTexCoord2f(tu1, tv1);
+  glVertex2i(x1, y1);
+  glTexCoord2f(tu2, tv1);
+  glVertex2i(x2, y1);
+  glTexCoord2f(tu2, tv2);
+  glVertex2i(x2, y2);
+  glTexCoord2f(tu1, tv2);
+  glVertex2i(x1, y2);
+  glEnd();
 }
 
-void ShadowFont::RenderUnderline(const FontBitmap *bitmap, int x, int y, int len,
-                                 const Color &color) const {
-  GlUtils::SetColor(shadow_color_);
-  Font::RenderUnderline(bitmap, x + GetShadowDx(bitmap), y + GetShadowDy(bitmap), len,
-                        shadow_color_);
-  GlUtils::SetColor(color);
-  Font::RenderUnderline(bitmap, x, y, len, color);
+void ShadowFont::RenderUnderline(const FontBitmap *bitmap, int x, int y, int len) const {
+  int y1 = y + bitmap->GetUnderlineStart(), y2 = y1 + bitmap->GetUnderlineHeight() - 1;
+  float dx = float(GetShadowDx(bitmap)), dy = float(GetShadowDy(bitmap)),
+        dz = 1 - shadow_brightness_;
+  glBegin(GL_QUADS);
+  glVertex3f(x + dx, y1 + dy, dz);
+  glVertex3f(x + len + dx, y1 + dy, dz);
+  glVertex3f(x + len + dx, y2 + dy, dz);
+  glVertex3f(x + dx, y2 + dy, dz);
+  glVertex2i(x, y1);
+  glVertex2i(x + len, y1);
+  glVertex2i(x + len, y2);
+  glVertex2i(x, y2);
+  glEnd();
 }
 
 int ShadowFont::GetShadowDx(const FontBitmap *bitmap) const {

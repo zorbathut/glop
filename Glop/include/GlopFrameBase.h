@@ -204,6 +204,12 @@ class GlopFrame {
   // Handles the fact that our focus has changed.
   virtual void OnFocusChange() {}
 
+  // Dirties a frame's size and the size of all of its children due to the window resizing.
+  // This will probably take care of itself via rec_width and rec_height. However, even if it
+  // does not, we still need to note the difference in case a frame sizes itself based on the
+  // window size.
+  virtual void OnWindowResize(int width, int height) {DirtySize();}
+
  private:
   // Ping types. See above.
   class AbsolutePing: public Ping {
@@ -231,20 +237,14 @@ class GlopFrame {
     void GetCoords(int *x1, int *y1, int *x2, int *y2) {
       *x1 = int(GetFrame()->GetWidth() * x1_);
       *y1 = int(GetFrame()->GetHeight() * y1_);
-      *x2 = int(GetFrame()->GetWidth() * x2_);
-      *y2 = int(GetFrame()->GetHeight() * y2_);
+      *x2 = int((GetFrame()->GetWidth() - 1) * x2_);
+      *y2 = int((GetFrame()->GetHeight() - 1) * y2_);
     }
    private:
     float x1_, y1_, x2_, y2_;
     DISALLOW_EVIL_CONSTRUCTORS(RelativePing);
   };  
 
-  // Dirties a frame's size and the size of all of its children due to the window resizing.
-  // This will probably take care of itself via rec_width and rec_height. However, even if it
-  // does not, we still need to note the difference in case a frame sizes itself based on the
-  // window size.
-  virtual void OnWindowResize(int width, int height) {DirtySize();}
-  
   // Changes our current parent frame, and inherits any appropriate settings from our parent.
   virtual void SetParent(GlopFrame *parent);
 
@@ -325,14 +325,12 @@ class SingleParentFrame: public GlopFrame {
   GlopFrame *GetChild() {return child_;}
   GlopFrame *RemoveChildNoDelete();
   void SetChild(GlopFrame *frame);
-
- private:
   void OnWindowResize(int width, int height) {
     DirtySize();
     if (child_ != 0) child_->OnWindowResize(width, height);
   }
 
-  // Data
+ private:
   GlopFrame *child_;
   DISALLOW_EVIL_CONSTRUCTORS(SingleParentFrame);
 };
@@ -375,11 +373,9 @@ class MultiParentFrame: public GlopFrame {
   LightSetId RemoveChild(LightSetId id);
   GlopFrame *RemoveChildNoDelete(LightSetId id);
   void ClearChildren();
+  void OnWindowResize(int width, int height);
   
  private:
-  virtual void OnWindowResize(int width, int height);
-  
-  // Data
   friend class GlopWindow;
   LightSet<GlopFrame*> children_;
   DISALLOW_EVIL_CONSTRUCTORS(MultiParentFrame);
@@ -1014,8 +1010,11 @@ class MinSizeFrame: public SingleParentFrame {
 //
 // This clips a frame until it fits in the recommended width/height/size. Alternatively, the size
 // limit can be given as a fraction of the corresponding window dimension. MaxSizeFrame is similar
-// to ScrollingFrame except that it cannot be user-controlled via scroll bars. It still responds
-// to pings, however.
+// to ScrollingFrame, but it has a few differences:
+//   - There are no scroll bars, and thus,
+//   - it cannot be user-controlled (although it does respond to pings)
+//   - It is possible to scroll to regions past the right and bottom extents of the frame if they
+//     are pinged, or if the inner frame shrinks. This is useful, for example, with text boxes.
 class MaxWidthFrame: public SingleParentFrame {
  public:
   MaxWidthFrame(GlopFrame *frame, float max_width = kSizeLimitRec,
@@ -1037,11 +1036,18 @@ class MaxSizeFrame: public SingleParentFrame {
   MaxSizeFrame(GlopFrame *frame, float max_width = kSizeLimitRec, float max_height = kSizeLimitRec,
                float horz_justify = kJustifyLeft, float vert_justify = kJustifyTop);
   void SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2);
+
  protected:
   void RecomputeSize(int rec_width, int rec_height);
   void OnChildPing(GlopFrame *child, int x1, int y1, int x2, int y2, bool center);
+  void OnWindowResize(int width, int height) {
+    must_recenter_ = true;
+    SingleParentFrame::OnWindowResize(width, height);
+  }
+
  private:
   void ScrollToChildPing(int x1, int y1, int x2, int y2, bool center);
+  bool must_recenter_;
   float max_width_, max_height_;
   int x_offset_, y_offset_;
   DISALLOW_EVIL_CONSTRUCTORS(MaxSizeFrame);
@@ -1090,8 +1096,7 @@ class ExactSizeFrame: public MinSizeFrame {
 // See also MaxSizeFrame.
 class ScrollingFrame: public FocusFrame {
  public:
-  ScrollingFrame(GlopFrame *frame,
-                 const SliderViewFactory *factory = gFrameStyle->slider_view_factory);
+  ScrollingFrame(GlopFrame *frame, const SliderViewFactory *factory = gSliderViewFactory);
  private:
   DISALLOW_EVIL_CONSTRUCTORS(ScrollingFrame);
 };

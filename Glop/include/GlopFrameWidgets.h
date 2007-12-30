@@ -1,4 +1,22 @@
-// Here we provide a set of useful stand-alone frames.
+// This file contains a set of useful stand-alone frames.
+// WARNING: Many of these frames require a valid font, which is not loaded by default. To avoid
+//          errors, load a font (see Font.h) and call InitDefaultFrameStyle (see FrameStyle.h).
+//
+// Conventions: Many of these frames are designed to be easily customizable by outer programs. To
+//              facilitate changing how frames look, they delegate to View objects for all
+//              rendering. These View objects are defined in GlopFrameStyle.
+//
+//              To faciliate changing how frames act, many frames have a Dummy version. This has all
+//              the same essential features but it's state can only be changed programmatically.
+//              These are then overloaded to give the desired functionality. These overloads further
+//              support some key rewrappings. As much as possible, they depend only on the Gui
+//              derived keys in Input. Thus, their behavior can be changed by remapping those keys.
+//
+//              Finally, recall that a frame only received input events if it is wrapped in a
+//              FocusFrame. By convention, all the major interactive frames here have a convenience
+//              Widget that is the frame wrapped inside a FocusFrame.
+//
+//              See, for example, ButtonView, DummyButtonFrame, ButtonFrame, ButtonWidget.
 //
 // Decorative Frames
 // =================
@@ -6,9 +24,10 @@
 // EmptyFrame: A convenience frame that takes max size and renders nothing.
 // SolidBoxFrame, HollowBoxFrame: Solid or hollow boxes, possibly sized to fit around an existing
 //                                frame.
-// ArrowFrame: Renders an arrow in some direction. Used for slider buttons for example.
+// InputBoxFrame: Similar to SolidBoxFrame, but based on an InputBoxView. Used as background for
+//                text boxes, etc.
+// ArrowFrame: Renders an arrow in some direction. Used for slider buttons.
 // WindowFrame: A decorative, unmovable window, optionally with a title.
-//  Helper classes: WindowRenderer, DefaultWindowRenderer
 // TextFrame, FancyTextFrame: Text output. TextFrame is faster but requires a uniform text style
 //                            with no new lines. FancyTextFrame can handle new lines and changing
 //                            style within the text.
@@ -18,25 +37,14 @@
 // Interactive GUI Widgets
 // =======================
 //
-// ButtonWidget: A basic push-button. Can override rendering via ButtonRenderer. Can override
-//               functionality by extending AbstractButtonFrame.
-//  Helper classes: ButtonRenderer, DefaultButtonRenderer, AbstractButtonFrame, DefaultButtonFrame
-//
+// StringPromptWidget: A text box that accepts strings.
+// IntegerPromptWidget: A text box that accepts integers.
+// ButtonWidget: A basic push-button.
 // SliderWidget: A horizontal or vertical scroll-bar, although with no scrolling properties. It can
-//               be used to select any integer value. Can override rendering via SliderRenderer.
-//  Helper classes: SliderRenderer, DefaultSliderRenderer, InnerSliderFrame, SliderFrame
+//               be used to select any integer value.
 //
 //
-// TextPrompt overview: A TextPrompt is any frame containing a flashing cursor and a text value
-//   that responds to user input. For example, the text could be a user-entered string or it could
-//   be the last key pressed by the user. The hierarchy is:
-//     AbstractTextPromptFrame: The absolute base class
-//     BasicTextPromptFrame: The base class for a TextPrompt that is edited one character at a
-//                           time (e.g. string or integer prompts)
-//     XXXPromptFrame: 
-//
-//
-// See GlopFrameBase.h.
+// See also GlopFrameBase.h.
 
 #ifndef GLOP_GLOP_FRAME_WIDGETS_H__
 #define GLOP_GLOP_FRAME_WIDGETS_H__
@@ -109,7 +117,7 @@ class SolidBoxFrame: public SingleParentFrame {
   SolidBoxFrame(const Color &inner_color)
   : SingleParentFrame(0), has_outer_part_(false), inner_color_(inner_color) {}
 
-  virtual void Render() const;
+  void Render() const;
   void SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2);
  protected:
   void RecomputeSize(int rec_width, int rec_height);
@@ -125,14 +133,27 @@ class HollowBoxFrame: public SingleParentFrame {
   HollowBoxFrame(GlopFrame *frame, const Color &color): SingleParentFrame(frame), color_(color) {}
   HollowBoxFrame(const Color &color): SingleParentFrame(0), color_(color) {}
 
-  virtual void Render() const ;
+  void Render() const;
   void SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2);
  protected:
   void RecomputeSize(int rec_width, int rec_height);
- 
  private:
   Color color_;
   DISALLOW_EVIL_CONSTRUCTORS(HollowBoxFrame);
+};
+
+class InputBoxFrame: public SingleParentFrame {
+ public:
+  InputBoxFrame(GlopFrame *inner_frame, const InputBoxViewFactory *factory = gInputBoxViewFactory)
+  : SingleParentFrame(new PaddedFrame(inner_frame, 0)), view_(factory->Create()) {}
+  ~InputBoxFrame() {delete view_;}
+
+  void Render() const;
+ protected:
+  void RecomputeSize(int rec_width, int rec_height); 
+ private:
+  InputBoxView *view_;
+  DISALLOW_EVIL_CONSTRUCTORS(InputBoxFrame);
 };
 
 class ArrowFrame: public GlopFrame {
@@ -146,8 +167,8 @@ class ArrowFrame: public GlopFrame {
  protected:
   void RecomputeSize(int rec_width, int rec_height);
  private:
-  ArrowView *view_;  
   Direction direction_;
+  ArrowView *view_;  
   DISALLOW_EVIL_CONSTRUCTORS(ArrowFrame);
 };
 
@@ -158,7 +179,7 @@ class ArrowFrame: public GlopFrame {
 // See comment at the top of the file.
 class TextFrame: public GlopFrame {
  public:
-  TextFrame(const string &text, const TextStyle &style = gFrameStyle->text_style);
+  TextFrame(const string &text, const GuiTextStyle &style = *gGuiTextStyle);
   virtual ~TextFrame();
   
   // Returns the pixel height we would choose for our text given the relative height as specified
@@ -178,20 +199,20 @@ class TextFrame: public GlopFrame {
       DirtySize();
     }
   }
-  const TextStyle &GetStyle() const {return text_style_;}
-  void SetStyle(const TextStyle &style) {
+  const GuiTextStyle &GetStyle() const {return text_style_;}
+  void SetStyle(const GuiTextStyle &style) {
     text_style_ = style;
     DirtySize();
   }
 
   // Standard GlopFrame functionality
-  virtual void Render() const;
+  void Render() const;
  protected:
-  virtual void RecomputeSize(int rec_width, int rec_height);
+  void RecomputeSize(int rec_width, int rec_height);
 
  private:
   string text_;
-  TextStyle text_style_;
+  GuiTextStyle text_style_;
   TextRenderer *renderer_;
   DISALLOW_EVIL_CONSTRUCTORS(TextFrame);
 };
@@ -220,9 +241,9 @@ class TextFrame: public GlopFrame {
 class FancyTextFrame: public MultiParentFrame {
  public:
   // Constructors. horz_justify is used to align different rows of text.
-  FancyTextFrame(const string &text, const TextStyle &style = gFrameStyle->text_style);
+  FancyTextFrame(const string &text, const GuiTextStyle &style = *gGuiTextStyle);
   FancyTextFrame(const string &text, bool add_soft_returns, float horz_justify,
-                 const TextStyle &style = gFrameStyle->text_style);
+                 const GuiTextStyle &style = *gGuiTextStyle);
 
   // Tags. These can be used as follows: string("Test: " + CTag(kRed) + " red");
   // Note that, they return strings, not char points, so if they are to be used with a call to
@@ -248,8 +269,8 @@ class FancyTextFrame: public MultiParentFrame {
       DirtySize();
     }
   }
-  const TextStyle &GetStyle() const {return text_style_;}
-  void SetStyle(const TextStyle &style) {
+  const GuiTextStyle &GetStyle() const {return text_style_;}
+  void SetStyle(const GuiTextStyle &style) {
     text_style_ = style;
     DirtySize();
   }
@@ -264,7 +285,7 @@ class FancyTextFrame: public MultiParentFrame {
   struct ParseStatus {
     int pos;
     float horz_justify;
-    TextStyle style;
+    GuiTextStyle style;
     TextRenderer *renderer;
   };
   ParseStatus CreateParseStatus();
@@ -277,7 +298,7 @@ class FancyTextFrame: public MultiParentFrame {
   // Data
   string text_;
   float base_horz_justify_;
-  TextStyle text_style_;
+  GuiTextStyle text_style_;
   bool add_soft_returns_;
   struct TextBlock {
     LightSetId child_id;
@@ -289,12 +310,12 @@ class FancyTextFrame: public MultiParentFrame {
 
 class FpsFrame: public SingleParentFrame {
  public:
-  FpsFrame(const TextStyle &style = gFrameStyle->text_style)
+  FpsFrame(const GuiTextStyle &style = *gGuiTextStyle)
   : SingleParentFrame(new TextFrame("", style)) {}
-  const TextStyle &GetStyle() const {return text()->GetStyle();}
-  void SetStyle(const TextStyle &style) {text()->SetStyle(style);}
+  const GuiTextStyle &GetStyle() const {return text()->GetStyle();}
+  void SetStyle(const GuiTextStyle &style) {text()->SetStyle(style);}
 
-  virtual void Think(int dt);
+  void Think(int dt);
  private:
   const TextFrame *text() const {return (TextFrame*)GetChild();}
   TextFrame *text() {return (TextFrame*)GetChild();}
@@ -302,228 +323,156 @@ class FpsFrame: public SingleParentFrame {
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-// AbstractTextPromptFrame
-// =======================
+// Text prompts
+// ============
 //
-// This is an abstract base class for a user-editable string of text. This text could be a generic
-// string, an integer, a GlopKey, or virtually anything else that can be built on top of a
-// TextFrame with a flashing cursor. Note that an AbstractTextPromptFrame cannot be instantiated
-// directly - a subclass must be used instead.
-class AbstractTextPromptFrame: public SingleParentFrame {
+// StringPrompt, IntegerPrompt, etc.
+
+class DummyTextPromptFrame: public SingleParentFrame {
  public:
-  // Overloaded functions for rendering the flashing cursor
+  DummyTextPromptFrame(const string &text, const TextPromptViewFactory *view_factory);
+  ~DummyTextPromptFrame() {delete view_;}
+
+  // Basic accessors and mutators. SetText automatically moves the cursor to the end of the prompt
+  // if the text changed.
+  const string &GetText() const {return text()->GetText();}
+  void SetText(const string &new_text);
+  int GetCursorPos() const {return cursor_pos_;}
+  void SetCursorPos(int pos);
+  bool IsSelectionActive() const {return selection_start_ != selection_end_;}
+  void GetSelection(int *start, int *end) {
+    *start = selection_start_;
+    *end = selection_end_;
+  }
+  void SetSelection(int start, int end);
+
+  // Given a pixel in local coordinates, these returns the character position it is overlapping. The
+  // first one returns a boundary in [0, len]. The second one returns an actual character in
+  // [0, len-1].
+  int PixelToBoundaryPosition(int x) const;
+  int PixelToCharacterPosition(int x) const;
+  void GetCursorExtents(int pos, int *x1, int *x2) const;
+  void GetCharacterExtents(int pos, int *x1, int *x2) const;
+
+  // Overloaded Glop functions
   void Render() const;
   void Think(int dt);
-
-  // Saves or unsaves the value of the text prompt. This is virtual so that overloaded frames do
-  // not need to use the TextFrame as their data storage.
-  virtual void StoreValue() = 0;
-  virtual void RestoreValue() = 0;
-
-  // Returns whether the text frame thinks the user tried to confirm or cancel his selection.
-  // Updated when Think is called.
-  bool WasConfirmed() const {return was_confirmed_;}
-  bool WasCanceled() const {return was_canceled_;}
-
+  void SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2);
  protected:
-  AbstractTextPromptFrame(const string &text, const TextStyle &style)
-  : SingleParentFrame(new TextFrame(text, style)),
-    cursor_timer_(0), cursor_pos_((int)text.size()),
-    was_confirmed_(false), was_canceled_(false),
-    was_confirm_queued_(false), was_cancel_queued_(false) {}
-
-  // Access to the underlying text. Note that the only legal mutation is setting the text, and this
-  // must go through us.
-  const TextFrame *text() const {return (TextFrame*)GetChild();}
-  virtual void SetText(const string &text) {
-    ((TextFrame*)GetChild())->SetText(text);
-    if ((int)text.size() < cursor_pos_)
-      SetCursorPos((int)text.size());
-  }
-    
-  // Compute and return the x-coordinate of each character (including the dummy last character) in
-  // our text frame. Also, ensure that we have a little room at the end for our cursor.
   void RecomputeSize(int rec_width, int rec_height);
-  const vector<int> &GetCharX() const {return char_x_;}
-
-  // Make the cursor visible if we just appeared
-  void OnFocusChange() {
-    cursor_timer_ = 0;
-    SingleParentFrame::OnFocusChange();
-  }
-
-  // Utilities for subclasses
-  int GetCursorPos() const {return cursor_pos_;}
-  void SetCursorPos(int pos, bool reset_timer = true) {
-    if (cursor_pos_ != pos) {
-      cursor_pos_ = min(max(pos, 0), (int)text()->GetText().size());
-      if (reset_timer)
-        cursor_timer_ = 0;
-    }
-  }
-  void Confirm() {was_confirm_queued_ = true;}
-  void Cancel() {was_cancel_queued_ = true;}
+  void OnFocusChange();
 
  private:
-  vector<int> char_x_;
-  int cursor_timer_, cursor_pos_;
-  bool was_confirmed_, was_canceled_;
-  bool was_confirm_queued_, was_cancel_queued_;
-  DISALLOW_EVIL_CONSTRUCTORS(AbstractTextPromptFrame);
+  const TextFrame *text() const {return (const TextFrame*)GetChild();}
+  TextFrame *text() {return (TextFrame*)GetChild();}
+  int cursor_pos_, cursor_time_;
+  int selection_start_, selection_end_;
+  int left_padding_, top_padding_, right_padding_;
+  TextPromptView *view_;
+  DISALLOW_EVIL_CONSTRUCTORS(DummyTextPromptFrame);
 };
 
-// BasicTextPromptFrame
-// ====================
-//
-// This is a subclass of AbstractTextPromptFrame that emulates a standard text prompt with a
-// cursor that can be moved with arrow keys and the mouse, as well as typing in any location. It
-// is still an abstract class, and it cannot be instantiated directly. See StringPromptFrame below
-// for the most basic implementation.
-class BasicTextPromptFrame: public AbstractTextPromptFrame {
+class BaseTextPromptFrame: public SingleParentFrame {
  public:
-  // GlopFrame overloads
-  void Render() const;
   bool OnKeyEvent(const KeyEvent &event, int dt);
-  bool IsFocusKeeper(const KeyEvent &event) const;
-
-  // AbstractTextPromptFrame overloads
-  void StoreValue() {stored_value_ = text()->GetText();}
-  void RestoreValue() {SetText(stored_value_);}
 
  protected:
-  BasicTextPromptFrame(const string &text, const FrameStyle *style);
-  BasicTextPromptFrame(const string &text, const TextStyle &text_style,
-                       const Color &selection_color);
+  BaseTextPromptFrame(const string &text, const TextPromptViewFactory *view_factory);
   void OnFocusChange();
-  void SetCursorPos(int pos, bool move_anchor);
-  void SetText(const string &text) {
-    AbstractTextPromptFrame::SetText(text);
-    selection_anchor_ = GetCursorPos();
-  }
+
+  // Text accessors, mutators. SetText ensures the cursor information is valid but does not
+  // reform the text automatically.
+  void SetText(const string &text);
+  const string &GetText() const {return prompt()->GetText();}
+  int GetCursorPos() const {return prompt()->GetCursorPos();}
 
   // The two functions that any BasicTextPromptFrame must implement:
   // CanInsertCharacter: If in_theory is true, is it ever possible to add ASCII value ch to the
   //                     text? If false, is it possible to add the value at the current cursor
   //                     location? If so, the subclass can still control how it is added via
   //                     ReformText below.
-  // ReformText: Given the prompt right after the user confirmed (if is_confirmed) or after a
-  //             normal edit (if !is_confirmed), this changes the text to valid text. For example,
-  //             this might convert lower-case letters to upper-case, or it might clip a number to
-  //             certain upper or lower bounds.
+  // ReformText: Given the prompt right after an edit, this changes the text to valid text. For
+  //             example, this might convert lower-case letters to upper-case, or it might clip a
+  //             number to certain upper or lower bounds.
   virtual bool CanInsertCharacter(char ch, bool in_theory) const = 0;
-  virtual void ReformText(bool is_confirmed) = 0;
+  virtual void ReformText() = 0;
 
  private:
+  const DummyTextPromptFrame *prompt() const {return (const DummyTextPromptFrame*)GetChild();}
+  DummyTextPromptFrame *prompt() {return (DummyTextPromptFrame*)GetChild();}
+
+  int GetPrevWordBoundary(int pos) const;
+  int GetNextWordBoundary(int pos) const;
   void DeleteSelection();
   void DeleteCharacter(bool is_next_character);
   void InsertCharacter(char ch);
-  void ReformTextAndCursor(bool is_confirmed);
+  void SetCursorPos(int pos, bool also_set_anchor);
+  class CharacterPing: public Ping {
+   public:
+    CharacterPing(GlopFrame *frame, int i): Ping(frame, false), i_(i) {}
+    void GetCoords(int *x1, int *y1, int *x2, int *y2);
+   private:
+    int i_;
+    DISALLOW_EVIL_CONSTRUCTORS(CharacterPing);
+  };
 
-  string stored_value_;
   bool is_tracking_mouse_;
   int selection_anchor_;
-  Color selection_color_;
-  DISALLOW_EVIL_CONSTRUCTORS(BasicTextPromptFrame);
+  DISALLOW_EVIL_CONSTRUCTORS(BaseTextPromptFrame);
 };
 
-// AbstractTextPromptFrame implementations
-// =======================================
-//
-// None of these are automatically wrapped in a FocusFrame.
-
-// GlopKeyPromptFrame - reads a GlopKey. Can override IsValidSelection to restrict to a subset of
-// keys.
-class GlopKeyPromptFrame: public AbstractTextPromptFrame {
+class StringPromptFrame: public BaseTextPromptFrame {
  public:
-  GlopKeyPromptFrame(const GlopKey &start_value,
-                     const TextStyle &style = gFrameStyle->text_style)
-  : AbstractTextPromptFrame("", style),
-    stored_value_(start_value) {
-    RestoreValue();
-  }
-  bool OnKeyEvent(const KeyEvent &event, int dt);
-  bool IsFocusKeeper(const KeyEvent &event) const {
-    return event.IsNonRepeatPress() && (IsValidSelection(event.key) || event.key == 27);
-  }
-
-  // Accessor and mutator
-  void StoreValue() {stored_value_ = Get();}
-  void RestoreValue() {Set(stored_value_);}
-  const GlopKey &Get() const {return key_;}
-  void Set(const GlopKey &key) {
-    key_ = key;
-    SetText(key.GetName());
-    SetCursorPos((int)text()->GetText().size());
-  }
-
- protected:
-  virtual bool IsValidSelection(const GlopKey &key) const {
-    return key != 27 && key != kKeyPause && key != kMouseUp && key != kMouseRight &&
-           key != kMouseDown && key != kMouseLeft;
-  }
-
- private:
-  GlopKey key_, stored_value_;
-  DISALLOW_EVIL_CONSTRUCTORS(GlopKeyPromptFrame);
-};
-
-// StringPromptFrame - A standard text prompt that limits the input length to be at most
-// length_limit characters long unless length_limit == 0;
-class StringPromptFrame: public BasicTextPromptFrame {
- public:
-  StringPromptFrame(const string &start_value, int length_limit,
-                    const FrameStyle *style = gFrameStyle)
-  : BasicTextPromptFrame("", style), length_limit_(length_limit) {
-    Set(start_value);
-  }
-  StringPromptFrame(const string &start_value, int length_limit,
-                    const TextStyle &text_style = gFrameStyle->text_style,
-                    const Color &selection_color = gFrameStyle->prompt_highlight_color)
-  : BasicTextPromptFrame("", text_style, selection_color),
-    length_limit_(length_limit) {
-    Set(start_value);
-  }
-
-  // Accessor and mutator
-  const string &Get() const {return text()->GetText();}
+  StringPromptFrame(const string &start_text, int length_limit,
+                    const TextPromptViewFactory *view_factory = gTextPromptViewFactory);
+  const string &Get() const {return GetText();}
   void Set(const string &value);
 
  protected:
   bool CanInsertCharacter(char ch, bool in_theory) const;
-  void ReformText(bool is_confirmed) {}
-
+  void ReformText() {}
  private:
   int length_limit_;
   DISALLOW_EVIL_CONSTRUCTORS(StringPromptFrame);
 };
 
-// IntegerPromptFrame - A text prompt for integers in a certain range.
-class IntegerPromptFrame: public BasicTextPromptFrame {
+class StringPromptWidget: public FocusFrame {
+ public:
+  StringPromptWidget(const string &start_text, int length_limit,
+                     const TextPromptViewFactory *prompt_view_factory = gTextPromptViewFactory,
+                     const InputBoxViewFactory *input_view_factory = gInputBoxViewFactory);
+  const string &Get() const {return prompt_->Get();}
+  void Set(const string &value) {prompt_->Set(value);}
+ private:
+  StringPromptFrame *prompt_;
+  DISALLOW_EVIL_CONSTRUCTORS(StringPromptWidget);
+};
+
+class IntegerPromptFrame: public BaseTextPromptFrame {
  public:
   IntegerPromptFrame(int start_value, int min_value, int max_value,
-                     const FrameStyle *style = gFrameStyle)
-  : BasicTextPromptFrame("", style), min_value_(min_value), max_value_(max_value) {
-    Set(start_value);
-  }
-  IntegerPromptFrame(int start_value, int min_value, int max_value,
-                     const TextStyle &text_style = gFrameStyle->text_style,
-                     const Color &selection_color = gFrameStyle->prompt_highlight_color)
-  : BasicTextPromptFrame("", text_style, selection_color),
-    min_value_(min_value), max_value_(max_value) {
-    Set(start_value);
-  }
-
-  // Accessor and mutator
-  int Get() const {return atoi(text()->GetText().c_str());}
-  void Set(int value) {SetText(Format("%d", value));}
+                     const TextPromptViewFactory *view_factory = gTextPromptViewFactory);
+  int Get() const {return atoi(GetText().c_str());}
+  void Set(int value);
 
  protected:
   bool CanInsertCharacter(char ch, bool in_theory) const;
-  void ReformText(bool is_confirmed);
-
+  void ReformText();
  private:
   int min_value_, max_value_;
   DISALLOW_EVIL_CONSTRUCTORS(IntegerPromptFrame);
+};
+
+class IntegerPromptWidget: public FocusFrame {
+ public:
+  IntegerPromptWidget(int start_value, int min_value, int max_value,
+                      const TextPromptViewFactory *prompt_view_factory = gTextPromptViewFactory,
+                      const InputBoxViewFactory *input_view_factory = gInputBoxViewFactory);
+  int Get() const {return prompt_->Get();}
+  void Set(int value) {prompt_->Set(value);}
+ private:
+  IntegerPromptFrame *prompt_;
+  DISALLOW_EVIL_CONSTRUCTORS(IntegerPromptWidget);
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -533,17 +482,16 @@ class IntegerPromptFrame: public BasicTextPromptFrame {
 class WindowFrame: public SingleParentFrame {
  public:
   WindowFrame(GlopFrame *inner_frame, const string &title,
-              const WindowViewFactory *view_factory = gFrameStyle->window_view_factory);
-  WindowFrame(GlopFrame *inner_frame,
-              const WindowViewFactory *view_factory = gFrameStyle->window_view_factory);
+              const WindowViewFactory *view_factory = gWindowViewFactory);
+  WindowFrame(GlopFrame *inner_frame, const WindowViewFactory *view_factory = gWindowViewFactory);
   ~WindowFrame() {delete view_;}
 
   void Render() const;
  protected:
   void RecomputeSize(int rec_width, int rec_height);
  private:
-  WindowView *view_;
   PaddedFrame *padded_title_frame_, *padded_inner_frame_;
+  WindowView *view_;
   DISALLOW_EVIL_CONSTRUCTORS(WindowFrame);
 };
 
@@ -572,7 +520,7 @@ class DummyButtonFrame: public SingleParentFrame {
 
 class ButtonFrame: public SingleParentFrame {
  public:
-  ButtonFrame(GlopFrame *inner_frame, const ButtonViewFactory *view_factory)
+  ButtonFrame(GlopFrame *inner_frame, const ButtonViewFactory *view_factory = gButtonViewFactory)
   : SingleParentFrame(new DummyButtonFrame(inner_frame, false, view_factory)),
     ping_on_press_(true), is_confirm_key_down_(false), was_pressed_fully_(false),
     is_mouse_locked_on_(false) {}
@@ -621,20 +569,19 @@ class ButtonFrame: public SingleParentFrame {
 class ButtonWidget: public FocusFrame {
  public:
   // Basic constructors
-  ButtonWidget(GlopFrame *frame,
-               const ButtonViewFactory *factory = gFrameStyle->button_view_factory)
+  ButtonWidget(GlopFrame *frame, const ButtonViewFactory *factory = gButtonViewFactory)
   : FocusFrame(new ButtonFrame(frame, factory)) {}
   ButtonWidget(GlopFrame *frame, const GlopKey &hot_key,
-               const ButtonViewFactory *factory = gFrameStyle->button_view_factory)
+               const ButtonViewFactory *factory = gButtonViewFactory)
   : FocusFrame(new ButtonFrame(frame, factory)) {button()->AddHotKey(hot_key);}
 
   // Convenience constructors for text button frames
-  ButtonWidget(const string &text, const TextStyle &text_style = gFrameStyle->text_style,
-               const ButtonViewFactory *factory = gFrameStyle->button_view_factory)
+  ButtonWidget(const string &text, const GuiTextStyle &text_style = *gGuiTextStyle,
+               const ButtonViewFactory *factory = gButtonViewFactory)
   : FocusFrame(new ButtonFrame(new TextFrame(text, text_style), factory)) {}
   ButtonWidget(const string &text, const GlopKey &hot_key,
-               const TextStyle &text_style = gFrameStyle->text_style,
-               const ButtonViewFactory *factory = gFrameStyle->button_view_factory)
+               const GuiTextStyle &text_style = *gGuiTextStyle,
+               const ButtonViewFactory *factory = gButtonViewFactory)
   : FocusFrame(new ButtonFrame(new TextFrame(text, text_style), factory)) {
     button()->AddHotKey(hot_key);
   }
@@ -662,7 +609,7 @@ class DummySliderFrame: public MultiParentFrame {
                    GlopFrame*(*button_factory)(ArrowFrame::Direction,
                                                const ArrowViewFactory *,
                                                const ButtonViewFactory *),
-                   const SliderViewFactory *factory = gFrameStyle->slider_view_factory);
+                   const SliderViewFactory *factory);
   ~DummySliderFrame() {delete view_;}
   const GlopFrame *GetDecButton() const {return dec_button_;}
   GlopFrame *GetDecButton() {return dec_button_;}
@@ -695,10 +642,10 @@ class DummySliderFrame: public MultiParentFrame {
 
   Direction direction_;
   GlopFrame *dec_button_, *inc_button_;
-  SliderView *view_;
   int logical_tab_size_, logical_total_size_, logical_tab_position_;
   int tab_x1_, tab_y1_, tab_x2_, tab_y2_;
   int tab_pixel_length_, bar_pixel_length_;
+  SliderView *view_;
   DISALLOW_EVIL_CONSTRUCTORS(DummySliderFrame);
 };
 
@@ -706,8 +653,7 @@ class SliderFrame: public SingleParentFrame {
  public:
   enum Direction {Horizontal, Vertical};  // Must match DummySliderFrame::Direction
   SliderFrame(Direction direction, int logical_tab_size, int logical_total_size,
-              int logical_tab_position,
-              const SliderViewFactory *factory = gFrameStyle->slider_view_factory);
+              int logical_tab_position, const SliderViewFactory *factory = gSliderViewFactory);
   LightSetId AddDecHotKey(const GlopKey &key) {return GetDecButton()->AddHotKey(key);}
   void RemoveDecHotKey(LightSetId id) {GetDecButton()->RemoveHotKey(id);}
   LightSetId AddBigDecHotKey(const GlopKey &key) {return big_dec_tracker_.AddHotKey(key);}
@@ -757,7 +703,7 @@ class SliderWidget: public FocusFrame {
   enum Direction {Horizontal, Vertical};  // Must match DummySliderFrame::Direction
   SliderWidget(Direction direction, int logical_tab_size, int logical_total_size,
                int logical_tab_position,
-               const SliderViewFactory *factory = gFrameStyle->slider_view_factory)
+               const SliderViewFactory *factory = gSliderViewFactory)
   : FocusFrame(new SliderFrame((SliderFrame::Direction)direction, logical_tab_size,
                                logical_total_size, logical_tab_position, factory)) {}
 

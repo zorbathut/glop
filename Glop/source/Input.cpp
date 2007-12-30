@@ -519,8 +519,8 @@ void Input::ConfigureGuiKeys(bool keyboard_bindings, bool mouse_bindings, bool j
     BindDerivedKey(kGuiKeyLeft, kKeyLeft);
     BindDerivedKey(kGuiKeyConfirm, 13);
     BindDerivedKey(kGuiKeyConfirm, kKeyPadEnter);
-    BindDerivedKey(kGuiKeySelectPrev, '\t', kKeyEitherShift, true, true);
-    BindDerivedKey(kGuiKeySelectNext, '\t', kKeyEitherShift, true, false);
+    BindDerivedKey(kGuiKeySelectPrev, '\t', kKeyEitherShift, kKeyEitherAlt, true, true, false);
+    BindDerivedKey(kGuiKeySelectNext, '\t', kKeyEitherShift, kKeyEitherAlt, true, false, false);
   }
   if (mouse_bindings) {
     BindDerivedKey(kGuiKeyScrollUp, kMouseWheelUp);
@@ -572,6 +572,20 @@ void Input::BindDerivedKey(const GlopKey &derived_key, const GlopKey &binding1,
   vector<bool> down;
   down.push_back(down1);
   down.push_back(down2);
+  BindDerivedKey(derived_key, binding, down);
+}
+
+void Input::BindDerivedKey(const GlopKey &derived_key, const GlopKey &binding1,
+                           const GlopKey &binding2, const GlopKey &binding3, bool down1, bool down2,
+                           bool down3) {
+  vector<GlopKey> binding;
+  binding.push_back(binding1);
+  binding.push_back(binding2);
+  binding.push_back(binding3);
+  vector<bool> down;
+  down.push_back(down1);
+  down.push_back(down2);
+  down.push_back(down3);
   BindDerivedKey(derived_key, binding, down);
 }
 

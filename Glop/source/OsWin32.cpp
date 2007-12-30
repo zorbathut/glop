@@ -178,6 +178,9 @@ LRESULT CALLBACK HandleMessage(HWND window_handle, UINT message, WPARAM wparam, 
         os_window->height = lparam2;
       }
       break;
+    case WM_SIZING:
+      os_window->focus_changed = true;
+      break;
 	  case WM_ACTIVATE:
       os_window->is_in_focus = (wparam1 == WA_ACTIVE || wparam1 == WA_CLICKACTIVE);
       os_window->focus_changed = true;

@@ -5,28 +5,93 @@
 #include "../include/GlopWindow.h"
 #include "../include/OpenGl.h"
 
-// Globals
-FrameStyle *gFrameStyle = 0;
+// GuiTextStyle
+// ============
 
-// TextStyle
-// =========
+GuiTextStyle::GuiTextStyle()
+: color(gGuiTextStyle->color), size(gGuiTextStyle->size), font(gGuiTextStyle->font),
+  flags(gGuiTextStyle->flags) {}
 
-TextStyle::TextStyle()
-: color(gFrameStyle->text_style.color), size(gFrameStyle->text_style.size),
-  font(gFrameStyle->text_style.font), flags(gFrameStyle->text_style.flags) {}
-TextStyle::TextStyle(const Color &_color)
-: color(_color), size(gFrameStyle->text_style.size), font(gFrameStyle->text_style.font),
-  flags(gFrameStyle->text_style.flags) {}
-TextStyle::TextStyle(const Color &_color, float _size)
-: color(_color), size(_size), font(gFrameStyle->text_style.font),
-  flags(gFrameStyle->text_style.flags) {}
-TextStyle::TextStyle(const Color &_color, float _size, Font *_font)
-: color(_color), size(_size), font(_font), flags(gFrameStyle->text_style.flags) {}
+GuiTextStyle::GuiTextStyle(const Color &_color)
+: color(_color), size(gGuiTextStyle->size), font(gGuiTextStyle->font),
+  flags(gGuiTextStyle->flags) {}
 
+GuiTextStyle::GuiTextStyle(const Color &_color, float _size)
+: color(_color), size(_size), font(gGuiTextStyle->font), flags(gGuiTextStyle->flags) {}
+
+GuiTextStyle::GuiTextStyle(const Color &_color, float _size, Font *_font)
+: color(_color), size(_size), font(_font), flags(gGuiTextStyle->flags) {}
+
+// InputBoxView
+// ============
+
+void DefaultInputBoxView::OnResize(int rec_width, int rec_height,
+                                   int *lp, int *tp, int *rp, int *bp) const {
+  *lp = *tp = *rp = *bp = 1;
+}
+
+void DefaultInputBoxView::Render(int x1, int y1, int x2, int y2,
+                                 const PaddedFrame *padded_frame) const {
+  GlUtils2d::DrawRectangle(x1, y1, x2, y2, factory_->GetBorderColor());
+  GlUtils2d::FillRectangle(x1+1, y1+1, x2-1, y2-1, factory_->GetBackgroundColor());
+  padded_frame->Render();
+}
+
+// TextPromptView
+// ==============
+
+const GuiTextStyle DefaultTextPromptView::GetTextStyle() const  {
+  return factory_->GetTextStyle();
+}
+
+void DefaultTextPromptView::OnResize(int rec_width, int rec_height, const TextFrame *text_frame,
+                                     int *lp, int *tp, int *rp, int *bp) const {
+  *tp = *bp = 0;
+  *lp = 1;
+  *rp = text_frame->GetRenderer()->GetCharWidth('|', true, true) - 1;
+}
+
+void DefaultTextPromptView::Render(int x1, int y1, int x2, int y2, int cursor_pos, int *cursor_time,
+                                   int selection_start, int selection_end, bool is_in_focus,
+                                   const TextFrame *text_frame) const {
+  const int kCursorCycleTime = 1000, kCursorFadeTime = 100;
+
+  // Get interesting x-coordinates
+  int len = (int)text_frame->GetText().size();
+  vector<int> x(1, 0);
+  for (int i = 0; i < len; i++) {
+    x.push_back(x[i] + text_frame->GetRenderer()->GetCharWidth(text_frame->GetText()[i],
+                i == 0, i == len-1));
+  }
+  int cursor_x = x1 + x[cursor_pos], sel_x1 = text_frame->GetX() + x[selection_start],
+      sel_x2 = text_frame->GetX() + x[selection_end];
+
+  // Animate the cursor
+  *cursor_time %= kCursorCycleTime;
+  Color cursor_color = factory_->GetCursorColor();
+  int delim[] = {kCursorCycleTime / 2 - kCursorFadeTime, kCursorCycleTime / 2,
+                 kCursorCycleTime - kCursorFadeTime, kCursorCycleTime};
+  if (*cursor_time <= delim[0])
+    cursor_color[3] = 1;
+  else if (*cursor_time <= delim[1])
+    cursor_color[3] = 1 - (*cursor_time - delim[0]) / float(delim[1] - delim[0]);
+  else if (*cursor_time <= delim[2])
+    cursor_color[3] = 0;
+  else
+    cursor_color[3] = (*cursor_time - delim[2]) / float(delim[3] - delim[2]);
+
+  // Render
+  if (selection_start != selection_end)
+    GlUtils2d::FillRectangle(sel_x1, y1, sel_x2-1, y2, factory_->GetHighlightColor());
+  text_frame->Render();
+  if (is_in_focus)
+    text_frame->GetRenderer()->Print(cursor_x, y1, "|", cursor_color);
+}
+ 
 // WindowView
 // ==========
 
-const TextStyle DefaultWindowView::GetTitleStyle() const {
+const GuiTextStyle DefaultWindowView::GetTitleStyle() const {
   return factory_->GetTitleStyle();
 }
 void DefaultWindowView::OnResize(int rec_width, int rec_height, bool has_title,
@@ -266,21 +331,40 @@ void DefaultSliderView::Render(int x1, int y1, int x2, int y2, bool is_horizonta
   GlUtils::SetColor(kWhite);
 }
 
-// FrameStyle
-// ==========
+// Globals
+// =======
+GuiTextStyle *gGuiTextStyle = 0;
+InputBoxViewFactory *gInputBoxViewFactory = 0;
+TextPromptViewFactory *gTextPromptViewFactory = 0;
+ArrowViewFactory *gArrowViewFactory = 0;
+ButtonViewFactory *gButtonViewFactory = 0;
+SliderViewFactory *gSliderViewFactory = 0;
+WindowViewFactory *gWindowViewFactory = 0;
 
-FrameStyle::FrameStyle(Font *font)
-: text_style(kBlack, 0.025f, font, 0),
-  prompt_highlight_color(0.6f, 0.6f, 1.0f) {
-  arrow_view_factory = new DefaultArrowViewFactory();
-  button_view_factory = new DefaultButtonViewFactory();
-  slider_view_factory = new DefaultSliderViewFactory(arrow_view_factory, button_view_factory);
-  window_view_factory = new DefaultWindowViewFactory(font);
+template<class T> static void SafeDelete(T *& data) {
+  if (data != 0) {
+    delete data;
+    data = 0;
+  }
 }
 
-FrameStyle::~FrameStyle() {
-  delete arrow_view_factory;
-  delete button_view_factory;
-  delete slider_view_factory;
-  delete window_view_factory;
+void ClearFrameStyle() {
+  SafeDelete(gGuiTextStyle);
+  SafeDelete(gInputBoxViewFactory);
+  SafeDelete(gTextPromptViewFactory);
+  SafeDelete(gArrowViewFactory);
+  SafeDelete(gButtonViewFactory);
+  SafeDelete(gSliderViewFactory);
+  SafeDelete(gWindowViewFactory);
+}
+
+void InitDefaultFrameStyle(Font *font) {
+  ClearFrameStyle();
+  gGuiTextStyle = new GuiTextStyle(kDefaultTextColor, kDefaultTextHeight, font, 0);
+  gInputBoxViewFactory = new DefaultInputBoxViewFactory();
+  gTextPromptViewFactory = new DefaultTextPromptViewFactory(font);
+  gArrowViewFactory = new DefaultArrowViewFactory();
+  gButtonViewFactory = new DefaultButtonViewFactory();
+  gSliderViewFactory = new DefaultSliderViewFactory(gArrowViewFactory, gButtonViewFactory);
+  gWindowViewFactory = new DefaultWindowViewFactory(font);
 }

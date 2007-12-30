@@ -511,6 +511,9 @@ class Input {
   static void BindDerivedKey(const GlopKey &derived_key, const GlopKey &binding, bool down = true);
   static void BindDerivedKey(const GlopKey &derived_key, const GlopKey &binding1,
                              const GlopKey &binding2, bool down1 = true, bool down2 = true);
+  static void BindDerivedKey(const GlopKey &derived_key, const GlopKey &binding1,
+                             const GlopKey &binding2, const GlopKey &binding3, bool down1 = true,
+                             bool down2 = true, bool down3 = true);
   static void BindDerivedKey(const GlopKey &derived_key, const vector<GlopKey> &binding,
                              const vector<bool> &down = vector<bool>(0));
   static void ClearDerivedKeys();

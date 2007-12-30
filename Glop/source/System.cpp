@@ -1,5 +1,6 @@
 // Includes
 #include "../include/System.h"
+#include "../include/GlopFrameStyle.h"
 #include "../include/GlopWindow.h"
 #include "../include/Image.h"
 #include "../include/Input.h"
@@ -16,8 +17,9 @@ System *gSystem = 0;
 void System::Init() {
   Os::Init();
   gSystem = new System();
-  Input::InitDerivedKeys();
   atexit(System::ShutDown);
+  Input::InitDerivedKeys();
+  InitDefaultFrameStyle(0);
 }
 
 // Internal logic - see System.h.
@@ -101,5 +103,6 @@ System::~System() {
   if (free_type_library_ != 0)
     FT_Done_FreeType((FT_Library)free_type_library_);
   FreeTypeLibrary::ShutDown();
+  ClearFrameStyle();
   Os::ShutDown();
 }

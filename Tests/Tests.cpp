@@ -4,12 +4,11 @@
 // TODO(darthur):
 //  - Clean up this file
 //  - Onquit
-//  - Boxed text prompt frames
-//  - Pinging on text prompt frames.
-//  - Should text prompts really track enter, escape?
 //  - Rework file stuff
 //  - Why is object slightly visible even when deep in the fog?
 //  - Add general GlopFrame comments, and formalize render expectations vis a vis gl settings
+//    Also look at FrameStyle
+//  - Vsync
 
 // Includes
 #include "../Glop/include/Base.h"
@@ -28,9 +27,8 @@
 Image *gIcon;
 
 void IntroScreen() {
-  GlopFrame *info = new FancyTextFrame("\1bu\1Glop Test Program\1/b/u\1\n\n"
-                                       "Select tests to verify that Glop performs as expected.",
-                                       kWhite);
+  GlopFrame *info = new FancyTextFrame("\1bu\1\1cFF8080\1Glop Test Program\1/b/u\1\1cFFFFFF\1\n\n"
+                                       "Select tests to verify that Glop performs as expected.");
   gWindow->AddFrame(info, 0.5f, 0.3f, 0.5f, 0.3f);
   input()->WaitForKeyPress();
   gWindow->ClearFrames();
@@ -348,17 +346,17 @@ void BuildMainMenu() {
 
 int main(int argc, char **argv) {
   Font *font;
-  
+
   System::Init();
-  gSystem->SetMaxFps(0);
   
-  ASSERT((font = Font::Load("thames.ttf")) != 0);
+  ASSERT((font = GradientFont::Load("thames.ttf", 1.0f, 0.5f, -0.3f, 1.0f)) != 0);
   ASSERT((gIcon = Image::Load("Icon.bmp", kRed, 1)) != 0);
-  gFrameStyle = new FrameStyle(font);
- 
+  InitDefaultFrameStyle(font);
+
   gWindow->SetIcon(gIcon);
   ASSERT(gWindow->Create(1024, 768, false));
   IntroScreen();
+
   BuildMainMenu();
   while (!input()->WasKeyPressed(27)) {
     int selection = 0;

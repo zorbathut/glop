@@ -824,7 +824,7 @@ void MinSizeFrame::RecomputeSize(int rec_width, int rec_height) {
 // scroll to on a ping.
 static void ScrollToPing(int scroll_x, int scroll_y, int view_w, int view_h, int total_w,
                          int total_h, int x1, int y1, int x2, int y2, bool center,
-                         int *new_scroll_x, int *new_scroll_y) {
+                         int *new_scroll_x, int *new_scroll_y, bool ignore_ub) {
   // Handle the special case where the pinged region is larger than the total view area (in that
   // case, look at the top-left part of the region).
   if (!center && x2 >= x1 + view_w)
@@ -846,7 +846,7 @@ static void ScrollToPing(int scroll_x, int scroll_y, int view_w, int view_h, int
   }
   if (*new_scroll_x < 0)
     *new_scroll_x = 0;
-  if (*new_scroll_x > total_w - view_w)
+  if (*new_scroll_x > total_w - view_w && !ignore_ub)
     *new_scroll_x = total_w - view_w;
 
   // Handle vertical movement
@@ -863,7 +863,7 @@ static void ScrollToPing(int scroll_x, int scroll_y, int view_w, int view_h, int
   }
   if (*new_scroll_y < 0)
     *new_scroll_y = 0;
-  if (*new_scroll_y > total_h - view_h)
+  if (*new_scroll_y > total_h - view_h && !ignore_ub)
     *new_scroll_y = total_h - view_h;
 }
 
@@ -878,11 +878,14 @@ MaxHeightFrame::MaxHeightFrame(GlopFrame *frame, float max_height, float vert_ju
 
 MaxSizeFrame::MaxSizeFrame(GlopFrame *frame, float max_width, float max_height, float horz_justify,
                            float vert_justify)
-: SingleParentFrame(new ClippedFrame(frame)), max_width_(max_width), max_height_(max_height) {
+: SingleParentFrame(new ClippedFrame(frame)), must_recenter_(false),
+  x_offset_(0), y_offset_(0),
+  max_width_(max_width), max_height_(max_height) {
   GetChild()->NewRelativePing(horz_justify, vert_justify, true);
 }
 
 void MaxSizeFrame::SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2) {
+  GlopFrame::SetPosition(screen_x, screen_y, cx1, cy1, cx2, cy2);
   ClippedFrame *clipped_frame = (ClippedFrame*)(GetChild());
   if (clipped_frame != 0) {
     if (max_width_ != kSizeLimitNone && max_height_ != kSizeLimitNone)
@@ -891,16 +894,17 @@ void MaxSizeFrame::SetPosition(int screen_x, int screen_y, int cx1, int cy1, int
       clipped_frame->SetClipping(GetX(), cy1, GetX2(), cy2);
     else if (max_height_ != kSizeLimitNone)
       clipped_frame->SetClipping(cx1, GetY(), cx2, GetY2());
-    clipped_frame->SetPosition(screen_x + x_offset_, screen_y + y_offset_, cx1, cy1, cx2, cy2);
+    clipped_frame->SetPosition(GetX() + x_offset_, GetY() + y_offset_, cx1, cy1, cx2, cy2);
   }
-  GlopFrame::SetPosition(screen_x, screen_y, cx1, cy1, cx2, cy2);
 }
 
 void MaxSizeFrame::RecomputeSize(int rec_width, int rec_height) {
   if (GetChild() != 0) {
     // Track the old scrolling position
-    double old_x = (GetX() + GetWidth()*0.5 - GetChild()->GetX()) / GetChild()->GetWidth();
-    double old_y = (GetY() + GetHeight()*0.5 - GetChild()->GetY()) / GetChild()->GetHeight();
+    double old_x = (GetChild()->GetWidth() == 0? 0 :
+      (GetX() + GetWidth()*0.5 - GetChild()->GetX()) / GetChild()->GetWidth());
+    double old_y = (GetChild()->GetHeight() == 0? 0 :
+      (GetY() + GetHeight()*0.5 - GetChild()->GetY()) / GetChild()->GetHeight());
 
     // Update the child size
     GetChild()->UpdateSize(rec_width, rec_height);
@@ -915,9 +919,12 @@ void MaxSizeFrame::RecomputeSize(int rec_width, int rec_height) {
     SetSize(min(GetChild()->GetWidth(), max_w), min(GetChild()->GetHeight(), max_h));
 
     // Position the child within the new size to be approximately where it was before
-    int px = int(old_x * GetChild()->GetWidth());
-    int py = int(old_y * GetChild()->GetHeight());
-    ScrollToChildPing(px, py, px, py, true);
+    if (must_recenter_) {
+      int px = int(old_x * GetChild()->GetWidth());
+      int py = int(old_y * GetChild()->GetHeight());
+      ScrollToChildPing(px, py, px, py, true);
+      must_recenter_ = false;
+    }
   } else {
     SetSize(0, 0);
   }
@@ -936,7 +943,8 @@ void MaxSizeFrame::OnChildPing(GlopFrame *child, int x1, int y1, int x2, int y2,
 void MaxSizeFrame::ScrollToChildPing(int x1, int y1, int x2, int y2, bool center) {
   int new_scroll_x, new_scroll_y;
   ::ScrollToPing(-x_offset_, -y_offset_, GetWidth(), GetHeight(), GetChild()->GetWidth(),
-                 GetChild()->GetHeight(), x1, y1, x2, y2, center, &new_scroll_x, &new_scroll_y);
+                 GetChild()->GetHeight(), x1, y1, x2, y2, center, &new_scroll_x, &new_scroll_y,
+                 true);
   x_offset_ = -new_scroll_x;
   y_offset_ = -new_scroll_y;
   SetPosition(GetX(), GetY(), GetClipX1(), GetClipY1(), GetClipX2(), GetClipY2());
@@ -944,7 +952,10 @@ void MaxSizeFrame::ScrollToChildPing(int x1, int y1, int x2, int y2, bool center
 
 // ScrollingFrame
 // ==============
-
+//
+// Note: ScrollingFrame's try to maintain their center in position when the inner frame resizes.
+// This is different from the behavior of MaxSizeFrame (as dictated by TextPrompt's). Perhaps
+// ScrollingFrame should be changed?
 class UnfocusableScrollingFrame: public MultiParentFrame {
  public:
   UnfocusableScrollingFrame(GlopFrame *frame, const SliderViewFactory *factory)
@@ -1071,7 +1082,7 @@ class UnfocusableScrollingFrame: public MultiParentFrame {
     ScrollToPing(scroll_x, scroll_y, inner_view_width_, inner_view_height_,
                  clipped_inner_frame_->GetWidth(), clipped_inner_frame_->GetHeight(),
                  x1 + scroll_x, y1 + scroll_y, x2 + scroll_x, y2 + scroll_y, center,
-                 &new_scroll_x, &new_scroll_y);
+                 &new_scroll_x, &new_scroll_y, false);
     if (horz_slider_ != 0) horz_slider_->SetTabPosition(new_scroll_x);
     if (vert_slider_ != 0) vert_slider_->SetTabPosition(new_scroll_y);
     SetPosition(GetX(), GetY(), GetClipX1(), GetClipY1(), GetClipX2(), GetClipY2());

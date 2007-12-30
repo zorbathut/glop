@@ -7,10 +7,6 @@
 #include "../include/System.h"
 #include "../include/Utils.h"
 
-// Constants
-const int kTextPromptCursorCycleTime = 800;
-const int kTextPromptCursorFadeTime = 80;
-
 // HotKeyTracker
 // =============
 KeyEvent::Type HotKeyTracker::RemoveHotKey(LightSetId id) {
@@ -71,15 +67,6 @@ bool HotKeyTracker::IsMatchingKey(const GlopKey &hot_key, const GlopKey &key) co
 // Basic widgets
 // =============
 
-void ArrowFrame::Render() const {
-  view_->Render(GetX(), GetY(), GetX2(), GetY2(), (ArrowView::Direction)direction_);
-}
-void ArrowFrame::RecomputeSize(int rec_width, int rec_height) {
-  int width, height;
-  view_->OnResize(rec_width, rec_height, (ArrowView::Direction)direction_, &width, &height);
-  SetSize(width, height);
-}
-
 void SolidBoxFrame::SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2) {
   int p = (has_outer_part_? 1 : 0);
   GlopFrame::SetPosition(screen_x, screen_y, cx1, cy1, cx2, cy2);
@@ -122,12 +109,34 @@ void HollowBoxFrame::Render() const {
   SingleParentFrame::Render();
 }
 
+void InputBoxFrame::Render() const {
+  view_->Render(GetX(), GetY(), GetX2(), GetY2(), (const PaddedFrame*)GetChild());
+}
+
+void InputBoxFrame::RecomputeSize(int rec_width, int rec_height) {
+  int lp, tp, rp, bp;
+  view_->OnResize(rec_width, rec_height, &lp, &tp, &rp, &bp);
+  ((PaddedFrame*)GetChild())->SetPadding(lp, tp, rp, bp);
+  SingleParentFrame::RecomputeSize(rec_width, rec_height);
+}
+
+void ArrowFrame::Render() const {
+  view_->Render(GetX(), GetY(), GetX2(), GetY2(), (ArrowView::Direction)direction_);
+}
+void ArrowFrame::RecomputeSize(int rec_width, int rec_height) {
+  int width, height;
+  view_->OnResize(rec_width, rec_height, (ArrowView::Direction)direction_, &width, &height);
+  SetSize(width, height);
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // TextFrame
 // =========
 
-TextFrame::TextFrame(const string &text, const TextStyle &style)
-: text_(text), text_style_(style), renderer_(0) {}
+TextFrame::TextFrame(const string &text, const GuiTextStyle &style)
+: text_(text), text_style_(style), renderer_(0) {
+  ASSERT(style.font != 0);  // Most likely user forgot to call InitDefaultFrameStyle or equivalent
+}
 
 TextFrame::~TextFrame() {
   if (renderer_ != 0)
@@ -140,7 +149,7 @@ int TextFrame::GetFontPixelHeight(float height) {
 
 void TextFrame::Render() const {
   if (renderer_ != 0 && text_.size() > 0) {
-    renderer_->Print(GetX(), GetY(), text_);
+    renderer_->Print(GetX(), GetY(), text_, text_style_.color);
     GlUtils::SetColor(kWhite);
   }
 }
@@ -150,7 +159,7 @@ void TextFrame::RecomputeSize(int rec_width, int rec_height) {
   TextRenderer *new_renderer = 0;
   if (text_style_.font != 0) {
     new_renderer = text_style_.font->AddRef(GetFontPixelHeight(text_style_.size),
-                                            text_style_.color, text_style_.flags); 
+                                            text_style_.flags); 
   }
   if (renderer_ != 0)
     TextRenderer::FreeRef(renderer_);
@@ -173,14 +182,18 @@ void FpsFrame::Think(int dt) {
 // FancyTextFrame
 // ==============
 
-FancyTextFrame::FancyTextFrame(const string &text, const TextStyle &style)
+FancyTextFrame::FancyTextFrame(const string &text, const GuiTextStyle &style)
 : MultiParentFrame(), text_(text), base_horz_justify_(0.5f), text_style_(style),
-  add_soft_returns_(true) {}
+  add_soft_returns_(true) {
+  ASSERT(style.font != 0);  // Most likely user forgot to call InitDefaultFrameStyle or equivalent
+}
 
 FancyTextFrame::FancyTextFrame(const string &text, bool add_soft_returns, float horz_justify,
-                               const TextStyle &style)
+                               const GuiTextStyle &style)
 : MultiParentFrame(), text_(text), base_horz_justify_(horz_justify), text_style_(style),
-  add_soft_returns_(add_soft_returns) {}
+  add_soft_returns_(add_soft_returns) {
+  ASSERT(style.font != 0);  // Most likely user forgot to call InitDefaultFrameStyle or equivalent
+}
 
 // Parsing utilities. A ParseStatus gives the position and style of text at a given location in
 // our string. When we start parsing, a ParseStatus also maintains a TextRenderer for the
@@ -196,8 +209,8 @@ FancyTextFrame::ParseStatus FancyTextFrame::CreateParseStatus() {
 // Utilities for parsing. Note that we keep many parsers "started" at the same time. In effect,
 // this means we keeps the font bitmaps in memory until they are transferred over to TextFrames.
 void FancyTextFrame::StartParsing(ParseStatus *status, vector<ParseStatus> *active_parsers) {
-  status->renderer = status->style.font->AddRef(
-    TextFrame::GetFontPixelHeight(status->style.size), status->style.color, status->style.flags);
+  status->renderer = status->style.font->AddRef(TextFrame::GetFontPixelHeight(status->style.size),
+                                                status->style.flags);
   active_parsers->push_back(*status);
 }
 
@@ -488,65 +501,395 @@ void FancyTextFrame::RecomputeSize(int rec_width, int rec_height) {
   StopParsing(&active_parsers);
 }
 
-// AbstractTextPromptFrame
-// =======================
+// TextPromptFrame
+// ===============
 
-void AbstractTextPromptFrame::Render() const {
-  SingleParentFrame::Render();
+DummyTextPromptFrame::DummyTextPromptFrame(const string &text,
+                                           const TextPromptViewFactory *view_factory)
+: SingleParentFrame(0),
+  cursor_pos_(0), cursor_time_(0), selection_start_(0), selection_end_(0),
+  left_padding_(0), top_padding_(0), right_padding_(0),
+  view_(view_factory->Create()) {
+  SetChild(new TextFrame(text, view_->GetTextStyle()));
+}
 
+void DummyTextPromptFrame::SetText(const string &new_text) {
+  if (new_text != text()->GetText()) {
+    text()->SetText(new_text);
+    SetCursorPos((int)new_text.size());
+    SetSelection(0, 0);
+  }
+}
+
+void DummyTextPromptFrame::SetCursorPos(int pos) {
+  cursor_pos_ = max(min(pos, int(GetText().size())), 0);
+  cursor_time_ = 0;
+}
+
+void DummyTextPromptFrame::SetSelection(int start, int end) {
+  int x1 = min(start, end), x2 = max(start, end);
+  selection_start_ = max(min(x1, int(GetText().size())), 0);
+  selection_end_ = max(min(x2, int(GetText().size())), 0);
+}
+
+int DummyTextPromptFrame::PixelToBoundaryPosition(int x) const {
+  int len = int(GetText().size());
+  if (len == 0)
+    return 0;
+  x -= (left_padding_ + text()->GetRenderer()->GetCharWidth(GetText()[0], true, len == 1)/2);
+  for (int i = 0; ; i++) {
+    if (x <= 0) return i;
+    if (i == len-1) return len;
+    x -= ((text()->GetRenderer()->GetCharWidth(GetText()[i], i == 0, false)+1)/2 +
+          text()->GetRenderer()->GetCharWidth(GetText()[i+1], false, i == len-2)/2);
+  }
+}
+
+int DummyTextPromptFrame::PixelToCharacterPosition(int x) const {
+  int len = int(GetText().size());
+  if (len == 0)
+    return 0;
+  x -= (left_padding_ + text()->GetRenderer()->GetCharWidth(GetText()[0], true, len == 1));
+  for (int i = 0; ; i++) {
+    if (x <= 0) return i;
+    if (i == len-2) return len-1;
+    x -= text()->GetRenderer()->GetCharWidth(GetText()[i+1], false, false);
+  }
+}
+
+void DummyTextPromptFrame::GetCursorExtents(int pos, int *x1, int *x2) const {
+  int x = 0, len = int(GetText().size());
+  for (int i = 0; i < pos; i++)
+    x += text()->GetRenderer()->GetCharWidth(GetText()[i], i == 0, i == len-1);
+  *x1 = x;
+  *x2 = *x1 + left_padding_ + right_padding_ - 1;
+}
+
+void DummyTextPromptFrame::GetCharacterExtents(int pos, int *x1, int *x2) const {
+  int x = 0, len = int(GetText().size());
+  for (int i = 0; i < pos; i++)
+    x += text()->GetRenderer()->GetCharWidth(GetText()[i], i == 0, i == len-1);
+  *x1 = x + left_padding_;
+  *x2 = *x1 + text()->GetRenderer()->GetCharWidth(GetText()[pos], pos == 0, pos == len-1) - 1;
+}
+
+void DummyTextPromptFrame::Render() const {
+  view_->Render(GetX(), GetY(), GetX2(), GetY2(), cursor_pos_, (int*)&cursor_time_,
+                selection_start_, selection_end_, IsInFocus(), text());
+}
+
+void DummyTextPromptFrame::Think(int dt) {
+  cursor_time_ += dt;
+  SingleParentFrame::Think(dt);
+}
+
+void DummyTextPromptFrame::SetPosition(int screen_x, int screen_y,
+                                       int cx1, int cy1, int cx2, int cy2) {
+  GetChild()->SetPosition(screen_x + left_padding_, screen_y + top_padding_, cx1, cy1, cx2, cy2);
+  GlopFrame::SetPosition(screen_x, screen_y, cx1, cy1, cx2, cy2);
+}
+
+void DummyTextPromptFrame::RecomputeSize(int rec_width, int rec_height) {
+  GetChild()->UpdateSize(rec_width, rec_height);
+  int bp;
+  view_->OnResize(rec_width, rec_height, text(), &left_padding_, &top_padding_,
+                  &right_padding_, &bp);
+  SetSize(GetChild()->GetWidth() + left_padding_ + right_padding_,
+          GetChild()->GetHeight() + top_padding_ + bp);
+}
+
+void DummyTextPromptFrame::OnFocusChange() {
+  if (IsInFocus())
+    cursor_time_ = 0;
+  else
+    selection_start_ = selection_end_ = 0;
+  SingleParentFrame::OnFocusChange();
+}
+
+bool BaseTextPromptFrame::OnKeyEvent(const KeyEvent &event, int dt) {
+  // Track mouse motion with the selection
+  if (input()->IsKeyDownNow(kGuiKeyPrimaryClick)) {
+    int mx = input()->GetMouseX() - GetX();
+
+    // Handle double-clicks
+    if (event.key == kGuiKeyPrimaryClick && event.IsDoublePress()) {
+      int pos = prompt()->PixelToCharacterPosition(mx), pos1 = GetPrevWordBoundary(pos),
+          pos2 = GetNextWordBoundary(pos+1);
+      selection_anchor_ = pos1;
+      SetCursorPos(pos2, false);
+      prompt()->SetSelection(pos1, pos2);
+    }
+
+    // Handle first clicks
+    else if (event.key == kGuiKeyPrimaryClick && event.IsNonRepeatPress()) {
+      int pos = prompt()->PixelToBoundaryPosition(mx);
+      is_tracking_mouse_ = true;
+      selection_anchor_ = pos;
+    }
+
+    // Handle dragged selections, but only scroll slowly
+    if (is_tracking_mouse_) {
+      int pos = prompt()->PixelToBoundaryPosition(mx),
+        min_pos = prompt()->PixelToBoundaryPosition(GetClipX1() - GetX()),
+        max_pos = prompt()->PixelToBoundaryPosition(GetClipX2() - GetX());
+      if (event.key == kGuiKeyPrimaryClick && event.IsPress()) {
+        min_pos = max(min_pos - 1, 0);
+        max_pos = min(max_pos + 1, (int)GetText().size());
+      }
+      pos = max(min(pos, max_pos), min_pos);
+      SetCursorPos(pos, false);
+      prompt()->SetSelection(selection_anchor_, pos);
+    }
+    if (event.key == kGuiKeyPrimaryClick)
+      return true;
+  } else {
+    is_tracking_mouse_ = false;
+  }
+
+  // Handle all key presses
+  if (event.IsPress()) {
+    int ascii = input()->GetAsciiValue(event.key);
+
+    // Handle backspace and delete
+    if (event.key == '\b') {
+      if (prompt()->IsSelectionActive())
+        DeleteSelection();
+      else if (GetCursorPos() > 0)
+        DeleteCharacter(false);
+      ReformText();
+      return true;
+    } else if (event.key == kKeyDelete) {
+      if (prompt()->IsSelectionActive())
+        DeleteSelection();
+      else if (GetCursorPos() < (int)GetText().size())
+        DeleteCharacter(true);
+      ReformText();
+      return true;
+    }
+    
+    // Handle character insertion
+    else if (ascii != 0 && CanInsertCharacter(ascii, true)) {
+      if (prompt()->IsSelectionActive()) {
+        int cursor_pos_cache = GetCursorPos(), selection_anchor_cache = selection_anchor_;
+        int selection_start_cache, selection_end_cache;
+        prompt()->GetSelection(&selection_start_cache, &selection_end_cache);
+        string text_cache = GetText();
+        DeleteSelection();
+        if (CanInsertCharacter(ascii, false)) {
+          InsertCharacter(ascii);
+          ReformText();
+        } else {
+          prompt()->SetText(text_cache);
+          prompt()->SetSelection(selection_start_cache, selection_end_cache);
+          selection_anchor_ = selection_anchor_cache;
+          SetCursorPos(cursor_pos_cache, false);
+          selection_anchor_ = selection_anchor_cache;
+        }
+      } else if (CanInsertCharacter(ascii, false)) {
+        InsertCharacter(ascii);
+        ReformText();
+      }
+      return true;
+    }
+
+    // Handle cursor movement
+    else {
+      int new_cursor_pos = GetCursorPos();
+      bool left_allowed = new_cursor_pos > 0 &&
+                          !input()->IsKeyDownNow(kKeyRight) && !input()->IsKeyDownNow(kKeyEnd) &&
+                          (!input()->IsNumLockSet() || !input()->IsKeyDownNow(kKeyPad6)) &&
+                          (!input()->IsNumLockSet() || !input()->IsKeyDownNow(kKeyPad1));
+      bool right_allowed = new_cursor_pos < (int)GetText().size() &&
+                           !input()->IsKeyDownNow(kKeyLeft) && !input()->IsKeyDownNow(kKeyHome) &&
+                           (!input()->IsNumLockSet() || !input()->IsKeyDownNow(kKeyPad4)) &&
+                           (!input()->IsNumLockSet() || !input()->IsKeyDownNow(kKeyPad7));
+      if (event.key == kKeyLeft || (event.key == kKeyPad4 && !input()->IsNumLockSet())) {
+        if (left_allowed) {
+          new_cursor_pos = (input()->IsKeyDownFrame(kKeyEitherControl)?
+                            GetPrevWordBoundary(new_cursor_pos-1) : new_cursor_pos - 1);
+        }
+      } else if (event.key == kKeyHome || (event.key == kKeyPad7 && !input()->IsNumLockSet())) {
+        if (left_allowed)
+          new_cursor_pos = 0;
+      } else if (event.key == kKeyRight || (event.key == kKeyPad6 && !input()->IsNumLockSet())) {
+        if (right_allowed) {
+          new_cursor_pos = (input()->IsKeyDownFrame(kKeyEitherControl)?
+                            GetNextWordBoundary(new_cursor_pos+1) : new_cursor_pos + 1);
+        }
+      } else if (event.key == kKeyEnd || (event.key == kKeyPad1 && !input()->IsNumLockSet())) {
+        if (right_allowed)
+          new_cursor_pos = int(GetText().size());
+      } else {
+        return false;
+      }
+
+      // Update the position
+      SetCursorPos(new_cursor_pos, !input()->IsKeyDownNow(kKeyEitherShift));
+      is_tracking_mouse_ = false;
+      prompt()->SetSelection(selection_anchor_, new_cursor_pos);
+      return true;
+    }
+  }
+  return false;
+}
+
+BaseTextPromptFrame::BaseTextPromptFrame(const string &text,
+                                         const TextPromptViewFactory *view_factory)
+: SingleParentFrame(new DummyTextPromptFrame(text, view_factory)),
+  is_tracking_mouse_(false), selection_anchor_(-1) {}
+
+void BaseTextPromptFrame::OnFocusChange() {
   if (IsInFocus()) {
-    // Determine the cursor color (including translucency)
-    Color cursor_color((text()->GetStyle().color + kBlue) / 2);
-    int delim[] = {kTextPromptCursorCycleTime / 2 - kTextPromptCursorFadeTime,
-                   kTextPromptCursorCycleTime / 2,
-                   kTextPromptCursorCycleTime - kTextPromptCursorFadeTime,
-                   kTextPromptCursorCycleTime};
-    if (cursor_timer_ <= delim[0])
-      cursor_color[3] = 1;
-    else if (cursor_timer_ <= delim[1])
-      cursor_color[3] = 1 - (cursor_timer_ - delim[0]) / float(delim[1] - delim[0]);
-    else if (cursor_timer_ <= delim[2])
-      cursor_color[3] = 0;
-    else
-      cursor_color[3] = (cursor_timer_ - delim[2]) / float(delim[3] - delim[2]);
-
-    // Print the cursor
-    text()->GetRenderer()->Print(GetX() + char_x_[cursor_pos_], GetY(), "|");
+    selection_anchor_ = 0;
+    SetCursorPos(int(GetText().size()), false);
+    prompt()->SetSelection(selection_anchor_, GetCursorPos());
   }
+  SingleParentFrame::OnFocusChange();
 }
 
-void AbstractTextPromptFrame::Think(int dt) {
-  cursor_timer_ += dt;
-  cursor_timer_ %= kTextPromptCursorCycleTime;
-  was_confirmed_ = was_confirm_queued_;
-  was_canceled_ = was_cancel_queued_;
-  was_confirm_queued_ = was_cancel_queued_ = false;
+void BaseTextPromptFrame::SetText(const string &text) {
+  prompt()->SetText(text);
+  prompt()->SetSelection(0, 0);
+  selection_anchor_ = GetCursorPos();
 }
 
-void AbstractTextPromptFrame::RecomputeSize(int rec_width, int rec_height) {
-  SingleParentFrame::RecomputeSize(rec_width, rec_height);
-  SetSize(GetWidth() + text()->GetRenderer()->GetCharWidth('|', true, true), GetHeight());
-  char_x_.clear();
-  char_x_.push_back(0);
-  for (int i = 0; i < (int)text()->GetText().size(); i++) {
-    int dx = text()->GetRenderer()->GetCharWidth(text()->GetText()[i], i == 0, false);
-    char_x_.push_back(char_x_[i] + dx);
+// Word boundaries are the start of the string, the end of the string, or any place we transition
+// from white space to non-white space. pos is clamped to the ranged of the string, and then we
+// next or previous word boundary, possibly including pos itself.
+int BaseTextPromptFrame::GetPrevWordBoundary(int pos) const {
+  pos = max(min(pos, int(GetText().size()) - 1), 0);
+  while (pos < int(GetText().size()) && pos > 0 &&
+         (GetText()[pos-1] != ' ' || GetText()[pos] == ' '))
+    pos--;
+  return pos;
+}
+
+int BaseTextPromptFrame::GetNextWordBoundary(int pos) const {
+  pos = max(min(pos, int(GetText().size()) - 1), 0);
+  while (pos < int(GetText().size()) && pos > 0 &&
+         (GetText()[pos-1] != ' ' || GetText()[pos] == ' '))
+    pos++;
+  return pos;
+}
+
+void BaseTextPromptFrame::DeleteSelection() {
+  int s1, s2;
+  prompt()->GetSelection(&s1, &s2);
+  string part1 = (s1 == 0? "" : GetText().substr(0, s1)),
+         part2 = (s2 == GetText().size()? "" : GetText().substr(s2));
+  SetText(part1 + part2);
+  SetCursorPos(s1, true);
+  is_tracking_mouse_ = false;
+}
+
+void BaseTextPromptFrame::DeleteCharacter(bool is_next_character) {
+  int i = GetCursorPos() + (is_next_character? 0 : -1);
+  string part1 = (i == 0? "" : GetText().substr(0, i)),
+         part2 = (i+1 == GetText().size()? "" : GetText().substr(i+1));
+  SetText(part1 + part2);
+  SetCursorPos(i, true);
+}
+
+void BaseTextPromptFrame::InsertCharacter(char ch) {
+  int i = GetCursorPos();
+  string part1 = (i == 0? "" : GetText().substr(0, i)),
+         part2 = (i == GetText().size()? "" : GetText().substr(i));
+  SetText(part1 + ch + part2);
+  SetCursorPos(i + 1, true);
+}
+
+void BaseTextPromptFrame::SetCursorPos(int pos, bool also_set_anchor) {
+  prompt()->SetCursorPos(pos);
+  if (also_set_anchor)
+    selection_anchor_ = GetCursorPos();
+  AddPing(new CharacterPing(this, GetCursorPos()));
+}
+
+void BaseTextPromptFrame::CharacterPing::GetCoords(int *x1, int *y1, int *x2, int *y2) {
+  BaseTextPromptFrame *frame = (BaseTextPromptFrame*)GetFrame();
+  int temp, len = (int)frame->GetText().size();
+  int char_x1, char_x2, cur_x1, cur_x2;
+  frame->prompt()->GetCharacterExtents(max(i_ - 1, 0), &char_x1, &temp);
+  frame->prompt()->GetCharacterExtents(min(i_, len-1), &temp, &char_x2);
+  frame->prompt()->GetCursorExtents(i_, &cur_x1, &cur_x2);
+  *x1 = min(char_x1, cur_x1);
+  *x2 = max(char_x2, cur_x2);
+  *y1 = 0;
+  *y2 = frame->GetHeight();
+}
+
+StringPromptFrame::StringPromptFrame(const string &start_text, int length_limit,
+                                     const TextPromptViewFactory *view_factory)
+: BaseTextPromptFrame(start_text, view_factory), length_limit_(length_limit) {}
+
+void StringPromptFrame::Set(const string &value) {
+  if (length_limit_ < (int)value.size())
+    SetText(value.substr(0, length_limit_));
+  else
+    SetText(value);
+}
+
+bool StringPromptFrame::CanInsertCharacter(char ch, bool in_theory) const {
+  return (ch >= 32 && ch <= 126) &&
+         (in_theory || (int)GetText().size() < length_limit_);
+}
+
+StringPromptWidget::StringPromptWidget(const string &start_text, int length_limit,
+                                       const TextPromptViewFactory *prompt_view_factory,
+                                       const InputBoxViewFactory *input_view_factory)
+: FocusFrame(new InputBoxFrame(new PaddedFrame(new ExactWidthFrame(
+    prompt_ = new StringPromptFrame(start_text, length_limit, prompt_view_factory)), 1),
+    input_view_factory)) {}
+
+IntegerPromptFrame::IntegerPromptFrame(int start_value, int min_value, int max_value,
+                                       const TextPromptViewFactory *view_factory)
+: BaseTextPromptFrame(Format("%d", start_value), view_factory), min_value_(min_value),
+  max_value_(max_value) {
+  ReformText();
+}
+
+void IntegerPromptFrame::Set(int value) {
+  SetText(Format("%d", value));
+  ReformText();
+}
+
+bool IntegerPromptFrame::CanInsertCharacter(char ch, bool in_theory) const {
+  if (!in_theory) {
+    if ((ch == '-' && GetCursorPos() > 0) ||
+        (ch == '0' && GetText() != "" && GetCursorPos() == 0) ||
+        (ch == '0' && GetText()[0] == '-' && GetCursorPos() == 1))
+      return false;
   }
+  return (ch >= '0' && ch <= '9') || (min_value_ < 0 && ch == '-');
 }
 
+void IntegerPromptFrame::ReformText() {
+  string min_value = Format("%d", min_value_), max_value = Format("%d", max_value_);
+  string s = GetText();
+  while (s[0] == '-' && s[1] == '0')
+    s = "-" + s.substr(2);
+  while (s[0] == '0' && s.size() > 1)
+    s = s.substr(1);
+  if (s[0] != '-') {
+    if (s.size() > max_value.size() || (s.size() == max_value.size() && s > max_value))
+      s = max_value;
+  } else {
+    if (s.size() > min_value.size() || (s.size() == min_value.size() && s > min_value))
+      s = min_value;
+  }
+  SetText(s);
+}
+
+IntegerPromptWidget::IntegerPromptWidget(int start_value, int min_value, int max_value,
+                                         const TextPromptViewFactory *prompt_view_factory,
+                                         const InputBoxViewFactory *input_view_factory)
+: FocusFrame(new InputBoxFrame(new PaddedFrame(new ExactWidthFrame(
+    prompt_ = new IntegerPromptFrame(start_value, min_value, max_value, prompt_view_factory)), 1),
+    input_view_factory)) {}
 // BasicTextPromptFrame
 // ====================
 
-void BasicTextPromptFrame::Render() const {
-  if (GetCursorPos() != selection_anchor_) {
-    int s1 = min(GetCursorPos(), selection_anchor_), s2 = max(GetCursorPos(), selection_anchor_);
-    GlUtils2d::FillRectangle(GetX() + GetCharX()[s1], GetY(),
-                             GetX() + GetCharX()[s2], GetY2(), selection_color_);
-    GlUtils::SetColor(kWhite);
-  }
-  AbstractTextPromptFrame::Render();
-}
-
+/*
 bool BasicTextPromptFrame::OnKeyEvent(const KeyEvent &event, int dt) {
   // Track mouse motion with the selection
   if (input()->IsKeyDownNow(kMouseLButton)) {
@@ -647,7 +990,7 @@ BasicTextPromptFrame::BasicTextPromptFrame(const string &text, const FrameStyle 
   selection_anchor_(GetCursorPos()),
   selection_color_(style->prompt_highlight_color) {}
 
-BasicTextPromptFrame::BasicTextPromptFrame(const string &text, const TextStyle &text_style,
+BasicTextPromptFrame::BasicTextPromptFrame(const string &text, const GuiTextStyle &text_style,
                                            const Color &selection_color)
 : AbstractTextPromptFrame(text, text_style),
   stored_value_(text),
@@ -755,7 +1098,7 @@ void IntegerPromptFrame::ReformText(bool is_confirmed) {
       s = min_value;
   }
   SetText(s);
-}
+}*/
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // WindowFrame
@@ -1011,7 +1354,7 @@ void DummySliderFrame::RecomputeTabScreenPosition() {
   if (direction_ == Horizontal)
     min_tab_length = view_->GetMinTabLengthOnResize(bar_pixel_length_, GetHeight(), true);
   else
-    min_tab_length = view_->GetMinTabLengthOnResize( GetWidth(), bar_pixel_length_, false);
+    min_tab_length = view_->GetMinTabLengthOnResize(GetWidth(), bar_pixel_length_, false);
 
   // Compute the length of the tab
   if (logical_tab_size_ < logical_total_size_) {
