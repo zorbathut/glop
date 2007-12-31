@@ -120,6 +120,44 @@ void InputBoxFrame::RecomputeSize(int rec_width, int rec_height) {
   SingleParentFrame::RecomputeSize(rec_width, rec_height);
 }
 
+ImageFrame::ImageFrame(BinaryFileReader reader, const Color &bg_color, int bg_tolerance,
+                       const Color &color) {
+  Init(Texture::Load(reader, bg_color, bg_tolerance), true, color);
+}
+ImageFrame::ImageFrame(BinaryFileReader reader, const Color &color) {
+  Init(Texture::Load(reader), true, color);
+}
+ImageFrame::ImageFrame(const Image *image, const Color &color) {
+  Init(new Texture(image), true, color);
+}
+ImageFrame::ImageFrame(const Texture *texture, const Color &color) {
+  Init(texture, false, color);
+}
+
+ImageFrame::~ImageFrame() {
+  if (is_texture_owned_)
+    delete texture_;
+}
+
+void ImageFrame::Init(const Texture *texture, bool is_texture_owned, const Color &color) {
+  ASSERT(texture != 0);
+  texture_ = texture;
+  is_texture_owned_ = is_texture_owned;
+  color_ = color;
+}
+
+void ImageFrame::Render() const {
+  GlUtils::SetColor(color_);
+  GlUtils::SetTexture(texture_);
+  GlUtils2d::RenderTexture(GetX(), GetY(), GetX2(), GetY2(), texture_);
+  GlUtils::SetNoTexture();
+  GlUtils::SetColor(kWhite);
+}
+
+void ImageFrame::RecomputeSize(int rec_width, int rec_height) {
+  SetToMaxSize(rec_width, rec_height, float(texture_->GetWidth()) / texture_->GetHeight());
+}
+
 void ArrowFrame::Render() const {
   view_->Render(GetX(), GetY(), GetX2(), GetY2(), (ArrowView::Direction)direction_);
 }
@@ -835,11 +873,12 @@ bool StringPromptFrame::CanInsertCharacter(char ch, bool in_theory) const {
 }
 
 StringPromptWidget::StringPromptWidget(const string &start_text, int length_limit,
+                                       float prompt_width,
                                        const TextPromptViewFactory *prompt_view_factory,
                                        const InputBoxViewFactory *input_view_factory)
 : FocusFrame(new InputBoxFrame(new PaddedFrame(new ExactWidthFrame(
-    prompt_ = new StringPromptFrame(start_text, length_limit, prompt_view_factory)), 1),
-    input_view_factory)) {}
+    prompt_ = new StringPromptFrame(start_text, length_limit, prompt_view_factory), prompt_width),
+    1), input_view_factory)) {}
 
 IntegerPromptFrame::IntegerPromptFrame(int start_value, int min_value, int max_value,
                                        const TextPromptViewFactory *view_factory)
@@ -881,226 +920,14 @@ void IntegerPromptFrame::ReformText() {
 }
 
 IntegerPromptWidget::IntegerPromptWidget(int start_value, int min_value, int max_value,
+                                         float prompt_width,
                                          const TextPromptViewFactory *prompt_view_factory,
                                          const InputBoxViewFactory *input_view_factory)
 : FocusFrame(new InputBoxFrame(new PaddedFrame(new ExactWidthFrame(
-    prompt_ = new IntegerPromptFrame(start_value, min_value, max_value, prompt_view_factory)), 1),
-    input_view_factory)) {}
-// BasicTextPromptFrame
-// ====================
+    prompt_ = new IntegerPromptFrame(start_value, min_value, max_value, prompt_view_factory),
+    prompt_width), 1), input_view_factory)) {}
 
-/*
-bool BasicTextPromptFrame::OnKeyEvent(const KeyEvent &event, int dt) {
-  // Track mouse motion with the selection
-  if (input()->IsKeyDownNow(kMouseLButton)) {
-    if (is_tracking_mouse_ ||
-        (event.IsNonRepeatPress() && event.key == kMouseLButton)) {
-      if (event.key == kMouseLButton && event.IsDoublePress()) {
-        selection_anchor_ = 0;
-        SetCursorPos(int(text()->GetText().size()), false);
-        return true;
-      }
-      int mx = input()->GetMouseX() - GetX();
-      int pos = BSFindLowerBound(GetCharX(), mx);
-      if (pos == -1)
-        SetCursorPos(0, !is_tracking_mouse_);
-      else if (pos == (int)text()->GetText().size())
-        SetCursorPos((int)text()->GetText().size(), !is_tracking_mouse_);
-      else if (mx < (GetCharX()[pos] + GetCharX()[pos+1])/2)
-        SetCursorPos(pos, !is_tracking_mouse_);
-      else
-        SetCursorPos(pos+1, !is_tracking_mouse_);
-      is_tracking_mouse_ = true;
-    }
-  } else {
-    is_tracking_mouse_ = false;
-  }
-
-  // Handle all key presses
-  if (event.IsPress()) {
-    int ascii = input()->GetAsciiValue(event.key);
-
-    // Handle backspace and delete
-    if (event.key == '\b') {
-      if (selection_anchor_ != GetCursorPos())
-        DeleteSelection();
-      else if (GetCursorPos() > 0)
-        DeleteCharacter(false);
-      ReformTextAndCursor(false);
-    } else if (event.key == kKeyDelete) {
-      if (selection_anchor_ != GetCursorPos())
-        DeleteSelection();
-      else if (GetCursorPos() < (int)text()->GetText().size())
-        DeleteCharacter(true);
-      ReformTextAndCursor(false);
-    }
-    
-    // Handle confirmation and canceling
-    else if (event.key == '\n' || event.key == kKeyPadEnter) {
-      ReformTextAndCursor(true);
-      Confirm();
-    } else if (event.key == 27) {
-      Cancel();
-    }
-
-    // Handle character insertion
-    else if (ascii != 0 && CanInsertCharacter(ascii, true)) {
-      if (selection_anchor_ != GetCursorPos()) {
-        int cursor_pos_cache = GetCursorPos(), selection_anchor_cache = selection_anchor_;
-        string text_cache = text()->GetText();
-        DeleteSelection();
-        if (CanInsertCharacter(ascii, false)) {
-          InsertCharacter(ascii);
-          ReformTextAndCursor(false);
-        } else {
-          SetText(text_cache);
-          AbstractTextPromptFrame::SetCursorPos(cursor_pos_cache, false);
-          selection_anchor_ = selection_anchor_cache;
-        }
-      } else if (CanInsertCharacter(ascii, false)) {
-        InsertCharacter(ascii);
-        ReformTextAndCursor(false);
-      }
-    }
-
-    // Handle cursor movement
-    else {
-      bool is_shift_down = input()->IsKeyDownNow(kKeyLeftShift) ||
-                          input()->IsKeyDownNow(kKeyRightShift);
-      if (event.key == kKeyRight || (event.key == kKeyPad6 && !input()->IsNumLockSet()))
-        SetCursorPos(GetCursorPos() + 1, !is_shift_down);
-      else if (event.key == kKeyLeft || (event.key == kKeyPad4 && !input()->IsNumLockSet()))
-        SetCursorPos(GetCursorPos() - 1, !is_shift_down);
-      else if (event.key == kKeyHome || (event.key == kKeyPad3 && !input()->IsNumLockSet()))
-        SetCursorPos(0, !is_shift_down);
-      else if (event.key == kKeyEnd || (event.key == kKeyPad1 && !input()->IsNumLockSet()))
-        SetCursorPos((int)text()->GetText().size(), !is_shift_down);
-      else
-        return false;
-    }
-    return true;
-  }
-  return false;
-}
-
-BasicTextPromptFrame::BasicTextPromptFrame(const string &text, const FrameStyle *style)
-: AbstractTextPromptFrame(text, style->text_style),
-  stored_value_(text),
-  is_tracking_mouse_(false),
-  selection_anchor_(GetCursorPos()),
-  selection_color_(style->prompt_highlight_color) {}
-
-BasicTextPromptFrame::BasicTextPromptFrame(const string &text, const GuiTextStyle &text_style,
-                                           const Color &selection_color)
-: AbstractTextPromptFrame(text, text_style),
-  stored_value_(text),
-  is_tracking_mouse_(false),
-  selection_anchor_(GetCursorPos()),
-  selection_color_(selection_color) {}
-
-void BasicTextPromptFrame::DeleteSelection() {
-  int s1 = min(GetCursorPos(), selection_anchor_), s2 = max(GetCursorPos(), selection_anchor_);
-  string part1 = (s1 == 0? "" : text()->GetText().substr(0, s1)),
-         part2 = (s2 == text()->GetText().size()? "" : text()->GetText().substr(s2));
-  SetText(part1 + part2);
-  SetCursorPos(s1, true);
-}
-
-void BasicTextPromptFrame::DeleteCharacter(bool is_next_character) {
-  int i = GetCursorPos() + (is_next_character? 0 : -1);
-  string part1 = (i == 0? "" : text()->GetText().substr(0, i)),
-         part2 = (i+1 == text()->GetText().size()? "" : text()->GetText().substr(i+1));
-  SetText(part1 + part2);
-  SetCursorPos(i, true);
-}
-
-void BasicTextPromptFrame::InsertCharacter(char ch) {
-  int i = GetCursorPos();
-  string part1 = (i == 0? "" : text()->GetText().substr(0, i)),
-         part2 = (i == text()->GetText().size()? "" : text()->GetText().substr(i));
-  SetText(part1 + ch + part2);
-  SetCursorPos(i + 1, true);
-}
-
-void BasicTextPromptFrame::ReformTextAndCursor(bool is_confirmed) {
-  ReformText(is_confirmed);
-  if (GetCursorPos() > (int)text()->GetText().size())
-    SetCursorPos((int)text()->GetText().size(), true);
-}
-
-void BasicTextPromptFrame::OnFocusChange() {
-  if (!IsInFocus()) {
-    selection_anchor_ = GetCursorPos();
-  } else {
-    selection_anchor_ = 0;
-    SetCursorPos(int(text()->GetText().size()), false);
-  }
-  AbstractTextPromptFrame::OnFocusChange();
-}
-
-void BasicTextPromptFrame::SetCursorPos(int pos, bool move_anchor) {
-  AbstractTextPromptFrame::SetCursorPos(pos);
-  if (move_anchor)
-    selection_anchor_ = GetCursorPos();
-}
-
-// AbstractTextPromptFrame implementations
-// =======================================
-
-bool GlopKeyPromptFrame::OnKeyEvent(const KeyEvent &event, int dt) {
-  if (event.IsNonRepeatPress() && !GetFocusFrame()->IsGainingFocus()) {
-    if (IsValidSelection(event.key)) {
-      Set(event.key);
-      Confirm();
-      return true;
-    } else if (event.key == 27) {
-      Cancel();
-      return true;
-    }
-  }
-  return false;
-}
-
-void StringPromptFrame::Set(const string &value) {
-  if (length_limit_ < (int)value.size())
-    SetText(value.substr(0, length_limit_));
-  else
-    SetText(value);
-}
-
-bool StringPromptFrame::CanInsertCharacter(char ch, bool in_theory) const {
-  return (ch >= 32 && ch <= 126) &&
-         (in_theory || (int)text()->GetText().size() < length_limit_);
-}
-
-bool IntegerPromptFrame::CanInsertCharacter(char ch, bool in_theory) const {
-  if (!in_theory) {
-    if ((ch == '-' && GetCursorPos() > 0) ||
-        (ch == '0' && text()->GetText() != "" && GetCursorPos() == 0) ||
-        (ch == '0' && text()->GetText()[0] == '-' && GetCursorPos() == 1))
-      return false;
-  }
-  return (ch >= '0' && ch <= '9') || (min_value_ < 0 && ch == '-');
-}
-
-void IntegerPromptFrame::ReformText(bool is_confirmed) {
-  string min_value = Format("%d", min_value_), max_value = Format("%d", max_value_);
-  string s = text()->GetText();
-  while (s[0] == '-' && s[1] == '0')
-    s = "-" + s.substr(2);
-  while (s[0] == '0' && s.size() > 1)
-    s = s.substr(1);
-  if (s[0] != '-') {
-    if (s.size() > max_value.size() || (s.size() == max_value.size() && s > max_value))
-      s = max_value;
-  } else {
-    if (s.size() > min_value.size() || (s.size() == min_value.size() && s > min_value))
-      s = min_value;
-  }
-  SetText(s);
-}*/
-
-///////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
 // WindowFrame
 // ===========
 
@@ -1402,6 +1229,7 @@ class SliderButtonFrame: public ButtonFrame {
     else 
       AddHotKey(kGuiKeyLeft);
   }
+  string GetType() const {return "SliderButtonFrame";}
   bool OnKeyEvent(const KeyEvent &event, int dt) {
     bool active = IsActive();
     SetPingOnPress(active);

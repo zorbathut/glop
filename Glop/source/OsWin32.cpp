@@ -206,9 +206,10 @@ void Os::WindowThink(OsWindowData *window) {}
 // Converts an image into a 32x32 ICO object in memory, and then returns a handle for the resulting
 // icon.
 HICON CreateIcon(OsWindowData *data, const Image *image) {
-  bool scaling_needed = (image->GetWidth() != 32 || image->GetHeight() != 32);
+  bool scaling_needed = (image->GetWidth() != 32 || image->GetHeight() != 32 ||
+                         image->GetBpp() != 32);
   if (scaling_needed)
-    image = Image::ScaledImage(image, 32, 32);
+    image = Image::AdjustedImage(image, 32, 32, 32);
 
   // Set the header
   unsigned char *icon = new unsigned char[3240];
@@ -226,31 +227,25 @@ HICON CreateIcon(OsWindowData *data, const Image *image) {
 
   // Set the colors
 	for (int y = 0; y < 32; y++)
-	for (int x = 0; x < 32; x++)
-  for (int c = 0; c < 3; c++) {
-    int index = (31 - y)*image->GetBytesPerRow() + x*image->GetBpp()/8;
-    unsigned char value = image->GetPixels()[index + c];
-    if (image->GetBpp() > 24 && image->GetPixels()[index + 3] == 0)
-      value = 0;  // Do not do strange background blending
-    icon[40 + y*32*3 + x*3 + 2-c] = value;
+  for (int x = 0; x < 32; x++) {
+    const unsigned char *pixel = image->Get(x, 31-y);
+    for (int c = 0; c < 3; c++) {
+      unsigned char value = pixel[c];
+      if (pixel[3] == 0)
+        value = 0;  // Do not do strange background blending
+      icon[40 + y*32*3 + x*3 + 2-c] = value;
+    }
   }
 
-  // Set the mask using alpha values if they exist
-  if (image->GetBpp() > 24) {
-    for (int y = 0; y < 32; y++)
-    for (int x = 0; x < 32; x++) {
-      int index = (31 - y)*image->GetBytesPerRow() + x*image->GetBpp()/8;
-      int icon_index = y*4 + x/8;
-      int icon_mask = 1 << (7-(x%8));
-      if (image->GetPixels()[index + 3] == 0)
-        icon[3112+icon_index] |= icon_mask;
-		  else
-        icon[3112+icon_index] &= (~icon_mask);
-    }
-  } else {
-    for (int y = 0; y < 32; y++)
-      for (int x = 0; x < 32; x++)
-        icon[3112+y*4+x/8] = 0;
+  // Set the mask using alpha values
+  for (int y = 0; y < 32; y++)
+  for (int x = 0; x < 32; x++) {
+    int icon_index = y*4 + x/8;
+    int icon_mask = 1 << (7-(x%8));
+    if (image->Get(x, 31-y)[3] == 0)
+      icon[3112+icon_index] |= icon_mask;
+		else
+      icon[3112+icon_index] &= (~icon_mask);
   }
 
   // Do the work

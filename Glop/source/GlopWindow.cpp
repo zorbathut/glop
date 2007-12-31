@@ -112,6 +112,7 @@ void GlopWindow::SetTitle(const string &title) {
 // Frame accessors
 // ===============
 
+string GlopWindow::GetFrameContextString() const {return frame_->GetContextString();}
 const GlopFrame *GlopWindow::GetFrame(LightSetId id) const {return frame_->GetChild(id);}
 GlopFrame *GlopWindow::GetFrame(LightSetId id) {return frame_->GetChild(id);}
 LightSetId GlopWindow::GetFirstFrameId() const {return frame_->GetFirstChildId();}

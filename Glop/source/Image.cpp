@@ -1,40 +1,82 @@
 #include "../include/Image.h"
 #include "../include/BinaryFileManager.h"
 #include "../include/Color.h"
+extern "C" {
 #include "third_party/jpeglib/jpeglib.h"
+}
 #include <setjmp.h>  // For LoadJpg error handling
 
 // Constants
 const int kMaxImageWidth = 65536;
 const int kMaxImageHeight = 65536;
 
-// See Image.h
-Image *Image::Load(BinaryFileReader reader, bool force_alpha) {
+// Constructors
+Image::Image(int width, int height, int bpp)
+: data_(0), width_(width), height_(height), bpp_(bpp) {
+  ASSERT(bpp_ > 0 && bpp_ <= 32 && bpp%8 == 0);
+  internal_width_ = NextPow2(width);
+  internal_height_ = NextPow2(height);
+  data_ = new unsigned char[internal_height_ * internal_width_ * bpp_ / 8];
+  memset(data_, 0, internal_height_ * internal_width_ * bpp_ / 8);
+}
+
+Image::Image(unsigned char *data, int width, int height, int bpp)
+: data_(0), width_(width), height_(height), bpp_(bpp) {
+  // Store the values
+  ASSERT(bpp_ > 0 && bpp_ <= 32 && bpp%8 == 0);
+  internal_width_ = NextPow2(width);
+  internal_height_ = NextPow2(height);
+  int row_size = internal_width_ * bpp_ / 8, old_row_size = width_ * bpp_ / 8;
+  data_ = new unsigned char[internal_height_ * row_size];
+
+  // Copy the data into the new location. If width and height are not powers of 2, we replicate
+  // the right and down boundaries so GL_LINEAR filter will look nice. All other pixels are black
+  // and transparent.
+  if (width < internal_width_) {
+    for (int y = 0; y < internal_height_; y++) {
+      memcpy(data_ + y*row_size, data + y*old_row_size, old_row_size);
+      memset(data_ + y*row_size + width_*bpp_/8, 0, row_size - old_row_size);
+      memcpy(data_ + y*row_size + width_*bpp_/8, data_ + y*row_size + (width_-1)*bpp_/8, bpp_/8);
+    }
+  } else {
+    memcpy(data_, data, height * row_size);
+  }
+  if (height_ < internal_height_) {
+    memset(data_ + height_*row_size, 0, (internal_height_-height)*row_size);
+    memcpy(data_ + height_*row_size, data_ + (height_-1)*row_size, row_size);
+  }
+}
+
+Image *Image::Load(BinaryFileReader reader) {
   if (!reader.IsOpen())
     return 0;
   if (IsBmp(reader))
-    return LoadBmp(reader, force_alpha);
+    return LoadBmp(reader);
   if (IsGif(reader))
-    return LoadGif(reader, force_alpha);
+    return LoadGif(reader);
   if (IsJpg(reader))
-    return LoadJpg(reader, force_alpha);
+    return LoadJpg(reader);
   return 0;
 }
 
-// See Image.h
 Image *Image::Load(BinaryFileReader reader, const Color &bg_color, int bg_tolerance) {
   // First load the image normally (but in 32 bit format)
-  Image *result = Load(reader, true);
+  Image *result = Load(reader);
   if (result == 0)
     return 0;
 
-  // Set the alpha channel based on the background
-  unsigned char *pixels = result->GetPixels();
+  // Convert to 32 bpp
   int x, y, w = result->GetWidth(), h = result->GetHeight();
+  ASSERT(result->GetBpp() == 24);
+  Image *temp = Image::AdjustedImage(result, w, h, 32);
+  delete result;
+  result = temp;
+
+  // Set the alpha channel based on the background
   int target[] = {(int)(bg_color[0]*255), (int)(bg_color[1]*255), (int)(bg_color[2]*255)};
   for (y = 0; y < h; y++)
   for (x = 0; x < w; x++) {
-    unsigned char *pixel = pixels + y*result->GetBytesPerRow() + x*4;
+    unsigned char *pixel = result->Get(x, y);
     int d = abs(pixel[0] - target[0]) + abs(pixel[1] - target[1]) + abs(pixel[2] - target[2]);
     if (d <= bg_tolerance)
       pixel[3] = 0;
@@ -45,43 +87,49 @@ Image *Image::Load(BinaryFileReader reader, const Color &bg_color, int bg_tolera
   return result;
 }
 
-// Returns a scaled version of this image - the trivial nearest neighbor scaling algorithm is used.
-Image *Image::ScaledImage(const Image *image, int new_width, int new_height) {
+Image *Image::AdjustedImage(const Image *image, int new_width, int new_height, int new_bpp) {
   int bpp = image->GetBpp();
-  unsigned char *pixels = (unsigned char*)malloc(new_width * new_height * bpp);
+  unsigned char *data = (unsigned char*)malloc(new_width * new_height * new_bpp);
   for (int y = 0; y < new_height; y++)
-  for (int x = 0; x < new_width; x++)
-  for (int c = 0; c < bpp; c++) {
+  for (int x = 0; x < new_width; x++) {
+    // Extract the source pixel
     int x2 = x * image->GetWidth() / new_width;
     int y2 = y * image->GetHeight() / new_height;
-    pixels[(y*new_width+x)*bpp/8 + c] = image->pixels_[y2*image->GetBytesPerRow() + x2*bpp/8 + c];
-  }
-  Image *result = new Image(pixels, new_width, new_height, bpp, false);
-  free(pixels);
-  return result;
-}
+    const unsigned char *src = image->Get(x2, y2);
+    unsigned char r, g, b, a;
+    if (bpp == 8) {
+      r = g = b = 255;
+      a = src[0];
+    } else if (bpp == 16) {
+      r = g = b = src[0];
+      a = src[1];
+    } else {
+      r = src[0];
+      g = src[1];
+      b = src[2];
+      a = (bpp == 32? src[3] : 255);
+    }
 
-// Constructor - the image should already be loaded at this point.
-// We enlarge it to a power of 2, however, and set the pixels adjacent to boundaries to be equal
-// to the boundary color, which helps with OpenGl scaling (see SmoothTransparentColors).
-Image::Image(unsigned char *data, int width, int height, int bpp, bool force_alpha)
-: pixels_(0),
-  width_(width),
-  height_(height),
-  bpp_(force_alpha? 32 : bpp) {
-  internal_width_ = NextPow2(width);
-  internal_height_ = NextPow2(height);
-  pixels_ = new unsigned char[internal_width_ * internal_height_ * bpp_ / 8];
-  for (int y = 0; y < internal_height_; y++)
-  for (int x = 0; x < internal_width_; x++)
-  for (int c = 0; c < bpp_/8; c++) {
-    int tx = (x == width_? width_ - 1 : x == internal_width_ - 1? 0 : x);
-    int ty = (y == height_? height_ - 1 : y == internal_height_ - 1? 0 : y);
-    if (ty < height && tx < width && c < bpp/8)
-      pixels_[y*internal_width_*bpp_/8 + x*bpp_/8 + c] = data[ty*width*bpp/8 + tx*bpp/8 + c];
-    else
-      pixels_[y*internal_width_*bpp_/8 + x*bpp_/8 + c] = 0;
+    // Write the destination pixel
+    unsigned char *dst = data + (new_width*y + x) * (new_bpp / 8);
+    if (new_bpp == 8) {
+      dst[0] = a;
+    } else if (new_bpp == 16) {
+      dst[0] = (unsigned char)((int(r) + int(g) + int(b)) / 3);
+      dst[1] = a;
+    } else {
+      dst[0] = r;
+      dst[1] = g;
+      dst[2] = b;
+      if (new_bpp == 32)
+        dst[3] = a;
+    }
   }
+  Image *result = new Image(data, new_width, new_height, new_bpp);
+  if (bpp == 24 && new_bpp != 24)
+    result->SmoothTransparentColors();
+  free(data);
+  return result;
 }
 
 // Returns the first power of 2 that is at least min(n, 4).
@@ -94,35 +142,26 @@ unsigned int Image::NextPow2(unsigned int n) {
 
 // In OpenGl, we often render a combination of two adjacent pixels. Even if a pixel is completely
 // transparent, it's color might be used if it is adjacent to a non-transparent pixel. This can
-// lead to borders around the image. To prevent this, we use this to set transparent pixel colors
-// to be the average of the non-transparent colors around the pixel.
+// lead to borders around the image. To prevent that, we use this function to set transparent pixel
+// colors to be the average of the non-transparent colors around the pixel.
 void Image::SmoothTransparentColors() {
-  if (bpp_ != 32)
-    return;
-  int w = internal_width_, h = internal_height_;
+  ASSERT (bpp_ == 16 || bpp_ == 32);
+  int w = internal_width_, h = internal_height_, ai = (bpp_ / 8) - 1;
   for (int y = 0; y < h; y++)
   for (int x = 0; x < w; x++) {
-    unsigned char *pixel = pixels_ + y*GetBytesPerRow() + x*4;
-    if (pixel[3] != 0)
+    unsigned char *pixel = Get(x, y);
+    if (pixel[ai] != 0)
       continue;
-    int rt = 0, gt = 0, bt = 0, t = 0;
+    int total[4] = {0, 0, 0};
     for (int y2 = -1; y2 <= 1; y2++)
     for (int x2 = -1; x2 <= 1; x2++) {
-      unsigned char *pixel2 = pixels_ + ((y+y2+h)%h)*GetBytesPerRow() + ((x+x2+w)%w)*4;
-      if (pixel2[3] == 0)
-        continue;
-      rt += pixel2[0];
-      gt += pixel2[1];
-      bt += pixel2[2];
-      t++;
+      unsigned char *pixel2 = Get((x+x2+w)%w, (y+y2+h)%h);
+      for (int i = 0; i < ai; i++)
+        total[i] += pixel2[i];
+      total[ai]++;
     }
-    if (t == 0) {
-      pixel[0] = pixel[1] = pixel[2] = 0;
-    } else {
-      pixel[0] = rt / t;
-      pixel[1] = gt / t;
-      pixel[2] = bt / t;
-    }
+    for (int i = 0; i < ai; i++)
+      pixel[i] = (total[ai] == 0? 0 : total[i] / total[ai]);
   }
 }
 
@@ -140,7 +179,7 @@ bool Image::IsBmp(BinaryFileReader reader) {
 
 // Loads a BMP file. Supports 1, 4, 8, 16, 24, and 32 bit uncompressed pixels.
 // Adapted from the SDL image library.
-Image *Image::LoadBmp(BinaryFileReader reader, bool force_alpha) {
+Image *Image::LoadBmp(BinaryFileReader reader) {
   const int kRgb = 0;
   const int kRle8 = 1;
   const int kRle4 = 2;
@@ -361,7 +400,7 @@ Image *Image::LoadBmp(BinaryFileReader reader, bool force_alpha) {
     }
 	}
 
-  result = new Image(pixels, width, height, new_bpp, force_alpha);
+  result = new Image(pixels, width, height, new_bpp);
 error:
   if (buffer != 0)
     free(buffer);
@@ -410,7 +449,7 @@ static int LoadGifBits(BinaryFileReader &reader, unsigned char *buffer, int num_
 
 // Loads a GIF file.
 // Adapted from the SDL image library, which is, in turn, taken from XPaint.
-Image *Image::LoadGif(BinaryFileReader reader, bool force_alpha) {
+Image *Image::LoadGif(BinaryFileReader reader) {
   const int kMaxLwzBits = 12;
   unsigned char *palette = (unsigned char*)malloc(768), *pixels = 0;
   Image *result = 0;
@@ -575,7 +614,7 @@ Image *Image::LoadGif(BinaryFileReader reader, bool force_alpha) {
         }
       }
       // Build the image
-      result = new Image(pixels, width, height, new_bpp, force_alpha);
+      result = new Image(pixels, width, height, new_bpp);
       if (new_bpp == 32)
         result->SmoothTransparentColors();
       break;
@@ -617,7 +656,7 @@ static void OnJpgErrorExit(j_common_ptr info) {
 static void OnJpgErrorMessage(j_common_ptr info) {}
 
 // Loads a JPG file using jpeglib.
-Image *Image::LoadJpg(BinaryFileReader reader, bool force_alpha) {
+Image *Image::LoadJpg(BinaryFileReader reader) {
   unsigned char *pixels = 0;
   Image *result = 0;
   jpeg_decompress_struct info;
@@ -650,8 +689,7 @@ Image *Image::LoadJpg(BinaryFileReader reader, bool force_alpha) {
   jpeg_finish_decompress(&info);
   if (reader.Tell() > reader.GetLength())
     goto error;
-  result = new Image(pixels, width, height, bpp, force_alpha);
-
+  result = new Image(pixels, width, height, bpp);
 error:
   if (pixels != 0)
     free(pixels);

@@ -22,20 +22,34 @@
 
 // Other includes
 #include "Base.h"
+#include "BinaryFileManager.h"
 #include "Color.h"
-#include "System.h"
+#include "Image.h"
 
 // OpenGL data objects. Note that switching into and out of fullscreen mode invalidates textures
 // and display lists. To prevent that from happening, these structures can and should be used
 // instead. They are a very light wrapper around the OpenGL functions, except they will always
 // stay valid.
+
+// An OpenGL texture.
 class Texture {
  public:
-  Texture(const void *data, int width, int height, int bpp, int mag_filter, int min_filter);
+  // Constructors. Load is similar to Image::Load. If this is used, the Image is owned by the
+  // Texture and will be deleted automatically when the Texture is deleted. Otherwise, the user is
+  // responsible for deleting the image.
+  static Texture *Load(BinaryFileReader reader, int mag_filter = GL_LINEAR,
+                       int min_filter = GL_LINEAR);
+  static Texture *Load(BinaryFileReader reader, const Color &bg_color, int bg_tolerance,
+                       int mag_filter = GL_LINEAR, int min_filter = GL_LINEAR);
+  Texture(const Image *image, int mag_filter = GL_LINEAR, int min_filter = GL_LINEAR);
   ~Texture();
-  int GetWidth() const {return width_;}
-  int GetHeight() const {return height_;}
-  int GetBpp() const {return bpp_;}
+
+  // Accessors - See Image.
+  int GetInternalWidth() const {return image_->GetInternalWidth();}
+  int GetInternalHeight() const {return image_->GetInternalHeight();}
+  int GetWidth() const {return image_->GetWidth();}
+  int GetHeight() const {return image_->GetHeight();}
+  int GetBpp() const {return image_->GetBpp();}
  
  private:
   friend class GlDataManager;
@@ -45,8 +59,8 @@ class Texture {
   friend class GlUtils;
   unsigned int gl_id_;
 
-  const void *data_;
-  int width_, height_, bpp_;
+  const Image *image_;
+  bool is_image_owned_;
   int mag_filter_, min_filter_;
   LightSetId glop_index_;
   DISALLOW_EVIL_CONSTRUCTORS(Texture);
@@ -122,6 +136,27 @@ class GlUtils2d {
     GlUtils::SetColor(color);
     FillRectangle(x1, y1, x2, y2);
   }
+
+  // Texture rendering without tiling:
+  //  - The first function render the full texture (excluding padding to make its size a power of 2)
+  //  - The second function renders the texture scaled, possibly distorting the aspect ratio
+  //  - The subtexture functions are similar but they render any subrectangle of the texture
+  // The texture is deactivated when done.
+  static void RenderTexture(int x1, int y1, const Texture *texture) {
+    RenderTexture(x1, y1, x1 + texture->GetWidth() - 1, y1 + texture->GetHeight() - 1, texture);
+  }
+  static void RenderTexture(int x1, int y1, int x2, int y2, const Texture *texture) {
+    RenderSubTexture(x1, y1, x2, y2, 0, 0, float(texture->GetWidth()) / texture->GetInternalWidth(),
+                     float(texture->GetHeight()) / texture->GetInternalHeight(), texture);
+  }
+  static void RenderSubTexture(int x1, int y1, float tu1, float tv1, float tu2, float tv2,
+                               const Texture *texture) {
+    RenderSubTexture(x1, y1, int(x1 + (tu2-tu1)*texture->GetInternalWidth() - 1),
+                     int(y1 + (tv2-tv1)*texture->GetInternalHeight() - 1),
+                     tu1, tv1, tu2, tv2, texture);
+  }
+  static void RenderSubTexture(int x1, int y1, int x2, int y2, float tu1, float tv1, float tu2,
+                               float tv2, const Texture *texture);
 };
 
 #endif // GLOP_OPEN_GL_H__
