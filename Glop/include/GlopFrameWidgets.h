@@ -26,6 +26,7 @@
 //                                frame.
 // InputBoxFrame: Similar to SolidBoxFrame, but based on an InputBoxView. Used as background for
 //                text boxes, etc.
+// ImageFrame: Renders an image, magnified as much as possible.
 // ArrowFrame: Renders an arrow in some direction. Used for slider buttons.
 // WindowFrame: A decorative, unmovable window, optionally with a title.
 // TextFrame, FancyTextFrame: Text output. TextFrame is faster but requires a uniform text style
@@ -50,6 +51,7 @@
 #define GLOP_GLOP_FRAME_WIDGETS_H__
 
 // Includes
+#include "BinaryFileManager.h"
 #include "Color.h"
 #include "Font.h"
 #include "GlopFrameBase.h"
@@ -57,6 +59,7 @@
 #include "Input.h"
 
 // Class declarations
+class Image;
 class TextRenderer;
 
 // HotKeyTracker
@@ -100,6 +103,7 @@ class HotKeyTracker {
 class EmptyFrame: public GlopFrame {
  public:
   EmptyFrame(): GlopFrame() {}
+  string GetType() const {return "EmptyFrame";}
  private:
   DISALLOW_EVIL_CONSTRUCTORS(EmptyFrame);
 };
@@ -116,6 +120,7 @@ class SolidBoxFrame: public SingleParentFrame {
   : SingleParentFrame(frame), has_outer_part_(false), inner_color_(inner_color) {}
   SolidBoxFrame(const Color &inner_color)
   : SingleParentFrame(0), has_outer_part_(false), inner_color_(inner_color) {}
+  string GetType() const {return "SolidBoxFrame";}
 
   void Render() const;
   void SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2);
@@ -147,6 +152,7 @@ class InputBoxFrame: public SingleParentFrame {
   InputBoxFrame(GlopFrame *inner_frame, const InputBoxViewFactory *factory = gInputBoxViewFactory)
   : SingleParentFrame(new PaddedFrame(inner_frame, 0)), view_(factory->Create()) {}
   ~InputBoxFrame() {delete view_;}
+  string GetType() const {return "InputBoxFrame";}
 
   void Render() const;
  protected:
@@ -156,12 +162,37 @@ class InputBoxFrame: public SingleParentFrame {
   DISALLOW_EVIL_CONSTRUCTORS(InputBoxFrame);
 };
 
+class ImageFrame: public GlopFrame {
+ public:
+  // Constructors - Either an image, a texture or a file can be specified. Any objects
+  // loaded/created here are also deleted here.
+  ImageFrame(BinaryFileReader reader, const Color &bg_color, int bg_tolerance,
+             const Color &color = kWhite);
+  ImageFrame(BinaryFileReader reader, const Color &color = kWhite);
+  ImageFrame(const Image *image, const Color &color = kWhite);
+  ImageFrame(const Texture *texture, const Color &color = kWhite);
+  ~ImageFrame();
+  string GetType() const {return "ImageFrame";}
+
+  void Render() const;
+ protected:
+  void RecomputeSize(int rec_width, int rec_height);
+
+ private:
+  void Init(const Texture *texture, bool is_texture_owned, const Color &color);
+  bool is_texture_owned_;
+  const Texture *texture_;
+  Color color_;
+  DISALLOW_EVIL_CONSTRUCTORS(ImageFrame);
+};
+
 class ArrowFrame: public GlopFrame {
  public:
   enum Direction {Up, Right, Down, Left};
   ArrowFrame(Direction d, const ArrowViewFactory *factory)
   : direction_(d), view_(factory->Create()) {}
   ~ArrowFrame() {delete view_;}
+  string GetType() const {return "ArrowFrame";}
 
   void Render() const;
  protected:
@@ -181,6 +212,7 @@ class TextFrame: public GlopFrame {
  public:
   TextFrame(const string &text, const GuiTextStyle &style = *gGuiTextStyle);
   virtual ~TextFrame();
+  string GetType() const {return "TextFrame";}
   
   // Returns the pixel height we would choose for our text given the relative height as specified
   // to TextFrame. This is provided so that an external class can get font information about a
@@ -244,6 +276,7 @@ class FancyTextFrame: public MultiParentFrame {
   FancyTextFrame(const string &text, const GuiTextStyle &style = *gGuiTextStyle);
   FancyTextFrame(const string &text, bool add_soft_returns, float horz_justify,
                  const GuiTextStyle &style = *gGuiTextStyle);
+  string GetType() const {return "FancyTextFrame";}
 
   // Tags. These can be used as follows: string("Test: " + CTag(kRed) + " red");
   // Note that, they return strings, not char points, so if they are to be used with a call to
@@ -312,6 +345,7 @@ class FpsFrame: public SingleParentFrame {
  public:
   FpsFrame(const GuiTextStyle &style = *gGuiTextStyle)
   : SingleParentFrame(new TextFrame("", style)) {}
+  string GetType() const {return "FpsFrame";}
   const GuiTextStyle &GetStyle() const {return text()->GetStyle();}
   void SetStyle(const GuiTextStyle &style) {text()->SetStyle(style);}
 
@@ -332,6 +366,7 @@ class DummyTextPromptFrame: public SingleParentFrame {
  public:
   DummyTextPromptFrame(const string &text, const TextPromptViewFactory *view_factory);
   ~DummyTextPromptFrame() {delete view_;}
+  string GetType() const {return "DummyTextPromptFrame";}
 
   // Basic accessors and mutators. SetText automatically moves the cursor to the end of the prompt
   // if the text changed.
@@ -374,6 +409,7 @@ class DummyTextPromptFrame: public SingleParentFrame {
 
 class BaseTextPromptFrame: public SingleParentFrame {
  public:
+  string GetType() const {return "BaseTextPromptFrame";}
   bool OnKeyEvent(const KeyEvent &event, int dt);
 
  protected:
@@ -425,6 +461,7 @@ class StringPromptFrame: public BaseTextPromptFrame {
  public:
   StringPromptFrame(const string &start_text, int length_limit,
                     const TextPromptViewFactory *view_factory = gTextPromptViewFactory);
+  string GetType() const {return "StringPromptFrame";}
   const string &Get() const {return GetText();}
   void Set(const string &value);
 
@@ -438,9 +475,10 @@ class StringPromptFrame: public BaseTextPromptFrame {
 
 class StringPromptWidget: public FocusFrame {
  public:
-  StringPromptWidget(const string &start_text, int length_limit,
+  StringPromptWidget(const string &start_text, int length_limit, float prompt_width = kSizeLimitRec,
                      const TextPromptViewFactory *prompt_view_factory = gTextPromptViewFactory,
                      const InputBoxViewFactory *input_view_factory = gInputBoxViewFactory);
+  string GetType() const {return "StringPromptWidget";}
   const string &Get() const {return prompt_->Get();}
   void Set(const string &value) {prompt_->Set(value);}
  private:
@@ -452,6 +490,7 @@ class IntegerPromptFrame: public BaseTextPromptFrame {
  public:
   IntegerPromptFrame(int start_value, int min_value, int max_value,
                      const TextPromptViewFactory *view_factory = gTextPromptViewFactory);
+  string GetType() const {return "IntegerPromptFrame";}
   int Get() const {return atoi(GetText().c_str());}
   void Set(int value);
 
@@ -466,8 +505,10 @@ class IntegerPromptFrame: public BaseTextPromptFrame {
 class IntegerPromptWidget: public FocusFrame {
  public:
   IntegerPromptWidget(int start_value, int min_value, int max_value,
+                      float prompt_width = kSizeLimitRec,
                       const TextPromptViewFactory *prompt_view_factory = gTextPromptViewFactory,
                       const InputBoxViewFactory *input_view_factory = gInputBoxViewFactory);
+  string GetType() const {return "IntegerPromptWidget";}
   int Get() const {return prompt_->Get();}
   void Set(int value) {prompt_->Set(value);}
  private:
@@ -485,6 +526,7 @@ class WindowFrame: public SingleParentFrame {
               const WindowViewFactory *view_factory = gWindowViewFactory);
   WindowFrame(GlopFrame *inner_frame, const WindowViewFactory *view_factory = gWindowViewFactory);
   ~WindowFrame() {delete view_;}
+  string GetType() const {return "WindowFrame";}
 
   void Render() const;
  protected:
@@ -505,6 +547,7 @@ class DummyButtonFrame: public SingleParentFrame {
   : SingleParentFrame(new PaddedFrame(inner_frame)), is_down_(is_down),
     view_(view_factory->Create()) {}
   ~DummyButtonFrame() {delete view_;}
+  string GetType() const {return "DummyButtonFrame";}
   bool IsDown() const {return is_down_;}
   void SetIsDown(bool is_down);
 
@@ -524,6 +567,7 @@ class ButtonFrame: public SingleParentFrame {
   : SingleParentFrame(new DummyButtonFrame(inner_frame, false, view_factory)),
     ping_on_press_(true), is_confirm_key_down_(false), was_pressed_fully_(false),
     is_mouse_locked_on_(false) {}
+  string GetType() const {return "ButtonFrame";}
 
   // Hot keys
   LightSetId AddHotKey(const GlopKey &key) {return hot_key_tracker_.AddHotKey(key);}
@@ -585,6 +629,7 @@ class ButtonWidget: public FocusFrame {
   : FocusFrame(new ButtonFrame(new TextFrame(text, text_style), factory)) {
     button()->AddHotKey(hot_key);
   }
+  string GetType() const {return "ButtonWidget";}
 
   // Utilities
   LightSetId AddHotKey(const GlopKey &key) {return button()->AddHotKey(key);}
@@ -611,6 +656,7 @@ class DummySliderFrame: public MultiParentFrame {
                                                const ButtonViewFactory *),
                    const SliderViewFactory *factory);
   ~DummySliderFrame() {delete view_;}
+  string GetType() const {return "DummySliderFrame";}
   const GlopFrame *GetDecButton() const {return dec_button_;}
   GlopFrame *GetDecButton() {return dec_button_;}
   const GlopFrame *GetIncButton() const {return inc_button_;}
@@ -654,6 +700,7 @@ class SliderFrame: public SingleParentFrame {
   enum Direction {Horizontal, Vertical};  // Must match DummySliderFrame::Direction
   SliderFrame(Direction direction, int logical_tab_size, int logical_total_size,
               int logical_tab_position, const SliderViewFactory *factory = gSliderViewFactory);
+  string GetType() const {return "SliderFrame";}
   LightSetId AddDecHotKey(const GlopKey &key) {return GetDecButton()->AddHotKey(key);}
   void RemoveDecHotKey(LightSetId id) {GetDecButton()->RemoveHotKey(id);}
   LightSetId AddBigDecHotKey(const GlopKey &key) {return big_dec_tracker_.AddHotKey(key);}
@@ -706,6 +753,7 @@ class SliderWidget: public FocusFrame {
                const SliderViewFactory *factory = gSliderViewFactory)
   : FocusFrame(new SliderFrame((SliderFrame::Direction)direction, logical_tab_size,
                                logical_total_size, logical_tab_position, factory)) {}
+  string GetType() const {return "SliderWidget";}
 
   // Utilities
   LightSetId AddDecHotKey(const GlopKey &key) {return slider()->AddDecHotKey(key);}

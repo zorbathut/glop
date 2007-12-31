@@ -37,6 +37,7 @@ using namespace std;
 // Class declarations
 class DisplayLists;
 class FontBitmap;
+class Image;
 class TextRenderer;
 class Texture;
 
@@ -107,7 +108,7 @@ class FontBitmap {
   Texture *texture_;
 
   // Data
-  unsigned char *data_;                   // The bitmap's raw data
+  Image *image_;
   int width_, height_;
   int char_bitmap_x_[kNumFontCharacters], // The position of each character in the bitmap
       char_bitmap_y_[kNumFontCharacters];

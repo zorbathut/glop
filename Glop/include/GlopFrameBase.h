@@ -102,6 +102,12 @@ class GlopFrame {
   GlopFrame();
   virtual ~GlopFrame();
 
+  // Debugging tools. GetType returns the class name of any GlopFrame (or should, if the GlopFrame
+  // overrides GetType correctly). GetContextString returns a string representation of all
+  // descendants and ascendants of this frame, including type and position.
+  virtual string GetType() const {return "GlopFrame";}
+  string GetContextString() const {return GetContextStringHelper(true, true, "");}
+
   // All frames except unused frames and the topmost tableau frame have a parent.
   const GlopFrame *GetParent() const {return parent_;}
   GlopFrame *GetParent() {return parent_;}
@@ -210,6 +216,9 @@ class GlopFrame {
   // window size.
   virtual void OnWindowResize(int width, int height) {DirtySize();}
 
+  // See GetContextString above.
+  virtual string GetContextStringHelper(bool extend_down, bool extend_up,
+                                        const string &prefix) const;
  private:
   // Ping types. See above.
   class AbsolutePing: public Ping {
@@ -288,6 +297,7 @@ class SingleParentFrame: public GlopFrame {
   SingleParentFrame(): child_(0) {}
   SingleParentFrame(GlopFrame *child): child_(0) {SetChild(child);}
   ~SingleParentFrame() {SetChild(0);}
+  string GetType() const {return "SingleParentFrame";}
 
   // Child delegation functions
   virtual void Render() const {if (child_ != 0) child_->Render();}
@@ -329,6 +339,7 @@ class SingleParentFrame: public GlopFrame {
     DirtySize();
     if (child_ != 0) child_->OnWindowResize(width, height);
   }
+  string GetContextStringHelper(bool extend_down, bool extend_up, const string &prefix) const;
 
  private:
   GlopFrame *child_;
@@ -349,6 +360,7 @@ class MultiParentFrame: public GlopFrame {
  public:
   MultiParentFrame() {}
   virtual ~MultiParentFrame() {ClearChildren();}
+  string GetType() const {return "MultiParentFrame";}
   
   // Child delegation functions
   virtual void Render() const;
@@ -374,6 +386,7 @@ class MultiParentFrame: public GlopFrame {
   GlopFrame *RemoveChildNoDelete(LightSetId id);
   void ClearChildren();
   void OnWindowResize(int width, int height);
+  string GetContextStringHelper(bool extend_down, bool extend_up, const string &prefix) const;
   
  private:
   friend class GlopWindow;
@@ -393,6 +406,7 @@ class MultiParentFrame: public GlopFrame {
 class ClippedFrame: public SingleParentFrame {
  public:
   ClippedFrame(GlopFrame *frame): SingleParentFrame(frame), is_standard_clipping_(true) {}
+  string GetType() const {return "ClippedFrame";}
 
   void Render() const;
   void SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2);
@@ -427,7 +441,8 @@ class PaddedFrame: public SingleParentFrame {
               int bottom_padding)
   : SingleParentFrame(frame), left_padding_(left_padding), top_padding_(top_padding),
     right_padding_(right_padding), bottom_padding_(bottom_padding) {}
- 
+  string GetType() const {return "PaddedFrame";}
+
   // Accessors/mutators
   const GlopFrame *GetInnerFrame() const {return GetChild();}
   GlopFrame *GetInnerFrame() {return GetChild();}
@@ -460,7 +475,8 @@ class ScalingPaddedFrame: public SingleParentFrame {
                      float bottom_padding)
   : SingleParentFrame(frame), scaled_left_padding_(left_padding), scaled_top_padding_(top_padding),
     scaled_right_padding_(right_padding), scaled_bottom_padding_(bottom_padding) {}
- 
+  string GetType() const {return "ScalingPaddedFrame";}
+
   // Accessors/mutators
   const GlopFrame *GetInnerFrame() const {return GetChild();}
   GlopFrame *GetInnerFrame() {return GetChild();}
@@ -495,6 +511,7 @@ class FocusFrame: public SingleParentFrame {
  public:
   FocusFrame(GlopFrame *frame);
   ~FocusFrame();
+  string GetType() const {return "FocusFrame";}
 
   // Returns whether we are descended from the given focus frame.
   bool IsSubFocusFrame(const FocusFrame *frame) const;
@@ -534,7 +551,8 @@ class FocusFrame: public SingleParentFrame {
 // with a high depth to always ensure it rendered on top of everything else.
 class TableauFrame: public MultiParentFrame {
  public:
-   TableauFrame(): order_dirty_(false) {}
+  TableauFrame(): order_dirty_(false) {}
+  string GetType() const {return "TableauFrame";}
   
   // Render is overwritten to draw frames in depth order
   virtual void Render() const;
@@ -638,6 +656,7 @@ class TableFrame: public MultiParentFrame {
   TableFrame(int num_cols, int num_rows, float default_horz_justify = kJustifyCenter,
              float default_vert_justify = kJustifyCenter);
   virtual ~TableFrame();
+  string GetType() const {return "TableFrame";}
   float GetDefaultHorzJustify() const {return default_horz_justify_;}
   float GetDefaultVertJustify() const {return default_vert_justify_;}
   void SetDefaultHorzJustify(float horz_justify) {default_horz_justify_ = horz_justify;}
@@ -772,6 +791,7 @@ class RowFrame: public SingleParentFrame {
     SetCell(1, frame2, width2, height2);
     SetCell(2, frame3, width3, height3);
   }
+  string GetType() const {return "RowFrame";}
   float GetDefaultVertJustify() const {return table()->GetDefaultVertJustify();}
   void SetDefaultVertJustify(float vert_justify) {table()->SetDefaultVertJustify(vert_justify);}
 
@@ -866,6 +886,7 @@ class ColFrame: public SingleParentFrame {
     SetCell(1, frame2, width2, height2);
     SetCell(2, frame3, width3, height3);
   }
+  string GetType() const {return "ColFrame";}
   float GetDefaultHorzJustify() const {return table()->GetDefaultHorzJustify();}
   void SetDefaultHorzJustify(float horz_justify) {table()->SetDefaultHorzJustify(horz_justify);}
   
@@ -925,6 +946,7 @@ class RecWidthFrame: public SingleParentFrame {
  public:
   RecWidthFrame(GlopFrame *frame, float rec_width)
   : SingleParentFrame(frame), rec_width_override_(rec_width) {}
+  string GetType() const {return "RecWidthFrame";}
  protected:
   void RecomputeSize(int rec_width, int rec_height);
  private:
@@ -936,6 +958,7 @@ class RecHeightFrame: public SingleParentFrame {
  public:
   RecHeightFrame(GlopFrame *frame, float rec_height)
   : SingleParentFrame(frame), rec_height_override_(rec_height) {}
+  string GetType() const {return "RecHeightFrame";}
  protected:
   void RecomputeSize(int rec_width, int rec_height);
  private:
@@ -947,6 +970,7 @@ class RecSizeFrame: public SingleParentFrame {
  public:
   RecSizeFrame(GlopFrame *frame, float rec_width, float rec_height)
   : SingleParentFrame(frame), rec_width_override_(rec_width), rec_height_override_(rec_height) {}
+  string GetType() const {return "RecSizeFrame";}
  protected:
   void RecomputeSize(int rec_width, int rec_height);
  private:
@@ -967,6 +991,7 @@ class MinWidthFrame: public SingleParentFrame {
   MinWidthFrame(GlopFrame *frame, float min_width = kSizeLimitRec,
                 float horz_justify = kJustifyLeft)
   : SingleParentFrame(frame), min_width_(min_width), horz_justify_(horz_justify) {}
+  string GetType() const {return "MinWidthFrame";}
   void SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2);
  protected:
   void RecomputeSize(int rec_width, int rec_height);
@@ -981,6 +1006,7 @@ class MinHeightFrame: public SingleParentFrame {
   MinHeightFrame(GlopFrame *frame, float min_height = kSizeLimitRec,
                  float vert_justify = kJustifyTop)
   : SingleParentFrame(frame), min_height_(min_height), vert_justify_(vert_justify) {}
+  string GetType() const {return "MinHeightFrame";}
   void SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2);
  protected:
   void RecomputeSize(int rec_width, int rec_height);
@@ -996,6 +1022,7 @@ class MinSizeFrame: public SingleParentFrame {
                float horz_justify = kJustifyLeft, float vert_justify = kJustifyTop)
   : SingleParentFrame(frame), min_width_(min_width), min_height_(min_height),
     horz_justify_(horz_justify), vert_justify_(vert_justify) {}
+  string GetType() const {return "MinSizeFrame";}
   void SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2);
  protected:
   void RecomputeSize(int rec_width, int rec_height);
@@ -1019,6 +1046,7 @@ class MaxWidthFrame: public SingleParentFrame {
  public:
   MaxWidthFrame(GlopFrame *frame, float max_width = kSizeLimitRec,
                 float horz_justify = kJustifyLeft);
+  string GetType() const {return "MaxWidthFrame";}
  private:
   DISALLOW_EVIL_CONSTRUCTORS(MaxWidthFrame);
 };
@@ -1027,6 +1055,7 @@ class MaxHeightFrame: public SingleParentFrame {
  public:
   MaxHeightFrame(GlopFrame *frame, float max_height = kSizeLimitRec,
                  float vert_justify = kJustifyTop);
+  string GetType() const {return "MaxHeightFrame";}
  private:
   DISALLOW_EVIL_CONSTRUCTORS(MaxHeightFrame);
 };
@@ -1035,8 +1064,8 @@ class MaxSizeFrame: public SingleParentFrame {
  public:
   MaxSizeFrame(GlopFrame *frame, float max_width = kSizeLimitRec, float max_height = kSizeLimitRec,
                float horz_justify = kJustifyLeft, float vert_justify = kJustifyTop);
+  string GetType() const {return "MaxSizeFrame";}
   void SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2);
-
  protected:
   void RecomputeSize(int rec_width, int rec_height);
   void OnChildPing(GlopFrame *child, int x1, int y1, int x2, int y2, bool center);
@@ -1063,6 +1092,7 @@ class ExactWidthFrame: public MinWidthFrame {
   ExactWidthFrame(GlopFrame *frame, float width = kSizeLimitRec,
                   float horz_justify_max = kJustifyLeft, float horz_justify_min = kJustifyLeft)
   : MinWidthFrame(new MaxWidthFrame(frame, width, horz_justify_max), width, horz_justify_min) {}
+  string GetType() const {return "ExactWidthFrame";}
  private:
   DISALLOW_EVIL_CONSTRUCTORS(ExactWidthFrame);
 };
@@ -1072,6 +1102,7 @@ class ExactHeightFrame: public MinHeightFrame {
                    float vert_justify_max = kJustifyTop, float vert_justify_min = kJustifyTop)
   : MinHeightFrame(new MaxHeightFrame(frame, height, vert_justify_max),
                    height, vert_justify_min) {}
+  string GetType() const {return "ExactHeightFrame";}
  private:
   DISALLOW_EVIL_CONSTRUCTORS(ExactHeightFrame);
 };
@@ -1082,6 +1113,7 @@ class ExactSizeFrame: public MinSizeFrame {
                  float horz_justify_min = kJustifyLeft, float vert_justify_min = kJustifyTop)
   : MinSizeFrame(new MaxSizeFrame(frame, width, height, horz_justify_max, vert_justify_max),
                  width, height, horz_justify_min, vert_justify_min) {}
+  string GetType() const {return "ExactSizeFrame";}
  private:
   DISALLOW_EVIL_CONSTRUCTORS(ExactSizeFrame);
 };
@@ -1097,6 +1129,7 @@ class ExactSizeFrame: public MinSizeFrame {
 class ScrollingFrame: public FocusFrame {
  public:
   ScrollingFrame(GlopFrame *frame, const SliderViewFactory *factory = gSliderViewFactory);
+  string GetType() const {return "ScrollingFrame";}
  private:
   DISALLOW_EVIL_CONSTRUCTORS(ScrollingFrame);
 };

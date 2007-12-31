@@ -8,6 +8,7 @@
 //  - Why is object slightly visible even when deep in the fog?
 //  - Add general GlopFrame comments, and formalize render expectations vis a vis gl settings
 //    Also look at FrameStyle
+//  - Add KeyPrompt?
 //  - Vsync
 
 // Includes
@@ -29,7 +30,8 @@ Image *gIcon;
 void IntroScreen() {
   GlopFrame *info = new FancyTextFrame("\1bu\1\1cFF8080\1Glop Test Program\1/b/u\1\1cFFFFFF\1\n\n"
                                        "Select tests to verify that Glop performs as expected.");
-  gWindow->AddFrame(info, 0.5f, 0.3f, 0.5f, 0.3f);
+  GlopFrame *img = new HollowBoxFrame(new ImageFrame("glop.jpg"), kWhite);
+  gWindow->AddFrame(new ColFrame(info, new RecHeightFrame(new EmptyFrame(), 0.1f), img));
   input()->WaitForKeyPress();
   gWindow->ClearFrames();
 }
@@ -161,7 +163,7 @@ void InputTest() {
   main_col->SetCell(3, tableau);
 
   gWindow->AddFrame(main_col, 0, 0, 0, 0);
-  while (!input()->WasKeyPressed(27)) {
+  while (!input()->WasKeyPressed(kKeyEscape)) {
     int dt = gSystem->Think();
 
     // Update the mouse position
@@ -325,7 +327,7 @@ void CameraTest() {
     new PaddedFrame(cube, 10), CellSize::Default(),
     CellSize::Max(), info, CellSize::Default(), CellSize::Default());
   gWindow->AddFrame(content);
-  while (!input()->WasKeyPressed(27))
+  while (!input()->WasKeyPressed(kKeyEscape))
     gSystem->Think();
 }
 
@@ -347,6 +349,7 @@ void BuildMainMenu() {
 int main(int argc, char **argv) {
   Font *font;
 
+  LogToFile("log.txt", true);
   System::Init();
   
   ASSERT((font = GradientFont::Load("thames.ttf", 1.0f, 0.5f, -0.3f, 1.0f)) != 0);
@@ -358,7 +361,7 @@ int main(int argc, char **argv) {
   IntroScreen();
 
   BuildMainMenu();
-  while (!input()->WasKeyPressed(27)) {
+  while (!input()->WasKeyPressed(kKeyEscape)) {
     int selection = 0;
     if (input()->WasKeyPressed('1')) selection = 1;
     if (input()->WasKeyPressed('2')) selection = 2;

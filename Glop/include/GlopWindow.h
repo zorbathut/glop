@@ -109,6 +109,7 @@ class GlopWindow {
   // ===============
   //
   // See TableauFrame in GlopFrameBase.h
+  string GetFrameContextString() const;
   const GlopFrame *GetFrame(LightSetId id) const;
   GlopFrame *GetFrame(LightSetId id);
   LightSetId GetFirstFrameId() const;
@@ -118,7 +119,7 @@ class GlopWindow {
   int GetFrameDepth(LightSetId id) const;
   float GetFrameHorzJustify(LightSetId id) const;
   float GetFrameVertJustify(LightSetId id) const;
-  
+    
   // Frame mutators
   // ==============
   //

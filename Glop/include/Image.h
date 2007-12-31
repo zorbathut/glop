@@ -1,10 +1,15 @@
-// A raw image, stored in either RGB (24 bit) or RGBA (32 bit) format. The image is made
-// compatible with OpenGl so that it can be used as a texture (i.e., the width and height are
-// increased to powers of 2), but no texture information is directly stored here. See
-// System::LoadTexture for that functionality.
+// An Image is raw image data stored in one of the following formats:
+//  - Alpha (bpp == 8)
+//  - Luminance, alpha (bpp == 16)
+//  - Red, green, blue (bpp == 24)
+//  - Red, green, blue, alpha (bpp == 32)
+// It is designed to be very easily used as an OpenGL texture. Thus, the actually data is stored
+// with width and height automatically increased to powers of 2.
 //
-// The main function of this class is loading images from data files. Currently, Bmp, Gif and Jpg
-// files are supported.
+// Nonetheless, an Image is fundamentally just raw data. To actually render it, a Texture object
+// must be cerated (see OpenGl.h).
+//
+// The main function of this class is to provide support for loading an Image from a file.
 
 #ifndef GLOP_IMAGE_H__
 #define GLOP_IMAGE_H__
@@ -20,28 +25,28 @@ class Color;
 // Image class definition
 class Image {
  public:
-  // Load an image from a file.
-  // Format 1: The image is loaded with no changes. It is stored in 32 bits only if the original
-  //           image is 32 bit, or if force_alpha is true.
-  // Format 2: The image is loaded in 32 bit mode, and then any pixels that are within a distance
-  //           of bg_tolerance from bg_color are made transparent. Formally: each pixel is taken
-  //           as (r,g,b) with r,g,b between 0 and 255. It's distance from bg_color is the sum of
-  //           the red difference, the green difference, and the blue difference.
-  // Format 3: The image is a rescaled version of the given image. This is particularly useful for
-  //           icons.
-  // On error, 0 is returned.
-  static Image *Load(BinaryFileReader reader, bool force_alpha = false);
+  // Image constructors:
+  // Format 1: Space for the image is allocated, but it is left empty.
+  // Format 2: The image is constructed from the given data, representing a raw bitmap with the
+  //           given width and height. Thus, data should be exactly width*height*bpp bytes long (as
+  //           opposed to the Image itself, which uses power of 2 sizes).
+  // Format 3: The image is loaded from a file with no changes. 0 is returned on read error.
+  // Format 4: A utility to add alpha to RGB images. The image is loaded in 32 bit mode, and then
+  //           any pixels that are within a distance of bg_tolerance from bg_color are made
+  //           transparent. Distance = rdiff + gdiff + bdiff.
+  // Format 5: The image is a rescaled version of the given image.
+  Image(int width, int height, int bpp);
+  Image(unsigned char *data, int width, int height, int bpp);
+  static Image *Load(BinaryFileReader reader);
   static Image *Load(BinaryFileReader reader, const Color &bg_color, int bg_tolerance);
-  static Image *ScaledImage(const Image *image, int new_width, int new_height);
-
-  // Destructor. Should only be used by the image creator, so it should not be used if this is
-  // created as a system texture.
-  ~Image() {delete[] pixels_;}
+  static Image *AdjustedImage(const Image *image, int new_width, int new_height, int new_bpp);
+  ~Image() {delete[] data_;}
 
   // Internal metrics:
   //   Bpp - Bits per pixel (24 or 32).
-  //   InternalWidth, InternalHeight - The size of the image after increasing to a power of 2.
-  //   Width, Height - The size of the image before increasing to a power of 2.
+  //   InternalWidth, InternalHeight - The size of the image after increasing to dimensions to
+  //                                   powers of 2.
+  //   Width, Height - The original size of the image.
   int GetBpp() const {return bpp_;}
   int GetBytesPerRow() const {return internal_width_ * bpp_ / 8;}
   int GetInternalWidth() const {return internal_width_;}
@@ -49,23 +54,24 @@ class Image {
   int GetWidth() const {return width_;}
   int GetHeight() const {return height_;}
 
-  // Raw pixel data, stored as RGB or RGBA (distinguishable via GetBpp).
-  const unsigned char *GetPixels() const {return pixels_;}
-  unsigned char *GetPixels() {return pixels_;}
+  // Raw pixel data, stored in A, LA, RGB, or RGBA format.
+  const unsigned char *Get() const {return data_;}
+  unsigned char *Get() {return data_;}
+  const unsigned char *Get(int x, int y) const {return data_ + (y*internal_width_ + x)*(bpp_/8);}
+  unsigned char *Get(int x, int y) {return data_ + (y*internal_width_ + x)*(bpp_/8);}
 
  private:
   // Image initialization
   static unsigned int NextPow2(unsigned int n);
   void SmoothTransparentColors();
   static bool IsBmp(BinaryFileReader reader);
-  static Image *LoadBmp(BinaryFileReader reader, bool force_alpha);
+  static Image *LoadBmp(BinaryFileReader reader);
   static bool IsGif(BinaryFileReader reader);
-  static Image *LoadGif(BinaryFileReader reader, bool force_alpha);
+  static Image *LoadGif(BinaryFileReader reader);
   static bool IsJpg(BinaryFileReader reader);
-  static Image *LoadJpg(BinaryFileReader reader, bool force_alpha);
-  Image(unsigned char *data, int width, int height, int bpp, bool force_alpha);
+  static Image *LoadJpg(BinaryFileReader reader);
 
-  unsigned char *pixels_;
+  unsigned char *data_;
   int width_, height_;
   int internal_width_, internal_height_;
   int bpp_;

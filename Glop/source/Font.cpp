@@ -216,7 +216,7 @@ restart:;
         char_bitmap_x_[i] = x;
         char_bitmap_y_[i] = y;
         for (int ty = 0; ty < h; ty++)
-          memcpy(data_ + (y+ty)*width_ + x, bitmaps[i] + ty*w, w);
+          memcpy(image_->Get(x, y+ty), bitmaps[i] + ty*w, w);
       }
 
       // Move to the next character
@@ -229,15 +229,15 @@ restart:;
     if (pass == 0) {
       while (y+row_height <= height_/2)
         height_ /= 2;
-      data_ = new unsigned char[width_ * height_];
+      image_ = new Image(width_, height_, 8);
     }
   }
-  texture_ = new Texture(data_, width_, height_, 8, GL_NEAREST, GL_NEAREST);
+  texture_ = new Texture(image_);
 }
 
 FontBitmap::~FontBitmap() {
   delete texture_;
-  delete[] data_;
+  delete image_;
 }
 
 // Font

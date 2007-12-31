@@ -10,8 +10,6 @@
  * and perhaps jerror.h if they want to know the exact error codes.
  */
 
-extern "C" {
-
 #ifndef JPEGLIB_H
 #define JPEGLIB_H
 
@@ -1096,5 +1094,3 @@ struct jpeg_color_quantizer { long dummy; };
 #endif
 
 #endif /* JPEGLIB_H */
-
-} // extern "C" {

@@ -87,6 +87,18 @@ void GlopFrame::AddPing(Ping *ping) {
   gWindow->RegisterPing(ping);
 }
 
+string GlopFrame::GetContextStringHelper(bool extend_down, bool extend_up,
+                                         const string &prefix) const {
+  string result;
+  if (extend_up && GetParent() != 0)
+    result = GetParent()->GetContextStringHelper(false, true, "");
+  if (prefix.size() > 0)
+    result += Format("%s+", prefix.substr(0, (int)prefix.size()-1).c_str());
+  result += Format("%s: (%d, %d) - (%d, %d)\n",
+                   GetType().c_str(), GetX(), GetY(), GetX2(), GetY2());
+  return result;
+}
+
 void GlopFrame::SetParent(GlopFrame *parent) {
   if (parent == 0) {
     if (!IsFocusFrame()) SetFocusInfo(0, false);
@@ -113,6 +125,14 @@ void SingleParentFrame::SetChild(GlopFrame *frame) {
   if (child_ != 0) delete child_;
   child_ = frame;
   if (child_ != 0) child_->SetParent(this);
+}
+
+string SingleParentFrame::GetContextStringHelper(bool extend_down, bool extend_up,
+                                                 const string &prefix) const {
+  string result = GlopFrame::GetContextStringHelper(extend_down, extend_up, prefix);
+  if (extend_down && child_ != 0)
+    result += child_->GetContextStringHelper(true, false, prefix + " ");
+  return result;
 }
 
 // MultiParentFrame
@@ -199,6 +219,16 @@ void MultiParentFrame::OnWindowResize(int width, int height) {
   DirtySize();
   for (LightSetId id = children_.GetFirstId(); id != 0; id = children_.GetNextId(id))
     children_[id]->OnWindowResize(width, height);
+}
+
+string MultiParentFrame::GetContextStringHelper(bool extend_down, bool extend_up,
+                                                const string &prefix) const {
+  string result = GlopFrame::GetContextStringHelper(extend_down, extend_up, prefix);
+  if (extend_down)
+  for (LightSetId id = children_.GetFirstId(); id != 0; id = children_.GetNextId(id))
+    result += children_[id]->GetContextStringHelper(
+      true, false, prefix + (children_.GetNextId(id) == 0? " " : "|"));
+  return result;
 }
 
 // ClippedFrame
@@ -843,6 +873,8 @@ static void ScrollToPing(int scroll_x, int scroll_y, int view_w, int view_h, int
     } else {
       *new_scroll_x = scroll_x;
     }
+  } else {
+    *new_scroll_x = 0;
   }
   if (*new_scroll_x < 0)
     *new_scroll_x = 0;
@@ -860,6 +892,8 @@ static void ScrollToPing(int scroll_x, int scroll_y, int view_w, int view_h, int
     } else {
       *new_scroll_y = scroll_y;
     }
+  } else {
+    *new_scroll_y = 0;
   }
   if (*new_scroll_y < 0)
     *new_scroll_y = 0;
@@ -965,6 +999,7 @@ class UnfocusableScrollingFrame: public MultiParentFrame {
     clipped_inner_frame_ = new ClippedFrame(inner_frame_ = frame);
     AddChild(clipped_inner_frame_);
   }
+  string GetType() const {return "UnfocusableScrollingFrame";}
   
   void SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2) {
     GlopFrame::SetPosition(screen_x, screen_y, cx1, cy1, cx2, cy2);

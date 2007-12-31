@@ -8,9 +8,29 @@
 // Texture class
 // =============
 
-Texture::Texture(const void *data, int width, int height, int bpp, int mag_filter, int min_filter)
-: data_(data), width_(width), height_(height), bpp_(bpp), mag_filter_(mag_filter),
-  min_filter_(min_filter), gl_id_(0) {
+Texture *Texture::Load(BinaryFileReader reader, int mag_filter, int min_filter) {
+  Image *image = Image::Load(reader);
+  if (image == 0)
+    return 0;
+  Texture *texture = new Texture(image, mag_filter, min_filter);
+  texture->is_image_owned_ = true;
+  return texture;
+}
+
+Texture *Texture::Load(BinaryFileReader reader, const Color &bg_color, int bg_tolerance,
+                       int mag_filter, int min_filter) {
+  Image *image = Image::Load(reader, bg_color, bg_tolerance);
+  if (image == 0)
+    return 0;
+  Texture *texture = new Texture(image, mag_filter, min_filter);
+  texture->is_image_owned_ = true;
+  return texture;
+}
+
+Texture::Texture(const Image *image, int mag_filter, int min_filter)
+: image_(image), is_image_owned_(false), mag_filter_(mag_filter), min_filter_(min_filter),
+  gl_id_(0) {
+  ASSERT(image != 0);
   glop_index_ = GlDataManager::RegisterTexture(this);
   if (gWindow->IsCreated())
     GlInit();
@@ -19,12 +39,14 @@ Texture::Texture(const void *data, int width, int height, int bpp, int mag_filte
 Texture::~Texture() {
   GlShutDown();
   GlDataManager::UnregisterTexture(glop_index_);
+  if (is_image_owned_)
+    delete image_;
 }
 
 void Texture::GlInit() {
+  const int kFormatList[] = {GL_ALPHA, GL_LUMINANCE_ALPHA, GL_RGB, GL_RGBA};
   ASSERT(gl_id_ == 0);
-  int format = (bpp_ == 8? GL_ALPHA : bpp_ == 24? GL_RGB : GL_RGBA);
-
+  int format = kFormatList[GetBpp()/8 - 1];
   glEnable(GL_TEXTURE_2D);
   glGenTextures(1, &gl_id_);
   glBindTexture(GL_TEXTURE_2D, gl_id_);
@@ -33,13 +55,12 @@ void Texture::GlInit() {
 
   if ((mag_filter_ != GL_NEAREST || mag_filter_ != GL_LINEAR) &&
       (min_filter_ != GL_NEAREST || min_filter_ != GL_LINEAR)) {
-    glTexImage2D(GL_TEXTURE_2D, 0, format, width_, height_, 0, format,
-                 GL_UNSIGNED_BYTE, data_);
+    glTexImage2D(GL_TEXTURE_2D, 0, format, GetInternalWidth(), GetInternalHeight(), 0, format,
+                 GL_UNSIGNED_BYTE, image_->Get());
   } else {
-    gluBuild2DMipmaps(GL_TEXTURE_2D, format, width_, height_, format,
-                      GL_UNSIGNED_BYTE, data_);
+    gluBuild2DMipmaps(GL_TEXTURE_2D, format, GetInternalWidth(), GetInternalHeight(), format,
+                      GL_UNSIGNED_BYTE, image_->Get());
   }
-
   glDisable(GL_TEXTURE_2D);
 }
 
@@ -145,4 +166,26 @@ void GlUtils2d::FillRectangle(int x1, int y1, int x2, int y2) {
   glVertex2i(max_x + 1, max_y + 1);
   glVertex2i(min_x, max_y + 1);
   glEnd();
+}
+
+void GlUtils2d::RenderSubTexture(int x1, int y1, int x2, int y2, float tu1, float tv1, float tu2,
+                                 float tv2, const Texture *texture) {
+  int min_x = min(x1, x2), max_x = max(x1, x2);
+  int min_y = min(y1, y2), max_y = max(y1, y2);
+  GlUtils::SetTexture(texture);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);  // Prevents texture bleeding across
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);  //  top & bottom
+  glBegin(GL_QUADS);
+  glTexCoord2f(tu1, tv1);
+  glVertex2i(min_x, min_y);
+  glTexCoord2f(tu2, tv1);
+  glVertex2i(max_x + 1, min_y);
+  glTexCoord2f(tu2, tv2);
+  glVertex2i(max_x + 1, max_y + 1);
+  glTexCoord2f(tu1, tv2);
+  glVertex2i(min_x, max_y + 1);
+  glEnd();
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+  GlUtils::SetNoTexture(); 
 }
