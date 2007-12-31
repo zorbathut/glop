@@ -25,18 +25,18 @@ const char *const kKeyNames[] = {
   "2", "3", "4", "5", "6",                                                  // 50
   "7", "8", "9", 0, ";",
   0, "=", 0, 0, 0,
-  "A", "B", "C", "D", "E",
-  "F", "G", "H", "I", "J",
-  "K", "L", "M", "N", "O",
-  "P", "Q", "R", "S", "T",
-  "U", "V", "W", "X", "Y",
-  "Z", "[", "\\", "]", 0,
-  0, "`", 0, 0, 0,
-  0, 0, 0, 0, 0,                                                            // 100
-  0, 0, 0, 0, 0,
-  0, 0, 0, 0, 0, 
   0, 0, 0, 0, 0,
   0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0,
+  0, "[", "\\", "]", 0,
+  0, "`", "A", "B", "C",
+  "D", "E", "F", "G", "H",                                                            // 100
+  "I", "J", "K", "L", "M",
+  "N", "O", "P", "Q", "R",
+  "S", "T", "U", "V", "W",
+  "X", "Y", "Z", 0, 0,
   0, 0, 0, 0, "F1",
   "F2", "F3", "F4", "F5", "F6",
   "F7", "F8", "F9", "F10", "F11",
@@ -78,11 +78,11 @@ const unsigned char kAsciiValues[] = {
   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 27, 0, 0, 
   0, 0, 32, 0, 0, 0, 0, 0, 0, '\'', 0, 0, 0, 0, ',', 
   '-', '.', '/', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 0, ';',
-  0, '=', 0, 0, 0, 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J',
-  'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y',
-  'Z', '[', '\\', ']', 0, 0, '`', 0, 0, 0, 0, 0, 0, 0, 0,
-  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, '=', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+  0, '[', '\\', ']', 0, 0, '`', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h',
+  'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w',
+  'x', 'y', 'z', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
   0, 0, 0, 0, 0, '/', '*', '-', '+', 13, '.', 0, 0, 0, 0,
@@ -99,11 +99,11 @@ const unsigned char kShiftedAsciiValues[] = {
   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 27, 0, 0, 
   0, 0, 32, 0, 0, 0, 0, 0, 0, '"', 0, 0, 0, 0, '<', 
   '_', '>', '?', ')', '!', '@', '#', '$', '%', '^', '&', '*', '(', 0, ':',
-  0, '+', 0, 0, 0, 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j',
-  'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y',
-  'z', '{', '|', '}', 0, 0, '~', 0, 0, 0, 0, 0, 0, 0, 0,
-  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, '+', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
+  0, '{', '|', '}', 0, 0, '`', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',
+  'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W',
+  'X', 'Y', 'Z', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
   0, 0, 0, 0, 0, '/', '*', '-', '+', 13, '.', 0, 0, 0, 0,
@@ -465,13 +465,12 @@ void Input::KeyTracker::Think() {
 // ============
 
 unsigned char Input::GetAsciiValue(const GlopKey &key) const {
-  if (!key.IsKeyboardKey() || IsKeyDownNow(kKeyLeftAlt) || IsKeyDownNow(kKeyRightAlt) ||
-      IsKeyDownNow(kKeyLeftControl) || IsKeyDownNow(kKeyRightControl))
+  if (!key.IsKeyboardKey() || IsKeyDownNow(kKeyEitherAlt) || IsKeyDownNow(kKeyEitherControl))
     return 0;
   if (key.index >= kKeyPad0.index && key.index <= kKeyPad9.index && IsNumLockSet())
     return '0' + (key.index - kKeyPad0.index);
-  bool is_shift_down = IsKeyDownNow(kKeyLeftShift) || IsKeyDownNow(kKeyRightShift);
-  if (key.index >= 'A' && key.index <= 'Z' && !IsCapsLockSet())
+  bool is_shift_down = IsKeyDownNow(kKeyEitherShift);
+  if (key.index >= 'a' && key.index <= 'z' && IsCapsLockSet())
     is_shift_down = !is_shift_down;
   return (is_shift_down? kShiftedAsciiValues[key.index] : kAsciiValues[key.index]);
 }
@@ -517,10 +516,10 @@ void Input::ConfigureGuiKeys(bool keyboard_bindings, bool mouse_bindings, bool j
     BindDerivedKey(kGuiKeyRight, kKeyRight);
     BindDerivedKey(kGuiKeyDown, kKeyDown);
     BindDerivedKey(kGuiKeyLeft, kKeyLeft);
-    BindDerivedKey(kGuiKeyConfirm, 13);
+    BindDerivedKey(kGuiKeyConfirm, kKeyEnter);
     BindDerivedKey(kGuiKeyConfirm, kKeyPadEnter);
-    BindDerivedKey(kGuiKeySelectPrev, '\t', kKeyEitherShift, kKeyEitherAlt, true, true, false);
-    BindDerivedKey(kGuiKeySelectNext, '\t', kKeyEitherShift, kKeyEitherAlt, true, false, false);
+    BindDerivedKey(kGuiKeySelectPrev, kKeyTab, kKeyEitherShift, kKeyEitherAlt, true, true, false);
+    BindDerivedKey(kGuiKeySelectNext, kKeyTab, kKeyEitherShift, kKeyEitherAlt, true, false, false);
   }
   if (mouse_bindings) {
     BindDerivedKey(kGuiKeyScrollUp, kMouseWheelUp);

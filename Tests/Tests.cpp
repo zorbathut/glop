@@ -163,7 +163,7 @@ void InputTest() {
   main_col->SetCell(3, tableau);
 
   gWindow->AddFrame(main_col, 0, 0, 0, 0);
-  while (!input()->WasKeyPressed(27)) {
+  while (!input()->WasKeyPressed(kKeyEscape)) {
     int dt = gSystem->Think();
 
     // Update the mouse position
@@ -327,7 +327,7 @@ void CameraTest() {
     new PaddedFrame(cube, 10), CellSize::Default(),
     CellSize::Max(), info, CellSize::Default(), CellSize::Default());
   gWindow->AddFrame(content);
-  while (!input()->WasKeyPressed(27))
+  while (!input()->WasKeyPressed(kKeyEscape))
     gSystem->Think();
 }
 
@@ -352,8 +352,7 @@ int main(int argc, char **argv) {
   LogToFile("log.txt", true);
   System::Init();
   
-  //ASSERT((font = GradientFont::Load("thames.ttf", 1.0f, 0.5f, -0.3f, 1.0f)) != 0);
-  ASSERT((font = Font::Load("thames.ttf")) != 0);
+  ASSERT((font = GradientFont::Load("thames.ttf", 1.0f, 0.5f, -0.3f, 1.0f)) != 0);
   ASSERT((gIcon = Image::Load("Icon.bmp", kRed, 1)) != 0);
   InitDefaultFrameStyle(font);
 
@@ -362,7 +361,7 @@ int main(int argc, char **argv) {
   IntroScreen();
 
   BuildMainMenu();
-  while (!input()->WasKeyPressed(27)) {
+  while (!input()->WasKeyPressed(kKeyEscape)) {
     int selection = 0;
     if (input()->WasKeyPressed('1')) selection = 1;
     if (input()->WasKeyPressed('2')) selection = 2;

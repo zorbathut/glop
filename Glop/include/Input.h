@@ -151,7 +151,20 @@ struct GlopKey {
 const GlopKey kNoKey(-2);
 const GlopKey kAnyKey(-1);
 
-// Key constants - keyboard
+// Key constants - keyboard. General rules:
+//  - If a key has a clear ASCII value associated with it, its GlopKey is given just by that ASCII
+//    value. For example, Enter is 13.
+//  - The non-shift, non-caps lock ASCII value is used when there's ambiguity. Thus, 'a' and ','
+//    are valid GlopKeys, but 'A' and '<' are not valid GlopKeys.
+//  - Key-pad keys are NEVER considered to have associated ASCII values. See the kKeyPad constants.
+// Note: these ASCII-related key indices are not intended to replace ASCII. If you want an ASCII
+// value, call Input::ToAscii so that shift, num lock and caps lock are all considered.
+const GlopKey kKeyBackspace(8);
+const GlopKey kKeyTab(9);
+const GlopKey kKeyEnter(13);
+const GlopKey kKeyReturn(13);
+const GlopKey kKeyEscape(27);
+
 const GlopKey kKeyF1(129);
 const GlopKey kKeyF2(130);
 const GlopKey kKeyF3(131);
@@ -206,9 +219,6 @@ const GlopKey kKeyInsert(192);
 const GlopKey kKeyEnd(193);
 const GlopKey kKeyPageUp(194);
 const GlopKey kKeyPageDown(195);
-
-const GlopKey kKeyEscape(27);
-const GlopKey kKeyReturn(13);
 
 // Key constants - mouse
 const GlopKey kMouseUp(291);

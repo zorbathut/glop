@@ -689,7 +689,7 @@ bool BaseTextPromptFrame::OnKeyEvent(const KeyEvent &event, int dt) {
     int ascii = input()->GetAsciiValue(event.key);
 
     // Handle backspace and delete
-    if (event.key == '\b') {
+    if (event.key == kKeyBackspace) {
       if (prompt()->IsSelectionActive())
         DeleteSelection();
       else if (GetCursorPos() > 0)
