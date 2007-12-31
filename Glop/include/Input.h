@@ -207,6 +207,9 @@ const GlopKey kKeyEnd(193);
 const GlopKey kKeyPageUp(194);
 const GlopKey kKeyPageDown(195);
 
+const GlopKey kKeyEscape(27);
+const GlopKey kKeyReturn(13);
+
 // Key constants - mouse
 const GlopKey kMouseUp(291);
 const GlopKey kMouseRight(292);
