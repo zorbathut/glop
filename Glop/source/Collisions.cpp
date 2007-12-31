@@ -16,7 +16,7 @@ bool Box::Collides(const Box& box) const {
 }
 
 bool Box::Collides(const Circle& circle) const {
-	Box box(circle.x() - circle.radius(), circle.y() - circle.radius(), circle.x() + circle.radius(), circle.y() + circle.radius());
+	Box box(circle.x() - circle.radius(), circle.y() - circle.radius(), circle.radius() * 2, circle.radius() * 2);
 	
 	// if a simple box/box collision fails, then the circle couldnt be colliding
 	if (!Collides(box))
