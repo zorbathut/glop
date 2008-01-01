@@ -151,7 +151,8 @@ class GlopWindow {
   // Interface to GlopFrame
   friend class GlopFrame;
   void UnregisterAllPings(GlopFrame *frame);
-  void RegisterPing(GlopFrame::Ping *ping) {ping_list_.InsertItem(ping);}
+  void RegisterPing(GlopFrame::Ping *ping);
+  void PropogatePing(GlopFrame::Ping *ping);
 
   // Interface to Input
   friend class Input;
@@ -185,6 +186,7 @@ class GlopWindow {
   // Content data
   enum TabDirection {Forward, Backward, None};
   TabDirection tab_direction_;  // Used to prevent too-rapid switching between tab & shift+tab
+  bool is_resolving_ping_;
   LightSet<GlopFrame::Ping*> ping_list_;
   vector<FocusFrame*> focus_stack_;
   TableauFrame *frame_;

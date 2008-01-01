@@ -2,17 +2,18 @@
 // WARNING: Many of these frames require a valid font, which is not loaded by default. To avoid
 //          errors, load a font (see Font.h) and call InitDefaultFrameStyle (see FrameStyle.h).
 //
-// Conventions: Many of these frames are designed to be easily customizable by outer programs. To
+// Conventions: Many of these frames are designed to be easily customizable by user programs. To
 //              facilitate changing how frames look, they delegate to View objects for all
 //              rendering. These View objects are defined in GlopFrameStyle.
 //
-//              To faciliate changing how frames act, many frames have a Dummy version. This has all
-//              the same essential features but it's state can only be changed programmatically.
-//              These are then overloaded to give the desired functionality. These overloads further
-//              support some key rewrappings. As much as possible, they depend only on the Gui
-//              derived keys in Input. Thus, their behavior can be changed by remapping those keys.
+//              To faciliate changing how frames act, many frames have a Dummy version. These have
+//              all the same essential features but their state can only be changed
+//              programmatically. These are then overloaded to give the desired functionality. These
+//              overloads further support some key rebindings. As much as possible, they depend only
+//              on the Gui derived keys in Input. Thus, their behavior can be changed by remapping
+//              those keys.
 //
-//              Finally, recall that a frame only received input events if it is wrapped in a
+//              Finally, recall that a frame only receives input events if it is wrapped in a
 //              FocusFrame. By convention, all the major interactive frames here have a convenience
 //              Widget that is the frame wrapped inside a FocusFrame.
 //
@@ -43,7 +44,9 @@
 // ButtonWidget: A basic push-button.
 // SliderWidget: A horizontal or vertical scroll-bar, although with no scrolling properties. It can
 //               be used to select any integer value.
-//
+// DialogWidget: A modal dialog box. It displays a message and waits for the user to press a
+//               button. It may also allow the user to interact with a single other widget inside
+//               (e.g. a StringPromptWidget).
 //
 // See also GlopFrameBase.h.
 
@@ -477,7 +480,7 @@ class StringPromptWidget: public FocusFrame {
  public:
   StringPromptWidget(const string &start_text, int length_limit, float prompt_width = kSizeLimitRec,
                      const TextPromptViewFactory *prompt_view_factory = gTextPromptViewFactory,
-                     const InputBoxViewFactory *input_view_factory = gInputBoxViewFactory);
+                     const InputBoxViewFactory *input_box_view_factory = gInputBoxViewFactory);
   string GetType() const {return "StringPromptWidget";}
   const string &Get() const {return prompt_->Get();}
   void Set(const string &value) {prompt_->Set(value);}
@@ -507,7 +510,7 @@ class IntegerPromptWidget: public FocusFrame {
   IntegerPromptWidget(int start_value, int min_value, int max_value,
                       float prompt_width = kSizeLimitRec,
                       const TextPromptViewFactory *prompt_view_factory = gTextPromptViewFactory,
-                      const InputBoxViewFactory *input_view_factory = gInputBoxViewFactory);
+                      const InputBoxViewFactory *input_box_view_factory = gInputBoxViewFactory);
   string GetType() const {return "IntegerPromptWidget";}
   int Get() const {return prompt_->Get();}
   void Set(int value) {prompt_->Set(value);}
@@ -643,9 +646,10 @@ class ButtonWidget: public FocusFrame {
   DISALLOW_EVIL_CONSTRUCTORS(ButtonWidget);
 };
 
-//////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
 // Slider
 // ======
+
 class DummySliderFrame: public MultiParentFrame {
  public:
   enum Direction {Horizontal, Vertical};
@@ -777,6 +781,80 @@ class SliderWidget: public FocusFrame {
   const SliderFrame *slider() const {return (const SliderFrame*)GetChild();}
   SliderFrame *slider() {return (SliderFrame*)GetChild();}
   DISALLOW_EVIL_CONSTRUCTORS(SliderWidget);
+};
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+// Dialog
+// ======
+
+class DialogWidget {
+ public:
+  // Hot key controls
+  static LightSetId AddYesHotKey(const GlopKey &key) {Init(); return yes_keys_.GetFirstId();}
+  static void RemoveYesHotKey(LightSetId id) {Init(); yes_keys_.RemoveItem(id);}
+  static void ClearYesHotKeys() {Init(); yes_keys_.Clear();}
+  static LightSetId AddNoHotKey(const GlopKey &key) {Init(); return no_keys_.GetFirstId();}
+  static void RemoveNoHotKey(LightSetId id) {Init(); no_keys_.RemoveItem(id);}
+  static void ClearNoHotKeys() {Init(); no_keys_.Clear();}
+  static LightSetId AddOkayHotKey(const GlopKey &key) {Init(); return okay_keys_.GetFirstId();}
+  static void RemoveOkayHotKey(LightSetId id) {Init(); okay_keys_.RemoveItem(id);}
+  static void ClearOkayHotKeys() {Init(); okay_keys_.Clear();}
+  static LightSetId AddCancelHotKey(const GlopKey &key) {Init(); return cancel_keys_.GetFirstId();}
+  static void RemoveCancelHotKey(LightSetId id) {Init(); cancel_keys_.RemoveItem(id);}
+  static void ClearCancelHotKeys() {Init(); cancel_keys_.Clear();}
+
+  // Text-only dialog boxes.
+  enum Result {Yes, No, Okay, Cancel};
+  static void TextOkay(const string &title, const string &message,
+                       const DialogViewFactory *factory = gDialogViewFactory);
+  static Result TextOkayCancel(const string &title, const string &message,
+                               const DialogViewFactory *factory = gDialogViewFactory);
+  static Result TextYesNo(const string &title, const string &message,
+                          const DialogViewFactory *factory = gDialogViewFactory);
+  static Result TextYesNoCancel(const string &title, const string &message,
+                                const DialogViewFactory *factory = gDialogViewFactory);
+
+  // Dialog boxes with a string prompt.
+  static string StringPromptOkay(const string &title, const string &message, const string &prompt,
+                                 const string &start_value, int value_length_limit,
+                                 const DialogViewFactory *factory = gDialogViewFactory);
+  static Result StringPromptOkayCancel(const string &title, const string &message,
+                                       const string &prompt, const string &start_value,
+                                       int value_length_limit, string *prompt_value,
+                                       const DialogViewFactory *factory = gDialogViewFactory);
+
+  // Dialog boxes with an integer prompt.
+  static int IntegerPromptOkay(const string &title, const string &message, const string &prompt,
+                               int start_value, int min_value, int max_value,
+                               const DialogViewFactory *factory = gDialogViewFactory);
+  static Result IntegerPromptOkayCancel(const string &title, const string &message,
+                                        const string &prompt, int start_value, int min_value,
+                                        int max_value, int *prompt_value,
+                                        const DialogViewFactory *factory = gDialogViewFactory);
+ private:
+  static void Init();
+  static GlopFrame *Create(const string &title, const string &message, const string &prompt,
+                           GlopFrame *extra_frame, bool has_yes_button, bool has_no_button,
+                           bool has_okay_button, bool has_cancel_button,
+                           const DialogViewFactory *factory, vector<ButtonWidget*> *buttons,
+                           vector<Result> *button_meanings);
+  static Result Execute(const vector<ButtonWidget*> &buttons,
+                        const vector<Result> &button_meanings);
+  static Result DoText(const string &title, const string &message, bool has_yes_button,
+                       bool has_no_button, bool has_okay_button, bool has_cancel_button,
+                       const DialogViewFactory *factory);
+  static Result DoStringPrompt(const string &title, const string &message, const string &prompt,
+                               const string &start_value, int value_length_limit,
+                               string *prompt_value, bool has_okay_button, bool has_cancel_button,
+                               const DialogViewFactory *factory);
+  static Result DoIntegerPrompt(const string &title, const string &message, const string &prompt,
+                                int start_value, int min_value, int max_value, int *prompt_value,
+                                bool has_okay_button, bool has_cancel_button,
+                                const DialogViewFactory *factory);
+ 
+  static bool is_initialized_;
+  static LightSet<GlopKey> yes_keys_, no_keys_, okay_keys_, cancel_keys_;
+  DISALLOW_EVIL_CONSTRUCTORS(DialogWidget);
 };
 
 #endif // GLOP_GLOP_FRAME_WIDGETS_H__

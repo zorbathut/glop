@@ -8,7 +8,7 @@
 //  - Why is object slightly visible even when deep in the fog?
 //  - Add general GlopFrame comments, and formalize render expectations vis a vis gl settings
 //    Also look at FrameStyle
-//  - Add KeyPrompt?
+//  - Add KeyPromptFrame?
 //  - Vsync
 
 // Includes
@@ -331,9 +331,45 @@ void CameraTest() {
     gSystem->Think();
 }
 
+void GuiTest() {
+  string text = "This is a long string of text from \1u\1Ender's Game\1/u\1. It is a good "
+                "test for scrolling and for fancy text frames:\1i\1\n\n"
+                "But they let go of him. And as soon as they did, Ender kicked out high and hard, "
+                "catching Stilson square in the breastbone. He dropped. It took Ender by surprise "
+                "-- he hadn't thought to put Stilson on the ground with one kick. It didn't occur "
+                "to him that Stilson didn't take a fight like this seriously, that he wasn't "
+                "prepared for a truly desperate blow.\n\n"
+                "For a moment, the others backed away and Stilson lay motionless. They were all "
+                "wondering if he was dead. Ender, however, was trying to figure out a way to "
+                "forestall vengeance. To keep them from taking him in a pack tomorrow. I have to "
+                "win this now, and for all time, or I'll fight it every day and it will get worse "
+                "and worse.\n\n"
+                "Ender knew the unspoken rules of manly warfare, even though he was only six. It "
+                "was forbidden to strike the opponent who lay helpless on the ground, only an "
+                "animal would do that.\n\n"
+                "So Ender walked to Stilson's supine body and kicked him again, viciously, in the "
+                "ribs. Stilson groaned and rolled away from him. Ender walked around him and "
+                "kicked him again, in the crotch. Stilson could not make a sound; he only doubled "
+                "up and tears streamed out of his eyes.\n\n"
+                "Then Ender looked at the others coldly. \"You might be having some idea of "
+                "ganging up on me. You could probably beat me up pretty bad. But just remember "
+                "what I do to people who try to hurt me. From then on you'd be wondering when I'd "
+                "get you, and how bad it would be.\" He kicked Stilson in the face. Blood from his "
+                "nose spattered the ground. \"It wouldn't be this bad,\" Ender said. \"It would be "
+                "worse.\"\n\n"
+                "He turned and walked away. Nobody followed him. He turned a corner into the "
+                "corridor leading to the bus stop. He could hear the boys behind him saying, "
+                "\"Geez. Look at him. He's wasted.\" Ender leaned his head against the wall of the "
+                "corridor and cried until the bus came. I am just like Peter. Take my monitor "
+                "away, and I am just like Peter.";
+  string temp;
+  DialogWidget::StringPromptOkayCancel("Dialog Frame Test", text, "And this is a text box:",
+                                       "No wai!", 100, &temp);
+}
+
 void BuildMainMenu() {
   gWindow->SetTitle("Tests menu");
-  ColFrame *column = new ColFrame(8, kJustifyLeft);
+  ColFrame *column = new ColFrame(9, kJustifyLeft);
   column->SetCell(0, new TextFrame("1. 2d rendering test", kWhite));
   column->SetCell(1, new TextFrame("2. DisplayMessage and full-screen modes", kWhite));
   column->SetCell(2, new TextFrame("3. Icon and Title", kWhite));
@@ -341,7 +377,8 @@ void BuildMainMenu() {
   column->SetCell(4, new TextFrame("5. Input", kWhite));
   column->SetCell(5, new TextFrame("6. Threading", kWhite));
   column->SetCell(6, new TextFrame("7. Camera frame", kWhite));
-  column->SetCell(7, new TextFrame("8. Quit", kWhite));
+  column->SetCell(6, new TextFrame("8. GUI", kWhite));
+  column->SetCell(7, new TextFrame("9. Quit", kWhite));
   gWindow->AddFrame(column, 0.5f, 0.4f, 0.5f, 0.4f);
   gSystem->Think();
 }
@@ -371,6 +408,7 @@ int main(int argc, char **argv) {
     if (input()->WasKeyPressed('6')) selection = 6;
     if (input()->WasKeyPressed('7')) selection = 7;
     if (input()->WasKeyPressed('8')) selection = 8;
+    if (input()->WasKeyPressed('9')) selection = 9;
     if (selection > 0) {
       gWindow->ClearFrames();
       if (selection == 1)
@@ -388,6 +426,8 @@ int main(int argc, char **argv) {
       else if (selection == 7)
         CameraTest();
       else if (selection == 8)
+        GuiTest();
+      else if (selection == 9)
         break;
       gWindow->ClearFrames();
       BuildMainMenu();

@@ -657,8 +657,17 @@ class TableFrame: public MultiParentFrame {
              float default_vert_justify = kJustifyCenter);
   virtual ~TableFrame();
   string GetType() const {return "TableFrame";}
+  float GetHorzPadding() const {return horz_padding_;}
+  float GetVertPadding() const {return vert_padding_;}
   float GetDefaultHorzJustify() const {return default_horz_justify_;}
   float GetDefaultVertJustify() const {return default_vert_justify_;}
+  void SetPadding(float horz_padding, float vert_padding) {
+    if (horz_padding_ != horz_padding || vert_padding_ != vert_padding) {
+      horz_padding_ = horz_padding;
+      vert_padding_ = vert_padding;
+      DirtySize();
+    }
+  }
   void SetDefaultHorzJustify(float horz_justify) {default_horz_justify_ = horz_justify;}
   void SetDefaultVertJustify(float vert_justify) {default_vert_justify_ = vert_justify;}
 
@@ -731,6 +740,7 @@ class TableFrame: public MultiParentFrame {
  private:
   // Data
   int num_cols_, num_rows_;
+  float horz_padding_, vert_padding_;
   float default_horz_justify_, default_vert_justify_;
   struct LineInfo {
     int pos, size;
@@ -792,7 +802,9 @@ class RowFrame: public SingleParentFrame {
     SetCell(2, frame3, width3, height3);
   }
   string GetType() const {return "RowFrame";}
+  float GetPadding() const {return table()->GetHorzPadding();}
   float GetDefaultVertJustify() const {return table()->GetDefaultVertJustify();}
+  void SetPadding(float padding) {table()->SetPadding(padding, 0);}
   void SetDefaultVertJustify(float vert_justify) {table()->SetDefaultVertJustify(vert_justify);}
 
   // Table size and position
@@ -887,7 +899,9 @@ class ColFrame: public SingleParentFrame {
     SetCell(2, frame3, width3, height3);
   }
   string GetType() const {return "ColFrame";}
+  float GetPadding() const {return table()->GetVertPadding();}
   float GetDefaultHorzJustify() const {return table()->GetDefaultHorzJustify();}
+  void SetPadding(float padding) {table()->SetPadding(0, padding);}
   void SetDefaultHorzJustify(float horz_justify) {table()->SetDefaultHorzJustify(horz_justify);}
   
   // Table size and position

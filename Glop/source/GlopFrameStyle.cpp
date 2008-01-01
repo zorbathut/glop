@@ -340,6 +340,7 @@ ArrowViewFactory *gArrowViewFactory = 0;
 ButtonViewFactory *gButtonViewFactory = 0;
 SliderViewFactory *gSliderViewFactory = 0;
 WindowViewFactory *gWindowViewFactory = 0;
+DialogViewFactory *gDialogViewFactory = 0;
 
 template<class T> static void SafeDelete(T *& data) {
   if (data != 0) {
@@ -356,6 +357,7 @@ void ClearFrameStyle() {
   SafeDelete(gButtonViewFactory);
   SafeDelete(gSliderViewFactory);
   SafeDelete(gWindowViewFactory);
+  SafeDelete(gDialogViewFactory);
 }
 
 void InitDefaultFrameStyle(Font *font) {
@@ -367,4 +369,7 @@ void InitDefaultFrameStyle(Font *font) {
   gButtonViewFactory = new DefaultButtonViewFactory();
   gSliderViewFactory = new DefaultSliderViewFactory(gArrowViewFactory, gButtonViewFactory);
   gWindowViewFactory = new DefaultWindowViewFactory(font);
+  gDialogViewFactory = new DefaultDialogViewFactory(gInputBoxViewFactory, gTextPromptViewFactory,
+                                                    gWindowViewFactory, gButtonViewFactory,
+                                                    gSliderViewFactory, font);
 }

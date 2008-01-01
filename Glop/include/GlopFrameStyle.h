@@ -45,15 +45,16 @@ const Color kDefaultInputBoxBorderColor(0.2f, 0.2f, 0.2f);
 
 const Color kDefaultWindowBorderHighlightColor(0.9f, 0.9f, 0.95f);
 const Color kDefaultWindowBorderLowlightColor(0.6f, 0.6f, 0.7f);
-const Color kDefaultWindowInnerColor(0.8f, 0.8f, 0.83f);
+const Color kDefaultWindowInnerColor(0.8f, 0.8f, 0.8f);
 const Color kDefaultWindowTitleColor(0, 0, 0);
 
 const float kDefaultButtonBorderSize = 0.003f;
 const Color kDefaultButtonSelectionColor(0, 0, 1.0f);
 const Color kDefaultButtonBorderColor(0.2f, 0.2f, 0.2f);
-const Color kDefaultButtonHighlightColor(0.95f, 0.95f, 0.95f);
+const Color kDefaultButtonHighlightColor(1.0f, 1.0f, 1.0f);
 const Color kDefaultButtonLowlightColor(0.5f, 0.5f, 0.5f);
-const Color kDefaultButtonUnpressedInnerColor(0.85f, 0.85f, 0.88f);
+const Color kDefaultButtonTextColor(0, 0, 0.25f);
+const Color kDefaultButtonUnpressedInnerColor(0.9f, 0.9f, 0.9f);
 const Color kDefaultButtonPressedInnerColor(0.75f, 0.75f, 0.77f);
 
 const Color kDefaultArrowColor(0, 0, 0);
@@ -61,6 +62,18 @@ const Color kDefaultArrowColor(0, 0, 0);
 const float kDefaultSliderWidth = 0.03f;
 const Color kDefaultSliderBackgroundColor(0.7f, 0.7f, 0.7f);
 const Color kDefaultSliderBorderColor(0.2f, 0.2f, 0.2f);
+
+const float kDefaultDialogVertJustify = 0.4f;
+const float kDefaultDialogRecWidth = 0.7f;
+const float kDefaultDialogRecHeight = 0.6f;
+const float kDefaultDialogTextHorzJustify = kJustifyLeft;
+const float kDefaultDialogButtonsHorzJustify = kJustifyCenter;
+const float kDefaultDialogLeftPadding = 0.02f;
+const float kDefaultDialogTopPadding = 0.02f;
+const float kDefaultDialogRightPadding = 0.02f;
+const float kDefaultDialogBottomPadding = 0.02f;
+const float kDefaultDialogInnerHorzPadding = 0.03f;
+const float kDefaultDialogInnerVertPadding = 0.03f;
 
 // GuiTextStyle
 // ============
@@ -512,15 +525,124 @@ class DefaultSliderViewFactory: public SliderViewFactory {
   DISALLOW_EVIL_CONSTRUCTORS(DefaultSliderViewFactory);
 };
 
+// DialogView
+// ==========
+//
+// Note that there is no DialogView, just a DialogViewFactory. Thus, it is set up differently from
+// some of the other classes. The difference results from the fact that there is not actually such
+// a thing as a DialogFrame - it is just a combination of other objects.
+class DialogViewFactory {
+ public:
+  virtual ~DialogViewFactory() {}
+  virtual const TextPromptViewFactory *GetTextPromptViewFactory() const = 0;
+  virtual const InputBoxViewFactory *GetInputBoxViewFactory() const = 0;
+  virtual const WindowViewFactory *GetWindowViewFactory() const = 0;
+  virtual const ButtonViewFactory *GetButtonViewFactory() const = 0;
+  virtual const SliderViewFactory *GetSliderViewFactory() const = 0;
+  virtual const GuiTextStyle &GetTextStyle() const = 0;
+  virtual const GuiTextStyle &GetButtonTextStyle() const = 0;
+  virtual float GetVertJustify() const = 0;
+  virtual float GetRecWidth() const = 0;
+  virtual float GetRecHeight() const = 0;
+  virtual float GetTextHorzJustify() const = 0;
+  virtual float GetButtonsHorzJustify() const = 0;
+  virtual void GetPadding(float *lp, float *tp, float *rp, float *bp) const = 0;
+  virtual float GetInnerHorzPadding() const = 0;
+  virtual float GetInnerVertPadding() const = 0;
+ protected:
+  DialogViewFactory() {}
+ private:
+  DISALLOW_EVIL_CONSTRUCTORS(DialogViewFactory);
+};
+
+// Default implementation
+class DefaultDialogViewFactory: public DialogViewFactory {
+ public:
+  DefaultDialogViewFactory(const InputBoxViewFactory *input_box_view_factory,
+                           const TextPromptViewFactory *text_prompt_view_factory,
+                           const WindowViewFactory *window_view_factory,
+                           const ButtonViewFactory *button_view_factory,
+                           const SliderViewFactory *slider_view_factory, Font *font)
+  : input_box_view_factory_(input_box_view_factory),
+    text_prompt_view_factory_(text_prompt_view_factory), window_view_factory_(window_view_factory),
+    button_view_factory_(button_view_factory), slider_view_factory_(slider_view_factory),   
+    text_style_(kDefaultTextColor, kDefaultTextHeight, font, 0),
+    button_text_style_(kDefaultButtonTextColor, kDefaultTextHeight, font, 0),
+    vert_justify_(kDefaultDialogVertJustify), rec_width_(kDefaultDialogRecWidth),
+    rec_height_(kDefaultDialogRecHeight), text_horz_justify_(kDefaultDialogTextHorzJustify),
+    buttons_horz_justify_(kDefaultDialogButtonsHorzJustify),
+    left_padding_(kDefaultDialogLeftPadding), top_padding_(kDefaultDialogTopPadding),
+    right_padding_(kDefaultDialogRightPadding), bottom_padding_(kDefaultDialogBottomPadding),
+    inner_horz_padding_(kDefaultDialogInnerHorzPadding),
+    inner_vert_padding_(kDefaultDialogInnerVertPadding) {}
+
+  // Accessors and mutators
+  const InputBoxViewFactory *GetInputBoxViewFactory() const {return input_box_view_factory_;}
+  void SetInputBoxViewFactory(const InputBoxViewFactory *f) {input_box_view_factory_ = f;}
+  const TextPromptViewFactory *GetTextPromptViewFactory() const {return text_prompt_view_factory_;}
+  void SetTextPromptViewFactory(const TextPromptViewFactory *f) {text_prompt_view_factory_ = f;}
+  const WindowViewFactory *GetWindowViewFactory() const {return window_view_factory_;}
+  void SetWindowViewFactory(const WindowViewFactory *f) {window_view_factory_ = f;}
+  const ButtonViewFactory *GetButtonViewFactory() const {return button_view_factory_;}
+  void SetButtonViewFactory(const ButtonViewFactory *f) {button_view_factory_ = f;}
+  const SliderViewFactory *GetSliderViewFactory() const {return slider_view_factory_;}
+  void SetSliderViewFactory(const SliderViewFactory *f) {slider_view_factory_ = f;}
+
+  const GuiTextStyle &GetTextStyle() const {return text_style_;}
+  void SetTextStyle(const GuiTextStyle &style) {text_style_ = style;}
+  const GuiTextStyle &GetButtonTextStyle() const {return button_text_style_;}
+  void SetButtonTextStyle(const GuiTextStyle &style) {button_text_style_ = style;}
+
+  float GetVertJustify() const {return vert_justify_;}
+  void SetVertJustify(float justify) {vert_justify_ = justify;}
+  float GetRecWidth() const {return rec_width_;}
+  void SetRecWidth(float rec_width) {rec_width_ = rec_width;}
+  float GetRecHeight() const {return rec_height_;}
+  void SetRecHeight(float rec_height) {rec_height_ = rec_height;}
+  float GetTextHorzJustify() const {return text_horz_justify_;}
+  void SetTextHorzJustify(float justify) {text_horz_justify_ = justify;}
+  float GetButtonsHorzJustify() const {return buttons_horz_justify_;}
+  void SetButtonsHorzJustify(float justify) {buttons_horz_justify_ = justify;}
+  void GetPadding(float *lp, float *tp, float *rp, float *bp) const {
+    *lp = left_padding_;
+    *tp = top_padding_;
+    *rp = right_padding_;
+    *bp = bottom_padding_;
+  }
+  void SetPadding (float lp, float tp, float rp, float bp) {
+    left_padding_ = lp;
+    top_padding_ = tp;
+    right_padding_ = rp;
+    bottom_padding_ = bp;
+  }
+  float GetInnerHorzPadding() const {return inner_horz_padding_;}
+  void SetInnerHorzPadding(float padding) {inner_horz_padding_ = padding;}
+  float GetInnerVertPadding() const {return inner_vert_padding_;}
+  void SetInnerVertPadding(float padding) {inner_vert_padding_ = padding;}
+
+ private:
+  const InputBoxViewFactory *input_box_view_factory_;
+  const ButtonViewFactory *button_view_factory_;
+  const SliderViewFactory *slider_view_factory_;
+  const TextPromptViewFactory *text_prompt_view_factory_;
+  const WindowViewFactory *window_view_factory_;
+  GuiTextStyle text_style_, button_text_style_;
+  float vert_justify_, rec_width_, rec_height_, text_horz_justify_, buttons_horz_justify_,
+        left_padding_, top_padding_, right_padding_, bottom_padding_, inner_horz_padding_,
+        inner_vert_padding_;
+  DISALLOW_EVIL_CONSTRUCTORS(DefaultDialogViewFactory);
+};
+
 // Global frame style
 // ==================
 extern GuiTextStyle *gGuiTextStyle;
 extern InputBoxViewFactory *gInputBoxViewFactory;
-extern TextPromptViewFactory *gTextPromptViewFactory;
 extern ArrowViewFactory *gArrowViewFactory;
+extern TextPromptViewFactory *gTextPromptViewFactory;
+extern WindowViewFactory *gWindowViewFactory;
 extern ButtonViewFactory *gButtonViewFactory;
 extern SliderViewFactory *gSliderViewFactory;
-extern WindowViewFactory *gWindowViewFactory;
+extern DialogViewFactory *gDialogViewFactory;
 
 // Deletes all global frame styles that is initialized.
 void ClearFrameStyle();

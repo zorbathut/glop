@@ -156,20 +156,12 @@ void GlopWindow::ClearFrames() {frame_->ClearChildren();}
 // Instantiates a GlopWindow object without actually creating the window. We set all values to
 // defaults, although many are technically undefined.
 GlopWindow::GlopWindow()
-: os_data_(0),
-  is_created_(false),
-  width_(0),
-  height_(0),
-  is_full_screen_(false),
-  settings_(),
-  title_(kDefaultTitle),
-  icon_(0),
-  is_in_focus_(false),
-  is_minimized_(false),
-  recreated_this_frame_(false),
-  windowed_x_(-1),
-  windowed_y_(-1),
-  tab_direction_(None),
+: os_data_(0), is_created_(false),
+  width_(0), height_(0), is_full_screen_(false), settings_(),
+  title_(kDefaultTitle), icon_(0),
+  is_in_focus_(false), is_minimized_(false), recreated_this_frame_(false),
+  windowed_x_(-1), windowed_y_(-1),
+  tab_direction_(None), is_resolving_ping_(false),
   focus_stack_(1, (FocusFrame*)0),
   frame_(new TableauFrame()) {
   input_ = new Input(this);
@@ -245,21 +237,12 @@ void GlopWindow::Think(int dt) {
   // if it is a new frame. Note, however, that one ping can actually generate another ping while
   // this is going on.
   frame_->UpdateSize(width_, height_); 
+  is_resolving_ping_ = true;
   for (LightSetId id = ping_list_.GetFirstId(); id != 0; id = ping_list_.GetNextId(id)) {
-    GlopFrame::Ping *ping = ping_list_[id];
-    GlopFrame *parent = ping->GetFrame()->GetParent();
-    if (parent != 0) {
-      int x1, y1, x2, y2;
-      ping->GetCoords(&x1, &y1, &x2, &y2);
-      parent->OnChildPing(ping->GetFrame(), ping->GetFrame()->GetX() - parent->GetX() + x1,
-                          ping->GetFrame()->GetY() - parent->GetY() + y1,
-                          ping->GetFrame()->GetX() - parent->GetX() + x2,
-                          ping->GetFrame()->GetY() - parent->GetY() + y2,
-                          ping->IsCentered());
-    }
-    delete ping;
+    PropogatePing(ping_list_[id]);
     id = ping_list_.RemoveItem(id);
   }
+  is_resolving_ping_ = false;
   frame_->SetPosition(0, 0, 0, 0, width_-1, height_-1);
 
   // Render
@@ -310,6 +293,32 @@ void GlopWindow::UnregisterAllPings(GlopFrame *frame) {
       delete ping_list_[id];
       id = ping_list_.RemoveItem(id);
     }
+}
+
+// We wish to handle a ping as an autonomous unit. This ensures that if ping1 was requested before
+// ping2, ping1 finishes propogating before ping2 starts propogating. We need to just store the ping
+// until we enter the ping resolution phase, but from that point onwards, all pings are handled
+// immediately.
+void GlopWindow::RegisterPing(GlopFrame::Ping *ping) {
+  if (is_resolving_ping_)
+    PropogatePing(ping);
+  else
+    ping_list_.InsertItem(ping);
+}
+
+// Internal utility to propogate a ping upwards to its child frame.
+void GlopWindow::PropogatePing(GlopFrame::Ping *ping) {
+  GlopFrame *parent = ping->GetFrame()->GetParent();
+  if (parent != 0) {
+    int x1, y1, x2, y2;
+    ping->GetCoords(&x1, &y1, &x2, &y2);
+    parent->OnChildPing(ping->GetFrame(), ping->GetFrame()->GetX() - parent->GetX() + x1,
+                        ping->GetFrame()->GetY() - parent->GetY() + y1,
+                        ping->GetFrame()->GetX() - parent->GetX() + x2,
+                        ping->GetFrame()->GetY() - parent->GetY() + y2,
+                        ping->IsCentered());
+  }
+  delete ping;
 }
 
 // Updates focus for the current layer based on a new key event.

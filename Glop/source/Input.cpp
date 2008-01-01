@@ -518,6 +518,7 @@ void Input::ConfigureGuiKeys(bool keyboard_bindings, bool mouse_bindings, bool j
     BindDerivedKey(kGuiKeyLeft, kKeyLeft);
     BindDerivedKey(kGuiKeyConfirm, kKeyEnter);
     BindDerivedKey(kGuiKeyConfirm, kKeyPadEnter);
+    BindDerivedKey(kGuiKeyCancel, kKeyEscape);
     BindDerivedKey(kGuiKeySelectPrev, kKeyTab, kKeyEitherShift, kKeyEitherAlt, true, true, false);
     BindDerivedKey(kGuiKeySelectNext, kKeyTab, kKeyEitherShift, kKeyEitherAlt, true, false, false);
   }
@@ -624,6 +625,7 @@ void Input::InitDerivedKeys() {
   ASSERT(kGuiKeyDown == AllocateDerivedKey("Gui down"));
   ASSERT(kGuiKeyLeft == AllocateDerivedKey("Gui left"));
   ASSERT(kGuiKeyConfirm == AllocateDerivedKey("Gui confirm"));
+  ASSERT(kGuiKeyCancel == AllocateDerivedKey("Gui cancel"));
   ASSERT(kGuiKeyPrimaryClick == AllocateDerivedKey("Gui primary click"));
   ASSERT(kGuiKeySecondaryClick == AllocateDerivedKey("Gui secondary click"));
   ASSERT(kGuiKeySelectNext == AllocateDerivedKey("Gui select next"));

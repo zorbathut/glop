@@ -486,13 +486,10 @@ void TableauFrame::RecomputeSize(int rec_width, int rec_height) {
 // Constructor - memory allocation is done through ResizeTable.
 TableFrame::TableFrame(int num_cols, int num_rows, float default_horz_justify,
                        float default_vert_justify)
-: num_cols_(0),
-  num_rows_(0),
-  default_horz_justify_(default_horz_justify),
-  default_vert_justify_(default_vert_justify),
-  row_info_(0),
-  col_info_(0),
-  cell_info_(0) {
+: num_cols_(0), num_rows_(0),
+  horz_padding_(0), vert_padding_(0),
+  default_horz_justify_(default_horz_justify), default_vert_justify_(default_vert_justify),
+  row_info_(0), col_info_(0), cell_info_(0) {
   Resize(num_cols, num_rows);
 }
 
@@ -655,6 +652,12 @@ void TableFrame::SetPosition(int screen_x, int screen_y, int cx1, int cy1, int c
 void TableFrame::RecomputeSize(int rec_width, int rec_height) {
   int x, y;
 
+  // Calculate the padding sizes
+  int hpad = int(gWindow->GetWidth() * horz_padding_ + 0.5f);
+  int vpad = int(gWindow->GetHeight() * vert_padding_ + 0.5f);
+  rec_width -= hpad * (GetNumCols() - 1);
+  rec_height -= vpad * (GetNumRows() - 1);
+
   // Update all sizes to have value 0
   for (y = 0; y < num_rows_; y++)
     row_info_[y].size = 0;
@@ -760,13 +763,13 @@ void TableFrame::RecomputeSize(int rec_width, int rec_height) {
     int width = 0, height = 0;
     for (x = 0; x < num_cols_; x++) {
       col_info_[x].pos = width;
-      width += col_info_[x].size;
+      width += col_info_[x].size + hpad;
     }
     for (y = 0; y < num_rows_; y++) {
       row_info_[y].pos = height;
-      height += row_info_[y].size;
+      height += row_info_[y].size + vpad;
     }
-    SetSize(width, height);
+    SetSize(width - hpad, height - vpad);
   }
   delete[] col_round_up;
   delete[] row_round_up;

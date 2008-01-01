@@ -875,10 +875,10 @@ bool StringPromptFrame::CanInsertCharacter(char ch, bool in_theory) const {
 StringPromptWidget::StringPromptWidget(const string &start_text, int length_limit,
                                        float prompt_width,
                                        const TextPromptViewFactory *prompt_view_factory,
-                                       const InputBoxViewFactory *input_view_factory)
+                                       const InputBoxViewFactory *input_box_view_factory)
 : FocusFrame(new InputBoxFrame(new PaddedFrame(new ExactWidthFrame(
     prompt_ = new StringPromptFrame(start_text, length_limit, prompt_view_factory), prompt_width),
-    1), input_view_factory)) {}
+    1), input_box_view_factory)) {}
 
 IntegerPromptFrame::IntegerPromptFrame(int start_value, int min_value, int max_value,
                                        const TextPromptViewFactory *view_factory)
@@ -922,10 +922,10 @@ void IntegerPromptFrame::ReformText() {
 IntegerPromptWidget::IntegerPromptWidget(int start_value, int min_value, int max_value,
                                          float prompt_width,
                                          const TextPromptViewFactory *prompt_view_factory,
-                                         const InputBoxViewFactory *input_view_factory)
+                                         const InputBoxViewFactory *input_box_view_factory)
 : FocusFrame(new InputBoxFrame(new PaddedFrame(new ExactWidthFrame(
     prompt_ = new IntegerPromptFrame(start_value, min_value, max_value, prompt_view_factory),
-    prompt_width), 1), input_view_factory)) {}
+    prompt_width), 1), input_box_view_factory)) {}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // WindowFrame
@@ -1269,7 +1269,8 @@ bool SliderFrame::OnKeyEvent(const KeyEvent &event, int dt) {
   KeyEvent::Type tracker_event;
   bool can_dec = (GetTabPosition() != 0);
   result |= (big_dec_tracker_.OnKeyEvent(event, dt, &tracker_event) && can_dec);
-  if (can_dec && (tracker_event == KeyEvent::Press || tracker_event == KeyEvent::RepeatPress)) {
+  if (can_dec && (tracker_event == KeyEvent::Press || tracker_event == KeyEvent::RepeatPress ||
+                  tracker_event == KeyEvent::DoublePress)) {
     BigDec();
     NewRelativePing(0, 0, 1, 1);
   }
@@ -1277,7 +1278,8 @@ bool SliderFrame::OnKeyEvent(const KeyEvent &event, int dt) {
   // Handle big increments
   bool can_inc = (GetTabPosition() != GetTotalSize() - GetTabSize());
   result |= (big_inc_tracker_.OnKeyEvent(event, dt, &tracker_event) && can_inc);
-  if (can_inc && (tracker_event == KeyEvent::Press || tracker_event == KeyEvent::RepeatPress)) {
+  if (can_inc && (tracker_event == KeyEvent::Press || tracker_event == KeyEvent::RepeatPress ||
+                  tracker_event == KeyEvent::DoublePress)) {
     BigInc();
     NewRelativePing(0, 0, 1, 1);
   }
@@ -1333,4 +1335,209 @@ void SliderFrame::OnFocusChange() {
   if (!IsInFocus())
     mouse_lock_mode_ = None;
   SingleParentFrame::OnFocusChange();
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+// Dialog
+// ======
+
+// Globals
+bool DialogWidget::is_initialized_ = false;
+LightSet<GlopKey> DialogWidget::yes_keys_, DialogWidget::no_keys_, DialogWidget::okay_keys_,
+                  DialogWidget::cancel_keys_;
+
+void DialogWidget::TextOkay(const string &title, const string &message,
+                            const DialogViewFactory *factory) {
+  DoText(title, message, false, false, true, false, factory);
+}
+
+DialogWidget::Result DialogWidget::TextOkayCancel(const string &title, const string &message,
+                                                  const DialogViewFactory *factory) {
+  return DoText(title, message, false, false, true, true, factory);
+}
+DialogWidget::Result DialogWidget::TextYesNo(const string &title, const string &message,
+                                            const DialogViewFactory *factory) {
+  return DoText(title, message, true, true, false, false, factory);
+}
+
+DialogWidget::Result DialogWidget::TextYesNoCancel(const string &title, const string &message,
+                                                   const DialogViewFactory *factory) {
+  return DoText(title, message, true, true, false, true, factory);
+}
+
+string DialogWidget::StringPromptOkay(const string &title, const string &message,
+                                      const string &prompt, const string &start_value,
+                                      int value_length_limit, const DialogViewFactory *factory) {
+  string prompt_value;
+  DoStringPrompt(title, message, prompt, start_value, value_length_limit, &prompt_value, true,
+                 false, factory);
+  return prompt_value;
+}
+
+DialogWidget::Result DialogWidget::StringPromptOkayCancel(
+  const string &title, const string &message, const string &prompt, const string &start_value,
+  int value_length_limit, string *prompt_value, const DialogViewFactory *factory) {
+  return DoStringPrompt(title, message, prompt, start_value, value_length_limit, prompt_value,
+                        true, true, factory);
+}
+
+int DialogWidget::IntegerPromptOkay(
+  const string &title, const string &message, const string &prompt, int start_value, int min_value,
+  int max_value, const DialogViewFactory *factory) {
+  int prompt_value;
+  DoIntegerPrompt(title, message, prompt, start_value, min_value, max_value, &prompt_value, true,
+                 false, factory);
+  return prompt_value;
+}
+
+DialogWidget::Result DialogWidget::IntegerPromptOkayCancel(
+  const string &title, const string &message, const string &prompt, int start_value, int min_value,
+  int max_value, int *prompt_value, const DialogViewFactory *factory) {
+  return DoIntegerPrompt(title, message, prompt, start_value, min_value, max_value, prompt_value,
+                        true, true, factory);
+}
+
+void DialogWidget::Init() {
+  if (!is_initialized_) {
+    yes_keys_.InsertItem('y');
+    no_keys_.InsertItem('n');
+    okay_keys_.InsertItem(kGuiKeyConfirm);
+    cancel_keys_.InsertItem(kGuiKeyCancel);
+    is_initialized_ = true;
+  }
+}
+
+GlopFrame *DialogWidget::Create(
+  const string &title, const string &message, const string &prompt, GlopFrame *extra_frame,
+  bool has_yes_button, bool has_no_button, bool has_okay_button, bool has_cancel_button,
+  const DialogViewFactory *factory, vector<ButtonWidget*> *buttons,
+  vector<Result> *button_meanings) {
+  Init();
+
+  // Create the buttons
+  buttons->clear();
+  button_meanings->clear();
+  if (has_yes_button) {
+    button_meanings->push_back(Yes);
+    buttons->push_back(new ButtonWidget("Yes", factory->GetButtonTextStyle(),
+                                        factory->GetButtonViewFactory()));
+    for (LightSetId id = yes_keys_.GetFirstId(); id != 0; id = yes_keys_.GetNextId(id))
+      (*buttons)[buttons->size()-1]->AddHotKey(yes_keys_[id]);
+  }
+  if (has_no_button) {
+    button_meanings->push_back(No);
+    buttons->push_back(new ButtonWidget("No", factory->GetButtonTextStyle(),
+                                       factory->GetButtonViewFactory()));
+    for (LightSetId id = no_keys_.GetFirstId(); id != 0; id = no_keys_.GetNextId(id))
+      (*buttons)[buttons->size()-1]->AddHotKey(no_keys_[id]);
+  }
+  if (has_okay_button) {
+    button_meanings->push_back(Okay);
+    buttons->push_back(new ButtonWidget("Okay", factory->GetButtonTextStyle(),
+                                       factory->GetButtonViewFactory()));
+    for (LightSetId id = okay_keys_.GetFirstId(); id != 0; id = okay_keys_.GetNextId(id))
+      (*buttons)[buttons->size()-1]->AddHotKey(okay_keys_[id]);
+  }
+  if (has_cancel_button) {
+    button_meanings->push_back(Cancel);
+    buttons->push_back(new ButtonWidget("Cancel", factory->GetButtonTextStyle(),
+                                       factory->GetButtonViewFactory()));
+    for (LightSetId id = cancel_keys_.GetFirstId(); id != 0; id = cancel_keys_.GetNextId(id))
+      (*buttons)[buttons->size()-1]->AddHotKey(cancel_keys_[id]);
+  }
+  RowFrame *button_row = new RowFrame((int)buttons->size());
+  for (int i = 0; i < (int)buttons->size(); i++)
+    button_row->SetCell(i, (*buttons)[i]);
+  button_row->SetPadding(factory->GetInnerHorzPadding());
+
+  // Create the main dialog frame
+  FancyTextFrame *message_frame = new FancyTextFrame(message, true, factory->GetTextHorzJustify(), 
+                                                     factory->GetTextStyle());
+  ColFrame *main_col = new ColFrame(extra_frame == 0? 2 : 3);
+  main_col->SetCell(0, message_frame, factory->GetTextHorzJustify());
+  if (extra_frame != 0) {
+    RowFrame *extra_row = new RowFrame(
+      new TextFrame(prompt, factory->GetTextStyle()), CellSize::Default(), CellSize::Default(),
+      extra_frame, CellSize::Max(), CellSize::Default());
+    main_col->SetCell(1, extra_row, factory->GetTextHorzJustify());
+  }
+  main_col->SetCell(main_col->GetNumCells() - 1, button_row, factory->GetButtonsHorzJustify());
+  main_col->SetPadding(factory->GetInnerVertPadding());
+  float lp, tp, rp, bp;
+  factory->GetPadding(&lp, &tp, &rp, &bp);
+  GlopFrame *padded_col = new ScalingPaddedFrame(main_col, lp, tp, rp, bp);
+  GlopFrame *interior = new ScrollingFrame(padded_col, factory->GetSliderViewFactory());
+  WindowFrame *window = new WindowFrame(interior, title, factory->GetWindowViewFactory());
+  padded_col->NewRelativePing(0, 0);
+  return new RecSizeFrame(window, factory->GetRecWidth(), factory->GetRecHeight());
+}
+
+DialogWidget::Result DialogWidget::Execute(const vector<ButtonWidget*> &buttons,
+                                          const vector<Result> &button_meanings) {
+  while (1) {
+    gSystem->Think();
+    for (int i = 0; i < (int)buttons.size(); i++)
+    if (buttons[i]->WasPressedFully())
+      return button_meanings[i];
+  }
+}
+
+DialogWidget::Result DialogWidget::DoText(
+  const string &title, const string &message, bool has_yes_button, bool has_no_button,
+  bool has_okay_button, bool has_cancel_button, const DialogViewFactory *factory) {
+  vector<ButtonWidget*> buttons;
+  vector<Result> button_meanings;
+  gWindow->PushFocus();
+  GlopFrame *frame = Create(title, message, "", 0, has_yes_button, has_no_button, has_okay_button,
+                            has_cancel_button, factory, &buttons, &button_meanings);
+  LightSetId id = gWindow->AddFrame(frame, 0.5f, factory->GetVertJustify(),
+                                    0.5f, factory->GetVertJustify(), 0);
+  Result result = Execute(buttons, button_meanings);
+  gWindow->RemoveFrame(id);
+  gWindow->PopFocus();
+  return result;
+}
+
+DialogWidget::Result DialogWidget::DoStringPrompt(
+  const string &title, const string &message, const string &prompt, const string &start_value,
+  int value_length_limit, string *prompt_value, bool has_okay_button, bool has_cancel_button,
+  const DialogViewFactory *factory) {
+  vector<ButtonWidget*> buttons;
+  vector<Result> button_meanings;
+  gWindow->PushFocus();
+  StringPromptWidget *prompt_frame = new StringPromptWidget(
+    start_value, value_length_limit, kSizeLimitRec, factory->GetTextPromptViewFactory(),
+    factory->GetInputBoxViewFactory());
+  GlopFrame *frame = Create(title, message, prompt + " ", prompt_frame, false, false,
+                            has_okay_button, has_cancel_button, factory, &buttons,
+                            &button_meanings);
+  LightSetId id = gWindow->AddFrame(frame, 0.5f, factory->GetVertJustify(),
+                                    0.5f, factory->GetVertJustify(), 0);
+  Result result = Execute(buttons, button_meanings);
+  *prompt_value = prompt_frame->Get();
+  gWindow->RemoveFrame(id);
+  gWindow->PopFocus();
+  return result;
+}
+
+DialogWidget::Result DialogWidget::DoIntegerPrompt(
+  const string &title, const string &message, const string &prompt, int start_value, int min_value,
+  int max_value, int *prompt_value, bool has_okay_button, bool has_cancel_button,
+  const DialogViewFactory *factory) {
+  vector<ButtonWidget*> buttons;
+  vector<Result> button_meanings;
+  gWindow->PushFocus();
+  IntegerPromptWidget *prompt_frame = new IntegerPromptWidget(
+    start_value, min_value, max_value, kSizeLimitRec, factory->GetTextPromptViewFactory(),
+    factory->GetInputBoxViewFactory());
+  GlopFrame *frame = Create(title, message, prompt + " ", prompt_frame, false, false,
+                            has_okay_button, has_cancel_button, factory, &buttons,
+                            &button_meanings);
+  LightSetId id = gWindow->AddFrame(frame, 0.5f, factory->GetVertJustify(),
+                                    0.5f, factory->GetVertJustify(), 0);
+  Result result = Execute(buttons, button_meanings);
+  *prompt_value = prompt_frame->Get();
+  gWindow->RemoveFrame(id);
+  gWindow->PopFocus();
+  return result;
 }

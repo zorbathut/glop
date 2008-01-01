@@ -40,8 +40,8 @@
 //                     can be queried.
 //  IsKeyDown: This is a discrete version of GetKeyPressAmount, and is usually equivalent to
 //             querying whether GetKeyPressAmount > 0. For certain keys, however, Input may
-//             artificially declare a key down shortly after it is released to promote smoothness
-//             (e.g. for mouse motion). 
+//             artificially declare a key to be down shortly after it is released to promote
+//             smoothness (e.g. for mouse motion). 
 //               Example usage: player_shield_on = IsKeyDownFrame(kShieldKey);
 //             Either the current state or the whole frame can be queried. In the latter case, true
 //             is returned if the key was ever down during the frame.
@@ -54,7 +54,7 @@
 // derived key is down would be easy, but generating events for them is a little more complicated.
 // To facilitate this, DerivedKeys may be defined directly wihin Input and then events will be
 // generated for them as if they were normal keys. Alternatively, Input::KeyTracker can be used to
-// simulate events for a a user-controlled "key". This is used, for example, Gui buttons.
+// simulate events for a a user-controlled "key". This is used, for example, by Gui buttons.
 //
 // Note that the Input class silently uses a separate thread for polling the Os input. This ensures
 // that the input will be accurate even if the frame rate is bad.
@@ -77,10 +77,9 @@ struct OsWindowData;
 
 // Key repeat-rate constants
 const int kRepeatDelay = 500;  // Time (in ms) between key down event #1 and #2 while a key is down
-                               //   Provided so that key behavior can be emulated.
 const int kRepeatRate = 60;    // Time (in ms) between later key down events while a key is down
 
-// GlopKey device and key iteration - See also GlopKey::GetMaxDevice() and GetNumKeys()
+// GlopKey devices
 const int kDeviceKeyboard = -1;
 const int kDeviceAnyJoystick = -2;
 const int kDeviceDerived = -3;
@@ -90,7 +89,7 @@ const int kMinDevice = -3;
 // =======
 
 // This is a basic identifier for any kind of key.
-// To refer to a specific key, use the static methods and constants below.
+// To create a GlopKey, use the static methods and constants below.
 struct GlopKey {
   // Constructor
   GlopKey(int _index = -2, int _device = kDeviceKeyboard): device(_device), index(_index) {}
@@ -156,7 +155,7 @@ const GlopKey kAnyKey(-1);
 //    value. For example, Enter is 13.
 //  - The non-shift, non-caps lock ASCII value is used when there's ambiguity. Thus, 'a' and ','
 //    are valid GlopKeys, but 'A' and '<' are not valid GlopKeys.
-//  - Key-pad keys are NEVER considered to have associated ASCII values. See the kKeyPad constants.
+//  - Key-pad keys are NEVER given GlopKeys based on their ASCII values.
 // Note: these ASCII-related key indices are not intended to replace ASCII. If you want an ASCII
 // value, call Input::ToAscii so that shift, num lock and caps lock are all considered.
 const GlopKey kKeyBackspace(8);
@@ -310,11 +309,12 @@ const GlopKey kGuiKeyRight(kNumFixedDerivedKeys + 9, kDeviceDerived);
 const GlopKey kGuiKeyDown(kNumFixedDerivedKeys + 10, kDeviceDerived);
 const GlopKey kGuiKeyLeft(kNumFixedDerivedKeys + 11, kDeviceDerived);
 const GlopKey kGuiKeyConfirm(kNumFixedDerivedKeys + 12, kDeviceDerived);
-const GlopKey kGuiKeyPrimaryClick(kNumFixedDerivedKeys + 13, kDeviceDerived);
-const GlopKey kGuiKeySecondaryClick(kNumFixedDerivedKeys + 14, kDeviceDerived);
-const GlopKey kGuiKeySelectNext(kNumFixedDerivedKeys + 15, kDeviceDerived);
-const GlopKey kGuiKeySelectPrev(kNumFixedDerivedKeys + 16, kDeviceDerived);
-const int kNumBasicDerivedKeys = kNumFixedDerivedKeys + 17;
+const GlopKey kGuiKeyCancel(kNumFixedDerivedKeys + 13, kDeviceDerived);
+const GlopKey kGuiKeyPrimaryClick(kNumFixedDerivedKeys + 14, kDeviceDerived);
+const GlopKey kGuiKeySecondaryClick(kNumFixedDerivedKeys + 15, kDeviceDerived);
+const GlopKey kGuiKeySelectNext(kNumFixedDerivedKeys + 16, kDeviceDerived);
+const GlopKey kGuiKeySelectPrev(kNumFixedDerivedKeys + 17, kDeviceDerived);
+const int kNumBasicDerivedKeys = kNumFixedDerivedKeys + 18;
 
 // KeyEvent
 // ========
@@ -417,15 +417,15 @@ class Input {
     float press_amount_now_,      // Instantaneous press_amount for the key
           press_amount_frame_;    // Total press_amount for the key this frame
     bool is_down_now_,            // Is the key down now - not quite the same as cur_press_amount > 0
-        is_down_frame_;          // Was the key down at any point this frame (See IsKeyDown)
+         is_down_frame_;          // Was the key down at any point this frame (See IsKeyDown)
     int total_frame_time_;        // Total time spent during this frame
     int release_delay_left_,      // Minimum time until cur_is_down can be reverted to false
         release_delay_;           // The max value for release_delay_left_
     int double_press_time_left_;  // Used for tracking double presses
     int repeat_delay_left_;       // Time remaining until we generate a repeat event
     bool was_pressed_,            // Was a key press event generated for this key this frame
-        was_pressed_no_repeats_, // Was a key press (no repeat) event generated this frame
-        was_released_;           // Was a key release event generated for this key this frame
+         was_pressed_no_repeats_, // Was a key press (no repeat) event generated this frame
+         was_released_;           // Was a key release event generated for this key this frame
   };
 
   // Gets/sets a sensitivity which is used to scale kMouseLeft, kMouseTop, etc. every frame. This
