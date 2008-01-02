@@ -1,6 +1,6 @@
 // This file has two purposes:
 //   - Including all Open GL header files in an OS-independent way.
-//   - Providing a small set of additional Gl primitives (e.g. rectangle, line of text, etc.)
+//   - Providing a small set of additional Gl primitives (e.g. rectangle, textures, etc.)
 
 #ifndef GLOP_OPEN_GL_H__
 #define GLOP_OPEN_GL_H__

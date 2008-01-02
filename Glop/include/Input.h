@@ -580,8 +580,11 @@ class Input {
   // Utility functions
   void UpdateDerivedKey(const GlopKey &key);
   void OnKeyEvent(const KeyEvent &event, int dt);
-  KeyTracker *GetKeyTracker(const GlopKey &key);
   const KeyTracker *GetKeyTracker(const GlopKey &key) const;
+  KeyTracker *GetKeyTracker(const GlopKey &key) {
+    const Input *const_this = (const Input *)this;
+    return (KeyTracker*)const_this->GetKeyTracker(key);
+  }
   void UpdateOsCursorVisibility();
   friend class KeyListener;
   DISALLOW_EVIL_CONSTRUCTORS(Input);

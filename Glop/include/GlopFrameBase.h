@@ -237,7 +237,7 @@ class GlopFrame {
     int x1_, y1_, x2_, y2_;
     DISALLOW_EVIL_CONSTRUCTORS(AbsolutePing);
   };
- class RelativePing: public Ping {
+  class RelativePing: public Ping {
    public:
     RelativePing(GlopFrame *frame, float x, float y, bool center)
     : Ping(frame, center), x1_(x), y1_(y), x2_(x), y2_(y) {}

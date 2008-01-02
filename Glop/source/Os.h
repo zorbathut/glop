@@ -11,8 +11,9 @@
 //     redundantly (e.g. SetTitle to the already existing title).
 //   - Glop only supports one window. However, it should be possible to change this at some future
 //     time if desired. Therefore, the Os code in particular should not heavily depend on this.
-//   - Note that all Os windows and functions will be controlled externally. Thus, an Os has no
-//     ownership of it's own objects. So, after a window is created, Os should never delete it.
+//   - Note that all Os windows and functions will be controlled externally. Therefore, with the
+//     exception of objects that are never even exposed outside of Os, all objects are owned
+//     externally. Thus, Os should not delete windows automatically for example.
 // 2. Add the appropriate includes in OpenGl.h.
 
 #ifndef GLOP_OS_H__

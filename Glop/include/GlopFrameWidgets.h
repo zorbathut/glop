@@ -784,6 +784,69 @@ class SliderWidget: public FocusFrame {
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
+// Menu
+// ====
+
+class DummyMenuFrame: public MultiParentFrame {
+ public:
+  DummyMenuFrame(int num_cols, bool is_vertical, float horz_justify, float vert_justify,
+                 const MenuViewFactory *factory = gMenuViewFactory);
+  ~DummyMenuFrame() {delete view_;}
+
+  // Item layout accessors.
+  int GetNumItems() const {return (int)item_ids_.size();}
+  int GetNumRows() const {return is_vertical_? GetNumItems() / num_cols_ : num_cols_;}
+  int GetNumCols() const {return is_vertical_? num_cols_ : GetNumItems() / num_cols_;}
+  int GetRow(int item) const {return is_vertical_? item / num_cols_ : item % num_cols_;}
+  int GetCol(int item) const {return is_vertical_? item % num_cols_ : item / num_cols_;}
+  int GetItemIndex(int row, int col) const {
+    return is_vertical_? row * num_cols_ + col : col * num_cols_ + row;
+  }
+
+  // Item accessors. Note that all coordinates are relative to this frame.
+  int GetSelection() const {return selection_;}
+  void SetSelection(int selection); 
+  const GlopFrame *GetItem(int item) const {return GetChild(item_ids_[item]);}
+  GlopFrame *GetItem(int item) {return GetChild(item_ids_[item]);}
+  void GetItemCoords(int item, int *x1, int *y1, int *x2, int *y2) const;
+  int GetItemByCoords(int x, int y) const {return GetItemIndex(y / row_height_, x / col_width_);}
+  void NewItemPing(int item, bool center = false) {AddPing(new ItemPing(this, item, center));}
+
+  // Item mutators
+  int AddItem(GlopFrame *frame);
+  void DeleteItem();
+  void SetItem(int item, GlopFrame *frame);
+  GlopFrame *SetItemNoDelete(int item, GlopFrame *frame);
+
+  // Overloaded functions
+  void Render() const;
+  void SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2);
+ protected:
+  void RecomputeSize(int rec_width, int rec_height);
+
+ private:
+  class ItemPing: public Ping {
+   public:
+    ItemPing(DummyMenuFrame *frame, int item, bool center)
+    : Ping(frame, center), item_(item) {}
+    void GetCoords(int *x1, int *y1, int *x2, int *y2) {
+      ((DummyMenuFrame*)GetFrame())->GetItemCoords(item_, x1, y1, x2, y2);
+    }
+   private:
+    int item_;
+    DISALLOW_EVIL_CONSTRUCTORS(ItemPing);
+  };
+  vector<LightSetId> item_ids_;
+  int num_cols_, selection_;
+  bool is_vertical_;
+  float horz_justify_, vert_justify_;
+  int item_lpadding_, item_tpadding_, item_rpadding_, item_bpadding_;
+  int col_width_, row_height_;
+  MenuView *view_;
+  DISALLOW_EVIL_CONSTRUCTORS(DummyMenuFrame);
+};
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
 // Dialog
 // ======
 

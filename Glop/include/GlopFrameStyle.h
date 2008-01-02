@@ -38,7 +38,6 @@ const Color kDefaultTextColor(kBlack);
 const Color kDefaultTextPromptColor(0, 0, 0.5f);
 const Color kDefaultTextPromptCursorColor(0, 0, 0.75f);
 const Color kDefaultTextHighlightColor(0.6f, 0.6f, 1.0f);
-const Color kDefaultTextHighlightColorNoFocus(0.8f, 0.8f, 1.0f);
 
 const Color kDefaultInputBoxBackgroundColor(1.0f, 1.0f, 1.0f);
 const Color kDefaultInputBoxBorderColor(0.2f, 0.2f, 0.2f);
@@ -63,6 +62,9 @@ const float kDefaultSliderWidth = 0.03f;
 const Color kDefaultSliderBackgroundColor(0.7f, 0.7f, 0.7f);
 const Color kDefaultSliderBorderColor(0.2f, 0.2f, 0.2f);
 
+const Color kDefaultMenuSelectionColor(0.6f, 0.6f, 1.0f);
+const Color kDefaultMenuSelectionColorNoFocus(0.8f, 0.8f, 1.0f);
+
 const float kDefaultDialogVertJustify = 0.4f;
 const float kDefaultDialogRecWidth = 0.7f;
 const float kDefaultDialogRecHeight = 0.6f;
@@ -77,6 +79,7 @@ const float kDefaultDialogInnerVertPadding = 0.03f;
 
 // GuiTextStyle
 // ============
+
 struct GuiTextStyle {
   // Every GuiTextStyle object requires a color, size, font and flags. The size is given as a
   // fraction of the window height. Flags are bitwise combinations of kFontBold, kFontItalics and
@@ -98,6 +101,7 @@ struct GuiTextStyle {
 
 // InputBoxView
 // ============
+
 class InputBoxView {
  public:
   virtual ~InputBoxView() {}
@@ -138,7 +142,6 @@ class DefaultInputBoxView: public InputBoxView {
 };
 class DefaultInputBoxViewFactory: public InputBoxViewFactory {
  public:
-  // Main operations
   DefaultInputBoxViewFactory()
   : background_color_(kDefaultInputBoxBackgroundColor),
     border_color_(kDefaultInputBoxBorderColor) {}
@@ -157,6 +160,7 @@ class DefaultInputBoxViewFactory: public InputBoxViewFactory {
 
 // TextPromptView
 // ==============
+
 class TextPromptView {
  public:
   virtual ~TextPromptView() {}
@@ -206,7 +210,6 @@ class DefaultTextPromptView: public TextPromptView {
 };
 class DefaultTextPromptViewFactory: public TextPromptViewFactory {
  public:
-  // Main operations
   DefaultTextPromptViewFactory(Font *font)
   : highlight_color_(kDefaultTextHighlightColor), cursor_color_(kDefaultTextPromptCursorColor),
     text_style_(kDefaultTextPromptColor, kDefaultTextHeight, font, 0) {}
@@ -228,6 +231,7 @@ class DefaultTextPromptViewFactory: public TextPromptViewFactory {
 
 // WindowView
 // ==========
+
 class WindowView {
  public:
   virtual ~WindowView() {}
@@ -277,7 +281,6 @@ class DefaultWindowView: public WindowView {
 };
 class DefaultWindowViewFactory: public WindowViewFactory {
  public:
-  // Main operations
   DefaultWindowViewFactory(Font *font)
   : border_highlight_color_(kDefaultWindowBorderHighlightColor),
     border_lowlight_color_(kDefaultWindowBorderLowlightColor),
@@ -302,6 +305,7 @@ class DefaultWindowViewFactory: public WindowViewFactory {
 
 // ButtonView
 // ==========
+
 class ButtonView {
  public:
   virtual ~ButtonView() {}
@@ -344,7 +348,6 @@ class DefaultButtonView: public ButtonView {
 };
 class DefaultButtonViewFactory: public ButtonViewFactory {
  public:
-  // Main operations
   DefaultButtonViewFactory()
   : border_size_(kDefaultButtonBorderSize), selection_color_(kDefaultButtonSelectionColor),
     border_color_(kDefaultButtonBorderColor), highlight_color_(kDefaultButtonHighlightColor),
@@ -377,6 +380,7 @@ class DefaultButtonViewFactory: public ButtonViewFactory {
 
 // ArrowView
 // =========
+
 class ArrowView {
  public:
   virtual ~ArrowView() {}
@@ -417,7 +421,6 @@ class DefaultArrowView: public ArrowView {
 };
 class DefaultArrowViewFactory: public ArrowViewFactory {
  public:
-  // Main operations
   DefaultArrowViewFactory(): color_(kDefaultArrowColor) {}
   ArrowView *Create() const {return new DefaultArrowView(this);}
 
@@ -431,6 +434,7 @@ class DefaultArrowViewFactory: public ArrowViewFactory {
 
 // SliderView
 // ==========
+
 class SliderView {
  public:
   virtual ~SliderView() {}
@@ -440,13 +444,13 @@ class SliderView {
   virtual const ArrowViewFactory *GetArrowViewFactory() const = 0;
   virtual const ButtonViewFactory *GetButtonViewFactory() const = 0;
 
-  // These are both calle any time the frame resizes. They return the desired "width" of the slider
+  // These are both called any time the frame resizes. They return the desired "width" of the slider
   // ("width" is defined as the short dimension - so it is actually measuring y-distance for
   // horizontal sliders), and the minimum length of the tab.
   virtual int GetWidthOnResize(int rec_width, int rec_height, bool is_horizontal) const = 0;
   virtual int GetMinTabLengthOnResize(int inner_width, int inner_height, bool is_horizontal) = 0;
 
-  // Renders the slider. tab coordinates are relative to the screen.
+  // Renders the slider. Tab coordinates are relative to the screen.
   virtual void Render(int x1, int y1, int x2, int y2, bool is_horizontal, bool is_primary_focus,
                       int tab_x1, int tab_y1, int tab_x2, int tab_y2, const GlopFrame *dec_button,
                       const GlopFrame *inc_button) const = 0;
@@ -483,7 +487,6 @@ class DefaultSliderView: public SliderView {
 };
 class DefaultSliderViewFactory: public SliderViewFactory {
  public:
-  // Main operations
   DefaultSliderViewFactory(const ArrowViewFactory *arrow_factory,
                            const ButtonViewFactory *button_factory)
   : button_factory_(button_factory), arrow_factory_(arrow_factory),
@@ -523,6 +526,66 @@ class DefaultSliderViewFactory: public SliderViewFactory {
   Color background_color_, border_color_, tab_border_color_, tab_highlight_color_,
         tab_lowlight_color_, tab_inner_color_;
   DISALLOW_EVIL_CONSTRUCTORS(DefaultSliderViewFactory);
+};
+
+// MenuView
+// ========
+
+class MenuView {
+ public:
+  virtual ~MenuView() {}
+
+  // Returns the padding reserved around each menu item.
+  virtual void OnResize(int rec_width, int rec_height, int *item_lp, int *item_tp, int *item_rp,
+                        int *item_bp) const = 0;
+
+  // Renders the menu. Selection coordinates are given relative to the screen. It is guaranteed
+  // that items is non-null, and the selection is valid.
+  virtual void Render(int x1, int y1, int x2, int y2, int sel_x1, int sel_y1, int sel_x2,
+                      int sel_y2, bool is_in_focus, const GlopFrame *items) const = 0;
+ protected: 
+  MenuView() {}
+ private:
+  DISALLOW_EVIL_CONSTRUCTORS(MenuView);
+};
+class MenuViewFactory {
+ public:
+  virtual MenuView *Create() const = 0;
+  virtual ~MenuViewFactory() {}
+ protected:
+  MenuViewFactory() {}
+ private:
+  DISALLOW_EVIL_CONSTRUCTORS(MenuViewFactory);
+};
+
+// Default implementation
+class DefaultMenuView: public MenuView {
+ public:
+  void OnResize(int rec_width, int rec_height, int *item_lp, int *item_tp, int *item_rp,
+                int *item_bp) const;
+  void Render(int x1, int y1, int x2, int y2, int sel_x1, int sel_y1, int sel_x2, int sel_y2,
+              bool is_in_focus, const GlopFrame *items) const;
+ private:
+  friend class DefaultMenuViewFactory;
+  DefaultMenuView(const DefaultMenuViewFactory *factory): factory_(factory) {}
+  const DefaultMenuViewFactory *factory_;
+  DISALLOW_EVIL_CONSTRUCTORS(DefaultMenuView);
+};
+class DefaultMenuViewFactory: public MenuViewFactory {
+ public:
+  DefaultMenuViewFactory()
+  : selection_color_(kDefaultMenuSelectionColor),
+    selection_color_no_focus_(kDefaultMenuSelectionColorNoFocus) {}
+  MenuView *Create() const {return new DefaultMenuView(this);}
+
+  // Accessors and mutators
+  const Color &GetSelectionColor() const {return selection_color_;}
+  void SetSelectionColor(const Color &c) {selection_color_ = c;}
+  const Color &GetSelectionColorNoFocus() const {return selection_color_no_focus_;}
+  void SetSelectionColorNoFocus(const Color &c) {selection_color_no_focus_ = c;}
+ private:
+  Color selection_color_, selection_color_no_focus_;
+  DISALLOW_EVIL_CONSTRUCTORS(DefaultMenuViewFactory);
 };
 
 // DialogView
@@ -635,6 +698,7 @@ class DefaultDialogViewFactory: public DialogViewFactory {
 
 // Global frame style
 // ==================
+
 extern GuiTextStyle *gGuiTextStyle;
 extern InputBoxViewFactory *gInputBoxViewFactory;
 extern ArrowViewFactory *gArrowViewFactory;
@@ -642,6 +706,7 @@ extern TextPromptViewFactory *gTextPromptViewFactory;
 extern WindowViewFactory *gWindowViewFactory;
 extern ButtonViewFactory *gButtonViewFactory;
 extern SliderViewFactory *gSliderViewFactory;
+extern MenuViewFactory *gMenuViewFactory;
 extern DialogViewFactory *gDialogViewFactory;
 
 // Deletes all global frame styles that is initialized.

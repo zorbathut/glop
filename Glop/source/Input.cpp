@@ -778,6 +778,8 @@ void Input::Think(bool lost_focus, int frame_dt) {
       if (os_events[i][j].key.IsJoystickKey())
         amt = (amt - kJoystickAxisThreshold) / (1 - kJoystickAxisThreshold);
       amt = max(amt, 0.0f);
+      if (amt == info->GetPressAmountNow())
+        continue;
       KeyEvent::Type type = info->SetPressAmount(amt);
       if (type != KeyEvent::Nothing)
         OnKeyEvent(KeyEvent(os_events[i][j].key, type), 0);
@@ -869,25 +871,23 @@ void Input::OnKeyEvent(const KeyEvent &event, int dt) {
 
 // Returns a pointer to the KeyTracker corresponding to a given GlopKey.
 const Input::KeyTracker *Input::GetKeyTracker(const GlopKey &key) const {
-  if (key.device == kDeviceKeyboard) {
-    ASSERT(key.index >= 0 && key.index < kNumKeyboardKeys);
-    return &keyboard_key_trackers_[key.index];
-  } else if (key.device >= 0 && key.device < (int)joystick_key_trackers_.size()) {
-    ASSERT(key.index >= 0 && key.index < kNumJoystickKeys);
-    return &joystick_key_trackers_[key.device][key.index];
-  } else if (key.device == kDeviceAnyJoystick) {
-    ASSERT(key.index >= 0 && key.index < kNumJoystickKeys);
-    return &any_joystick_key_trackers_[key.index];
-  } else if (key.device == kDeviceDerived) {
-    ASSERT(key.index >= 0 && key.index < GetNumDerivedKeys());
-    return &derived_key_trackers_[key.index];
-  } else {
-    return 0;
-  }
-}
-Input::KeyTracker *Input::GetKeyTracker(const GlopKey &key) {
-  const Input *const_this = (const Input *)this;
-  return (KeyTracker*)const_this->GetKeyTracker(key);
+  switch (key.device) {
+    case kDeviceKeyboard:
+      ASSERT(key.index >= 0 && key.index < kNumKeyboardKeys);
+      return &keyboard_key_trackers_[key.index];
+    case kDeviceAnyJoystick:
+      ASSERT(key.index >= 0 && key.index < kNumJoystickKeys);
+      return &any_joystick_key_trackers_[key.index];
+    case kDeviceDerived:
+      ASSERT(key.index >= 0 && key.index < GetNumDerivedKeys());
+      return &derived_key_trackers_[key.index];
+    default:
+      ASSERT(key.device >= 0 && key.index >= 0 && key.index < kNumJoystickKeys);
+      if (key.device < GetNumJoysticks())
+        return &joystick_key_trackers_[key.device][key.index];
+      else
+        return 0;
+  };
 }
 
 // Figures out whether the OS should be displaying or hiding our cursor, and then informs it if

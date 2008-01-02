@@ -1338,6 +1338,85 @@ void SliderFrame::OnFocusChange() {
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
+// Menu
+// ====
+
+DummyMenuFrame::DummyMenuFrame(int num_cols, bool is_vertical, float horz_justify,
+                               float vert_justify, const MenuViewFactory *factory)
+: num_cols_(num_cols), is_vertical_(is_vertical), horz_justify_(horz_justify),
+  vert_justify_(vert_justify), view_(factory->Create()) {}
+
+void DummyMenuFrame::SetSelection(int selection) {
+  selection_ = max(0, min(selection, GetNumItems() - 1));
+}
+
+void DummyMenuFrame::GetItemCoords(int item, int *x1, int *y1, int *x2, int *y2) const {
+  *x1 = GetCol(item) * col_width_;
+  *y1 = GetRow(item) * row_height_;
+  *x2 = *x1 + col_width_ - 1;
+  *y2 = *y1 + row_height_ - 1;
+}
+
+int DummyMenuFrame::AddItem(GlopFrame *frame) {
+  item_ids_.push_back(AddChild(frame));
+  return GetNumItems() - 1;
+}
+
+void DummyMenuFrame::DeleteItem() {
+  ASSERT(GetNumItems() > 0);
+  RemoveChild(item_ids_[item_ids_.size()-1]);
+  item_ids_.pop_back();
+  SetSelection(selection_);
+}
+
+void DummyMenuFrame::SetItem(int item, GlopFrame *frame) {
+  ASSERT(item >= 0 && item < GetNumItems());
+  RemoveChild(item_ids_[item]);
+  item_ids_[item] = AddChild(frame);
+}
+
+GlopFrame *DummyMenuFrame::SetItemNoDelete(int item, GlopFrame *frame) {
+  ASSERT(item >= 0 && item < GetNumItems());
+  GlopFrame *result = RemoveChildNoDelete(item_ids_[item]);
+  item_ids_[item] = AddChild(frame);
+  return result;
+}
+
+void DummyMenuFrame::Render() const {
+  if (GetNumItems() > 0) {
+    int sel_x1, sel_y1, sel_x2, sel_y2;
+    GetItemCoords(selection_, &sel_x1, &sel_y1, &sel_x2, &sel_y2);
+    view_->Render(GetX(), GetY(), GetX2(), GetY2(),  sel_x1, sel_y1, sel_x2, sel_y2,
+                  IsInFocus(), 0);
+  }
+}
+
+void DummyMenuFrame::SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2) {
+  GlopFrame::SetPosition(screen_x, screen_y, cx1, cy1, cx2, cy2);
+  for (int i = 0; i < GetNumItems(); i++) {
+    GetItem(i)->SetPosition(screen_x + GetCol(i) * col_width_ + item_lpadding_,
+                            screen_y + GetRow(i) * row_height_ + item_tpadding_,
+                            cx1, cy1, cx2, cy2);
+  }
+}
+
+void DummyMenuFrame::RecomputeSize(int rec_width, int rec_height) {
+  view_->OnResize(rec_width, rec_height, &item_lpadding_, &item_tpadding_, &item_rpadding_,
+                  &item_bpadding_);
+  col_width_ = row_height_ = 0;
+  if (GetNumItems() > 0) {
+    int col_rec_width = rec_width / GetNumCols() - (item_lpadding_ + item_rpadding_);
+    int row_rec_height = rec_height / GetNumRows() - (item_tpadding_ + item_bpadding_);
+    for (int i = 0; i < GetNumItems(); i++) {
+      GetItem(i)->UpdateSize(col_rec_width, row_rec_height);
+      col_width_ = max(col_width_, GetItem(i)->GetWidth() + item_lpadding_ + item_rpadding_);
+      row_height_ = max(row_height_, GetItem(i)->GetHeight() + item_tpadding_ + item_bpadding_);
+    }
+  }
+  SetSize(col_width_ * GetNumCols(), row_height_ * GetNumRows());
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
 // Dialog
 // ======
 
@@ -1346,6 +1425,7 @@ bool DialogWidget::is_initialized_ = false;
 LightSet<GlopKey> DialogWidget::yes_keys_, DialogWidget::no_keys_, DialogWidget::okay_keys_,
                   DialogWidget::cancel_keys_;
 
+// Constructors
 void DialogWidget::TextOkay(const string &title, const string &message,
                             const DialogViewFactory *factory) {
   DoText(title, message, false, false, true, false, factory);
@@ -1397,6 +1477,7 @@ DialogWidget::Result DialogWidget::IntegerPromptOkayCancel(
                         true, true, factory);
 }
 
+// Utilities
 void DialogWidget::Init() {
   if (!is_initialized_) {
     yes_keys_.InsertItem('y');

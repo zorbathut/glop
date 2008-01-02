@@ -10,6 +10,13 @@
 //    Also look at FrameStyle
 //  - Add KeyPromptFrame?
 //  - Vsync
+//  - Cease tab grab in some way on slider motion
+//  - Vector usage?
+//  - Make character ping part of dummytextpromptframe
+//  - Think about pinging, (e.g. menu adjusted, or typing, etc.)
+//  - Further prune calls to UpdateDerivedKey?
+//  - Think more about rendering order, perhaps add movetofront to multiparentframe
+//  - Allow DummyMenuFrames to render even when empty
 
 // Includes
 #include "../Glop/include/Base.h"

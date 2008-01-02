@@ -331,6 +331,22 @@ void DefaultSliderView::Render(int x1, int y1, int x2, int y2, bool is_horizonta
   GlUtils::SetColor(kWhite);
 }
 
+// MenuView
+// ========
+
+void DefaultMenuView::OnResize(int rec_width, int rec_height, int *item_lp, int *item_tp,
+                               int *item_rp, int *item_bp) const {
+  *item_lp = *item_tp = *item_rp = *item_bp = 1;
+}
+
+void DefaultMenuView::Render(int x1, int y1, int x2, int y2, int sel_x1, int sel_y1, int sel_x2,
+                             int sel_y2, bool is_in_focus, const GlopFrame *items) const {
+  Color color = (is_in_focus? factory_->GetSelectionColor() : factory_->GetSelectionColorNoFocus());
+  GlUtils2d::FillRectangle(sel_x1, sel_y1, sel_x2, sel_y2, color);
+  GlUtils::SetColor(kWhite);
+  items->Render();
+}
+
 // Globals
 // =======
 GuiTextStyle *gGuiTextStyle = 0;
@@ -340,6 +356,7 @@ ArrowViewFactory *gArrowViewFactory = 0;
 ButtonViewFactory *gButtonViewFactory = 0;
 SliderViewFactory *gSliderViewFactory = 0;
 WindowViewFactory *gWindowViewFactory = 0;
+MenuViewFactory *gMenuViewFactory = 0;
 DialogViewFactory *gDialogViewFactory = 0;
 
 template<class T> static void SafeDelete(T *& data) {
@@ -357,6 +374,7 @@ void ClearFrameStyle() {
   SafeDelete(gButtonViewFactory);
   SafeDelete(gSliderViewFactory);
   SafeDelete(gWindowViewFactory);
+  SafeDelete(gMenuViewFactory);
   SafeDelete(gDialogViewFactory);
 }
 
@@ -369,6 +387,7 @@ void InitDefaultFrameStyle(Font *font) {
   gButtonViewFactory = new DefaultButtonViewFactory();
   gSliderViewFactory = new DefaultSliderViewFactory(gArrowViewFactory, gButtonViewFactory);
   gWindowViewFactory = new DefaultWindowViewFactory(font);
+  gMenuViewFactory = new DefaultMenuViewFactory();
   gDialogViewFactory = new DefaultDialogViewFactory(gInputBoxViewFactory, gTextPromptViewFactory,
                                                     gWindowViewFactory, gButtonViewFactory,
                                                     gSliderViewFactory, font);
