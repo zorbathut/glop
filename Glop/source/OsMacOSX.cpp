@@ -1,10 +1,12 @@
 #ifdef MACOSX
 
 #include "Os.h"
+#include "../include/Input.h"
 #include <vector>
 #include <string>
 #include <set>
 #include <map>
+#include <algorithm>
 using namespace std;
 
 #include <Carbon/Carbon.h>
@@ -12,12 +14,51 @@ using namespace std;
 #include <OpenGL/gl.h>
 #include <AGL/agl.h>
 #include <ApplicationServices/ApplicationServices.h>
+#include <IOKit/hid/IOHIDLib.h>
 
 const int kEventClassGlop = 'Glop';
 const int kEventGlopBreak = 0;
 const int kEventGlopToggleFullScreen = 'Flsc';
 
 static set<OsWindowData*> all_windows;
+static HIPoint mouse_location;
+static HIPoint mouse_delta;
+static map<int,int> glop_key_map;
+
+const GlopKey kKeyGUI = 0;
+const GlopKey kKeyPadClear = 0;
+const GlopKey kKeyHelp = 0;
+
+
+const GlopKey key_map[] = {
+  'a', 's', 'd', 'f', 'h',
+  'g', 'z', 'x', 'c', 'v',
+    0, 'b', 'q', 'w', 'e',
+  'r', 'y', 't', '1', '2',
+  '3', '4', '6', '5', '!',
+  '9', '7', '-', '8', '0',
+  ']', 'o', 'u', '[', 'i',
+  'p', kKeyEnter, 'l', 'j', '\'',
+  'k', ';', '\\', ',', '/',
+  'n', 'm', '.', kKeyTab, ' ',
+  '`', kKeyBackspace, 0, kKeyEscape, 0,             // 50
+  kKeyGUI, 0, 0, 0, 0,
+  0, 0, 0, 0, 0,
+  kKeyPadDecimal, 0, kKeyPadMultiply, 0, kKeyPadAdd,
+  0, kKeyPadClear, 0, 0, 0,
+  kKeyPadDivide, 0, kKeyPadEnter, kKeyPadSubtract, 0,
+  0, 0, kKeyPad0, kKeyPad1, kKeyPad2,
+  kKeyPad3, kKeyPad4, kKeyPad5, kKeyPad6, kKeyPad7,
+  kKeyPad8, kKeyPad9, 0, 0, 0,
+  0, kKeyF5, kKeyF6, kKeyF7, kKeyF3,
+  kKeyF8, kKeyF9, 0, kKeyF11, 0,                    // 100
+  0, 0, 0, 0, kKeyF10,
+  0, kKeyF12, 0, 0, kKeyHelp,
+  kKeyHome, kKeyPageUp, kKeyDelete, kKeyF4, kKeyEnd,
+  kKeyF2, kKeyPageDown, kKeyF1, kKeyLeft, kKeyRight,
+  kKeyDown, kKeyUp,
+  -1, -1, -1, -1, -1};
+
 
 // BUG(jwills): With multiple windows open, you can get a gl context to draw onto the header bar of
 // a window by moving it around a bunch.  Why on earth does this happen?
@@ -29,7 +70,9 @@ struct OsWindowData {
       was_active(false) {
   }
   ~OsWindowData() {
+    printf("destroyed\n");
     if (window != NULL) {
+      printf("thundered\n");
       DisposeWindow(window);
     }
     if (agl_context != NULL) {
@@ -49,6 +92,28 @@ void GlopToggleFullScreen();
 
 // HACK!
 static bool ok_to_exit;
+
+struct GlopOSXEvent {
+  double timestamp;
+  Os::KeyEvent event;
+  GlopOSXEvent() : event(0, false) {}
+  GlopOSXEvent(double _timestamp, GlopKey key, bool is_pressed) :
+      timestamp(_timestamp),
+      event(key, is_pressed) {}
+  GlopOSXEvent(double _timestamp, GlopKey key, float pressed_amount) :
+      timestamp(_timestamp),
+      event(key, pressed_amount) {}
+};
+bool operator < (const GlopOSXEvent& a, const GlopOSXEvent& b) {
+  if (a.timestamp != b.timestamp)
+    return a.timestamp < b.timestamp;
+  if (a.event.key != b.event.key)
+    return a.event.key < b.event.key;
+  return a.event.press_amount < b.event.press_amount;
+}
+
+
+vector<GlopOSXEvent> raw_events;
 
 OSStatus GlopEventHandler(EventHandlerCallRef next_handler, EventRef the_event, void* user_data) {
   OSStatus result = eventNotHandledErr;
@@ -94,7 +159,25 @@ OSStatus GlopEventHandler(EventHandlerCallRef next_handler, EventRef the_event, 
     	    sizeof(key),
     	    NULL,
           &key);
-      printf("Key: %d\t%x\n", key, key);
+      printf("KeyDown: %d %x\n", key, key);
+      printf("Array: %d\n",key_map[key].index);
+//      printf("%s\n", key_map[key].GetName().c_str());
+      raw_events.push_back(
+          GlopOSXEvent(GetEventTime(the_event),key_map[key], true));
+    }
+    if (event_kind == kEventRawKeyUp) {
+      UInt32 key;
+    	GetEventParameter(
+    	    the_event,
+    	    kEventParamKeyCode,
+    	    typeUInt32,
+    	    NULL,
+    	    sizeof(key),
+    	    NULL,
+          &key);
+      printf("KeyUp  : %d %x\n", key, key);
+      raw_events.push_back(
+          GlopOSXEvent(GetEventTime(the_event),key_map[key], false));
     }
     if (event_kind == kEventRawKeyModifiersChanged) {
       UInt32 modifiers;
@@ -112,16 +195,65 @@ OSStatus GlopEventHandler(EventHandlerCallRef next_handler, EventRef the_event, 
     }
   }
   if (event_class == kEventClassMouse) {
-    if (event_kind == kEventMouseMoved) {
-      HIPoint point;
+    if (event_kind == kEventMouseMoved || event_kind == kEventMouseDragged) {
+      printf("Mouse Moved\n");
+      GetEventParameter(
+        the_event,
+        kEventParamMouseLocation,
+        typeHIPoint,
+        NULL,
+        sizeof(mouse_location),
+        NULL,
+        &mouse_location);
+      HIPoint current_delta;
       GetEventParameter(
         the_event,
         kEventParamMouseDelta,
         typeHIPoint,
         NULL,
-        sizeof(point),
+        sizeof(current_delta),
         NULL,
-        &point);
+        &current_delta);
+      mouse_delta.x += current_delta.x;
+      mouse_delta.y += current_delta.y;
+    }
+    if (event_kind == kEventMouseDown || event_kind == kEventMouseUp) {
+      HIPoint point;
+      EventMouseButton button;
+      GetEventParameter(
+          the_event,
+          kEventParamMouseLocation,
+          typeHIPoint,
+          NULL,
+          sizeof(point),
+          NULL,
+          &point);
+      GetEventParameter(
+          the_event,
+          kEventParamMouseButton,
+          typeMouseButton,
+          NULL,
+          sizeof(button),
+          NULL,
+          &button);
+      printf("button: %d\n", button);
+      GlopKey glop_mouse_button(0);
+      if (button == kEventMouseButtonPrimary) {
+        glop_mouse_button = kMouseLButton;
+      } else 
+      if (button == kEventMouseButtonSecondary) {
+        glop_mouse_button = kMouseRButton;
+      } else
+      if (button == kEventMouseButtonTertiary) {
+        glop_mouse_button = kMouseMButton;
+      }
+      if (glop_mouse_button != GlopKey(0)) {
+        raw_events.push_back(
+            GlopOSXEvent(
+                GetEventTime(the_event),
+                glop_mouse_button,
+                event_kind == kEventMouseDown));
+      }
     }
   }
   return result;
@@ -143,17 +275,15 @@ OSStatus GlopWindowHandler(EventHandlerCallRef next_handler, EventRef the_event,
     	    NULL,
           &data->bounds);
       Os::SetCurrentContext(data);
-			glViewport(
-			    0,
-          0,
-		      data->bounds.left - data->bounds.right,
-          data->bounds.top - data->bounds.bottom);
       result = noErr;
+//      glViewport(0,50,data->bounds.right - data->bounds.left,
+//      data->bounds.bottom - data->bounds.top+50);
     }
     if (event_kind == kEventWindowClosed) {
       printf("Destroying window %s\n", data->title.c_str());
       if (!data->full_screen) {
-        Os::DestroyWindow(data);
+// TODO(jwills): Look here, fixy fixy.
+//        Os::DestroyWindow(data);
       }
       result = noErr;
     }
@@ -161,13 +291,215 @@ OSStatus GlopWindowHandler(EventHandlerCallRef next_handler, EventRef the_event,
   return result;
 }
 
-map<int,int> glop_key_map;
+struct GlopHIDEvent {
+  double timestamp;
+  UInt32 page;
+  UInt32 usage;
+  int value;
+  int queue;
+  GlopHIDEvent() {}
+  GlopHIDEvent(IOHIDValueRef value_ref, int _queue) :
+      page(IOHIDElementGetUsagePage(IOHIDValueGetElement(value_ref))),
+      usage(IOHIDElementGetUsage(IOHIDValueGetElement(value_ref))),
+      value(IOHIDValueGetIntegerValue(value_ref)),
+      queue(_queue) {
+    uint64_t t = IOHIDValueGetTimeStamp(value_ref);
+    Nanoseconds nano = AbsoluteToNanoseconds(*(AbsoluteTime*)&t);
+    long long time_in_nanoseconds = *(long long*)&nano;
+    timestamp = (double)time_in_nanoseconds / 1e9;
+  }
+};
+
+bool operator < (const GlopHIDEvent& a, const GlopHIDEvent& b) {
+  if (a.timestamp != b.timestamp)
+    return a.timestamp < b.timestamp;
+  if (a.page != b.page)
+    return a.page < b.page;
+  if (a.usage != b.usage)
+    return a.usage < b.usage;
+  return a.value < b.value;
+}
+
+static vector<IOHIDQueueRef> modifier_queues;
+static set<GlopHIDEvent> modifier_events;
+
+static vector<IOHIDQueueRef> joystick_queues;
+static set<GlopHIDEvent> joystick_events;
+
+static vector<IOHIDDeviceRef> joystick_devices;
+// This is a parallel vector to joystick_queues, this is so when we update the joysticks that we
+// don't move any around that were present from the last time we updated joysticks
+
+static void ExtractEvents(vector<IOHIDQueueRef>* queues, set<GlopHIDEvent>* events) {
+  for (int i = 0; i < queues->size(); i++) {
+    if ((*queues)[i] == NULL) continue;
+    IOHIDValueRef value = IOHIDQueueCopyNextValueWithTimeout((*queues)[i], 0);
+    while (value) {
+      events->insert(GlopHIDEvent(value, i));
+      value = IOHIDQueueCopyNextValueWithTimeout((*queues)[i], 0);
+    }
+  }
+}
+
+static void GlopProcessModifierHIDs(const void* value, void* context) {
+	IOHIDDeviceRef device_ref = (IOHIDDeviceRef)value;
+  // We match all devices and in here we check all elements.  This might be slow,
+  // but this also shouldn't happen very often, typically just once at startup.
+	if (device_ref) {
+    bool queue_created = false;
+    CFArrayRef elements = IOHIDDeviceCopyMatchingElements(device_ref, NULL, 0);
+    for (int i = 0; i < CFArrayGetCount(elements); i++) {
+      IOHIDElementRef element_ref = (IOHIDElementRef)CFArrayGetValueAtIndex(elements, i);
+      int page = IOHIDElementGetUsagePage(element_ref);
+      int usage = IOHIDElementGetUsage(element_ref);
+      if (page == 0x07 && (usage >= 0xE0 && usage <= 0xE7) || usage == 0x39) {
+        if (!queue_created) {
+          modifier_queues.push_back(IOHIDQueueCreate(NULL, device_ref, 100, kIOHIDOptionsTypeNone));
+          queue_created = true;
+        }
+        IOHIDQueueAddElement(modifier_queues.back(), element_ref);
+        printf("Added key: %x\n", usage);
+      }
+    }
+	}
+}
+
+// TODO(jwills): This function should probably undergo some serious testing
+static void GlopFindRemainingJoysticks(const void* value, void* context) {
+  IOHIDDeviceRef device_ref = (IOHIDDeviceRef)value;
+  if (device_ref) {
+    CFArrayRef elements = IOHIDDeviceCopyMatchingElements(device_ref, NULL, 0);
+    for (int i = 0; i < CFArrayGetCount(elements); i++) {
+      int index = -1;
+      for (int i = 0; i < CFArrayGetCount(elements); i++) {
+        IOHIDElementRef element_ref = (IOHIDElementRef)CFArrayGetValueAtIndex(elements, i);
+        int page = IOHIDElementGetUsagePage(element_ref);
+        int usage = IOHIDElementGetUsage(element_ref);
+        if (page == 0x01 && (usage == 0x04 || usage == 0x05)) {
+          index++;
+          while (index < joystick_devices.size() && joystick_devices[index] != device_ref) {
+            index++;
+          }
+          if (index < joystick_devices.size()) {
+            joystick_queues[index] = IOHIDQueueCreate(NULL, device_ref, 100, kIOHIDOptionsTypeNone);
+          }
+        }
+      }
+    }
+  }
+}
+
+static void GlopProcessJoysticks(const void* value, void* context) {
+	IOHIDDeviceRef device_ref = (IOHIDDeviceRef)value;
+  // We match all devices and in here we check all elements.  This might be slow,
+  // but this also shouldn't happen very often, typically just once at startup.
+	if (device_ref) {
+    CFArrayRef elements = IOHIDDeviceCopyMatchingElements(device_ref, NULL, 0);
+    int index = -1;
+    for (int i = 0; i < CFArrayGetCount(elements); i++) {
+      IOHIDElementRef element_ref = (IOHIDElementRef)CFArrayGetValueAtIndex(elements, i);
+      int page = IOHIDElementGetUsagePage(element_ref);
+      int usage = IOHIDElementGetUsage(element_ref);
+      printf("GlopProcessJoysticks(): %d %d\n", page, usage);
+      // TODO(jwills): Figure out if joysticks always indicate what they are with usage page 0x01
+      if (page == 0x01 && (usage == 0x04 || usage == 0x05)) {
+        index = index + 1;
+        while (index < joystick_devices.size() && joystick_devices[index] != device_ref) {
+          index++;
+        }
+        printf("1index: %d\n", index);
+        if (index == joystick_devices.size()) {
+          for (int j = 0; j < joystick_devices.size(); j++) {
+            if (joystick_devices[j] == NULL) {
+              index = j;
+              joystick_devices[j] = device_ref;
+              assert(joystick_queues[j] == NULL);
+              joystick_queues[j] = IOHIDQueueCreate(NULL, device_ref, 100, kIOHIDOptionsTypeNone);
+              break;
+            }
+          }
+          printf("2index: %d\n", index);
+          if (index == joystick_devices.size()) {
+            index = joystick_queues.size();
+            joystick_queues.push_back(
+                IOHIDQueueCreate(NULL, device_ref, 100, kIOHIDOptionsTypeNone));
+            joystick_devices.push_back(device_ref);
+          }
+          printf("3index: %d\n", index);
+        }
+      }
+      if (index != -1 &&
+          ((page == 0x01 && (usage >= 0x30 && usage <= 0x39)) ||
+           (page == 0x09 && (usage > 0)))) {
+        IOHIDQueueAddElement(joystick_queues[index], element_ref);
+        printf("Added joystick button: %x\n", usage);
+      }
+    }
+	}
+}
+
+static IOHIDManagerRef glop_manager;
+static void GlopHandleNewModifierHIDs() {
+	CFSetRef set_ref = IOHIDManagerCopyDevices(glop_manager);
+	if (set_ref) {
+    vector<IOHIDQueueRef> old_modifier_queues = modifier_queues;
+    modifier_queues.resize(0);
+		CFSetApplyFunction(set_ref, GlopProcessModifierHIDs, NULL);
+    ExtractEvents(&old_modifier_queues, &modifier_events);
+    for (int i = 0; i < old_modifier_queues.size(); i++) {
+      CFRelease(old_modifier_queues[i]);
+    }
+	} else {
+    printf("Error: Tried to handle new HIDs, but there are no HIDs.\n");
+	}
+  for (int i = 0; i < modifier_queues.size(); i++) {
+    IOHIDQueueStart(modifier_queues[i]);
+  }
+}
+static void GlopHandleNewJoysticks() {
+	CFSetRef set_ref = IOHIDManagerCopyDevices(glop_manager);
+	if (set_ref) {
+    vector<IOHIDQueueRef> old_joystick_queues = joystick_queues;
+    for (int i = 0; i < joystick_queues.size(); i++) {
+      joystick_queues[i] = NULL;
+    }
+		CFSetApplyFunction(set_ref, GlopFindRemainingJoysticks, NULL);
+    for (int i = 0; i < joystick_devices.size(); i++) {
+      if (joystick_queues[i] == NULL) {
+        if (joystick_devices[i] != NULL) {
+          printf("Removed joystick %d\n", i);
+        }
+        joystick_devices[i] = NULL;
+      }
+    }
+		CFSetApplyFunction(set_ref, GlopProcessJoysticks, NULL);
+    ExtractEvents(&old_joystick_queues, &joystick_events);
+	} else {
+    printf("Error: Tried to handle new HIDs, but there are no HIDs.\n");
+	}
+  for (int i = 0; i < joystick_queues.size(); i++) {
+    if (joystick_queues[i] != NULL) {
+      IOHIDQueueStart(joystick_queues[i]);
+    }
+  }
+  for (int i = 0; i < joystick_devices.size(); i++) {
+//    printf("Device ID: %d\n", IOHIDDevice_GetProductID(joystick_devices[i]));
+  }
+}
+
+// This function is way less efficient than it could be, but it doesn't seem like there is really
+// any point.  This function should be called once every time a USB device is added or removed, so
+// if it's slow, it shouldn't matter.
+static void GlopUpdateDevices(void* context, IOReturn result, void* sender, IOHIDDeviceRef device) {
+  GlopHandleNewModifierHIDs();
+  GlopHandleNewJoysticks();
+}
 
 static UnsignedWide glop_start_time;
 void Os::Init() {
   Microseconds(&glop_start_time);
   EventHandlerUPP handler_upp = NewEventHandlerUPP(GlopEventHandler);
-  EventTypeSpec event_types[7];
+  EventTypeSpec event_types[9];
   event_types[0].eventClass = kEventClassGlop;
   event_types[0].eventKind  = kEventGlopBreak;
   event_types[1].eventClass = kEventClassApplication;
@@ -178,12 +510,36 @@ void Os::Init() {
   event_types[3].eventKind  = kEventRawKeyDown;
   event_types[4].eventClass = kEventClassKeyboard;
   event_types[4].eventKind  = kEventRawKeyUp;
-  event_types[5].eventClass = kEventClassKeyboard;
-  event_types[5].eventKind  = kEventRawKeyModifiersChanged;
+  event_types[5].eventClass = kEventClassMouse;
+  event_types[5].eventKind  = kEventMouseMoved;
   event_types[6].eventClass = kEventClassMouse;
-  event_types[6].eventKind  = kEventMouseMoved;
+  event_types[6].eventKind  = kEventMouseDragged;
+  event_types[7].eventClass = kEventClassMouse;
+  event_types[7].eventKind  = kEventMouseDown;
+  event_types[8].eventClass = kEventClassMouse;
+  event_types[8].eventKind  = kEventMouseUp;
+  InstallApplicationEventHandler(handler_upp, 9, event_types, NULL, NULL);
 
-  InstallApplicationEventHandler(handler_upp, 7, event_types, NULL, NULL);
+  // Handle HIDs
+  glop_manager = IOHIDManagerCreate(kCFAllocatorDefault, kIOHIDOptionsTypeNone);
+  printf("%x\n", glop_manager);
+  if (glop_manager == NULL) {
+    printf("couldn't make a manager\n");
+  }
+	IOHIDManagerSetDeviceMatching(glop_manager, NULL);  // This will match all HIDs, but that's fine
+	IOReturn result = IOHIDManagerOpen(glop_manager, kIOHIDOptionsTypeNone);
+	if (kIOReturnSuccess != result) {
+    printf("Couldn't open IOHIDManager: %x\n", result);
+	}
+  IOHIDManagerRegisterDeviceMatchingCallback(glop_manager, GlopUpdateDevices, (void*)1);
+  IOHIDManagerRegisterDeviceRemovalCallback(glop_manager, GlopUpdateDevices, (void*)0);
+  CFRunLoopRef run_loop_ref = (CFRunLoopRef)GetCFRunLoopFromEventLoop(GetMainEventLoop());
+  IOHIDManagerScheduleWithRunLoop(glop_manager, run_loop_ref, kCFRunLoopDefaultMode);
+  GlopUpdateDevices(NULL, NULL, NULL, NULL);
+  printf("Num devices with stuff: %d\n", modifier_queues.size());
+
+
+
 
   OSStatus err;
   IBNibRef nib_ref = NULL;
@@ -194,73 +550,82 @@ void Os::Init() {
   DisposeNibReference(nib_ref);
 
   if (glop_key_map.size() == 0) {
-/*    const GlopKey kKeyF1(129);122
-    const GlopKey kKeyF2(130);120
-    const GlopKey kKeyF3(131);99
-    const GlopKey kKeyF4(132);118
-    const GlopKey kKeyF5(133);96
-    const GlopKey kKeyF6(134);97
-    const GlopKey kKeyF7(135);98
-    const GlopKey kKeyF8(136);100
-    const GlopKey kKeyF9(137);101
-    const GlopKey kKeyF10(138);109
-    const GlopKey kKeyF11(139);103
-    const GlopKey kKeyF12(140);111
-    const GlopKey kKeyF13(133);105
-    const GlopKey kKeyF14(134);107
-    const GlopKey kKeyF15(135);113
-    const GlopKey kKeyF16(136);106
-    const GlopKey kKeyF17(137);64
-    const GlopKey kKeyF18(138);79
-    const GlopKey kKeyF19(139);80
-    const GlopKey kKeyCapsLock(150);
-    const GlopKey kKeyNumLock(151);
-    const GlopKey kKeyScrollLock(152);
-    const GlopKey kKeyPrintScreen(153);
-    const GlopKey kKeyPause(154);
-    const GlopKey kKeyLeftShift(155);
-    const GlopKey kKeyRightShift(156);
-    const GlopKey kKeyLeftControl(157);
-    const GlopKey kKeyRightControl(158);
-    const GlopKey kKeyLeftAlt(159);
-    const GlopKey kKeyRightAlt(160);
-    const GlopKey kKeyRight(166);
-    const GlopKey kKeyLeft(167);
-    const GlopKey kKeyUp(168);
-    const GlopKey kKeyDown(169);
-    const GlopKey kKeyPadDivide(170);75
-    const GlopKey kKeyPadMultiply(171);67
-    const GlopKey kKeyPadSubtract(172);78
-    const GlopKey kKeyPadAdd(173);69
-    const GlopKey kKeyPadEnter(174);76
-    const GlopKey kKeyPadDecimal(175);65
-    const GlopKey kKeyPadEquals(176);81
-    const GlopKey kKeyPad0(177);82
-    const GlopKey kKeyPad1(178);83
-    const GlopKey kKeyPad2(179);84
-    const GlopKey kKeyPad3(180);85
-    const GlopKey kKeyPad4(181);86
-    const GlopKey kKeyPad5(182);87
-    const GlopKey kKeyPad6(183);88
-    const GlopKey kKeyPad7(184);89
-    const GlopKey kKeyPad8(185);91
-    const GlopKey kKeyPad9(186);92
-    const GlopKey kKeyDelete(190);
-    const GlopKey kKeyHome(191);
-    const GlopKey kKeyInsert(192);
-    const GlopKey kKeyEnd(193);
-    const GlopKey kKeyPageUp(194);
-    const GlopKey kKeyPageDown(195);
-    const GlopKey kMouseUp(291);
-    const GlopKey kMouseRight(292);
-    const GlopKey kMouseDown(293);
-    const GlopKey kMouseLeft(294);
-    const GlopKey kMouseWheelUp(295);
-    const GlopKey kMouseWheelDown(296);
-    const GlopKey kMouseLButton(297);
-    const GlopKey kMouseMButton(298);
-    const GlopKey kMouseRButton(299);
-*/
+    glop_key_map[50] = 23;
+    glop_key_map[18] = 49;
+    glop_key_map[19] = 50;
+    glop_key_map[20] = 51;
+    glop_key_map[21] = 52;
+    glop_key_map[23] = 53;
+    glop_key_map[22] = 54;
+    glop_key_map[26] = 55;
+    glop_key_map[28] = 56;
+
+    glop_key_map[122] = 129;
+    glop_key_map[120] = 130;
+    glop_key_map[99] = 131;
+    glop_key_map[118] = 132;
+    glop_key_map[96] = 133;
+    glop_key_map[97] = 134;
+    glop_key_map[98] = 135;
+    glop_key_map[100] = 136;
+    glop_key_map[101] = 137;
+    glop_key_map[109] = 138;
+    glop_key_map[103] = 139;
+    glop_key_map[111] = 140;
+    glop_key_map[105] = 133;
+    glop_key_map[107] = 134;
+    glop_key_map[113] = 135;
+    glop_key_map[106] = 136;
+    glop_key_map[64] = 137;
+    glop_key_map[79] = 138;
+    glop_key_map[80] = 139;
+//    const GlopKey kKeyCapsLock(150);
+//    const GlopKey kKeyNumLock(151);
+//    const GlopKey kKeyScrollLock(152);
+//    const GlopKey kKeyPrintScreen(153);
+//    const GlopKey kKeyPause(154);
+//    const GlopKey kKeyLeftShift(155);
+//    const GlopKey kKeyRightShift(156);
+//    const GlopKey kKeyLeftControl(157);
+//    const GlopKey kKeyRightControl(158);
+//    const GlopKey kKeyLeftAlt(159);
+//    const GlopKey kKeyRightAlt(160);
+//    const GlopKey kKeyRight(166);
+//    const GlopKey kKeyLeft(167);
+//    const GlopKey kKeyUp(168);
+//    const GlopKey kKeyDown(169);
+//    const GlopKey kKeyPadDivide(170);75
+//    const GlopKey kKeyPadMultiply(171);67
+//    const GlopKey kKeyPadSubtract(172);78
+//    const GlopKey kKeyPadAdd(173);69
+//    const GlopKey kKeyPadEnter(174);76
+//    const GlopKey kKeyPadDecimal(175);65
+//    const GlopKey kKeyPadEquals(176);81
+//    const GlopKey kKeyPad0(177);82
+//    const GlopKey kKeyPad1(178);83
+//    const GlopKey kKeyPad2(179);84
+//    const GlopKey kKeyPad3(180);85
+//    const GlopKey kKeyPad4(181);86
+//    const GlopKey kKeyPad5(182);87
+//    const GlopKey kKeyPad6(183);88
+//    const GlopKey kKeyPad7(184);89
+//    const GlopKey kKeyPad8(185);91
+//    const GlopKey kKeyPad9(186);92
+//    const GlopKey kKeyDelete(190);
+//    const GlopKey kKeyHome(191);
+//    const GlopKey kKeyInsert(192);
+//    const GlopKey kKeyEnd(193);
+//    const GlopKey kKeyPageUp(194);
+//    const GlopKey kKeyPageDown(195);
+//    const GlopKey kMouseUp(291);
+//    const GlopKey kMouseRight(292);
+//    const GlopKey kMouseDown(293);
+//    const GlopKey kMouseLeft(294);
+//    const GlopKey kMouseWheelUp(295);
+//    const GlopKey kMouseWheelDown(296);
+//    const GlopKey kMouseLButton(297);
+//    const GlopKey kMouseMButton(298);
+//    const GlopKey kMouseRButton(299);
   }
 }
 
@@ -277,17 +642,63 @@ void Os::Think() {
   PostEventToQueue(GetMainEventQueue(), terminator, kEventPriorityLow);
   ok_to_exit = true;
   RunApplicationEventLoop();
-  set<OsWindowData*>::iterator it;
-  for (it = all_windows.begin(); it != all_windows.end(); it++) {
-    WindowThink(*it);
+  // The application event loop does not get modifier keys for the keyboard, or joysticks, both of
+  // those have to be done separately.
+
+  ExtractEvents(&modifier_queues, &modifier_events);
+  set<GlopHIDEvent>::iterator event;
+  for (event = modifier_events.begin(); event != modifier_events.end(); event++) {
+    static map<UInt32, GlopKey> modifier_map;
+    if (modifier_map.size() == 0) {
+      modifier_map[0x39] = kKeyCapsLock;
+      modifier_map[0xE0] = kKeyLeftControl;
+      modifier_map[0xE1] = kKeyLeftShift;
+      modifier_map[0xE2] = kKeyLeftAlt;
+      modifier_map[0xE3] = 0;
+      modifier_map[0xE4] = kKeyRightControl;
+      modifier_map[0xE5] = kKeyRightShift;
+      modifier_map[0xE6] = kKeyRightAlt;
+      modifier_map[0xE7] = 0;
+    }
+    printf("Modifier: %f %d %d %d\n", event->timestamp, event->page, event->usage, event->value);
+    raw_events.push_back(
+        GlopOSXEvent(event->timestamp,modifier_map[event->usage], (bool)event->value));
+  }
+  modifier_events.clear();
+  // modifier_events only gets new events inside RunApplicationEventLoop(), so we won't miss any
+  // events by clearing the whole thing here.
+
+  ExtractEvents(&joystick_queues, &joystick_events);
+//  printf("Num Joystick Queues: %d\n", joystick_queues.size());
+  for (event = joystick_events.begin(); event != joystick_events.end(); event++) {
+    printf("Event: %f %d %d %d\n", event->timestamp, event->page, event->usage, event->value);
+    static map<pair<UInt32, UInt32>, int> joystick_map;
+    if (joystick_map.size() == 0) {
+//      joystick_map[pair<UInt32, UInt32>(0x09,)] = 0;
+    }
+    if (event->page == 0x09) {
+      raw_events.push_back(
+          GlopOSXEvent(
+              event->timestamp,
+              GetJoystickButton(event->queue, event->usage - 1),
+              (bool)event->value));
+    } else if (0) {
+      raw_events.push_back(
+          GlopOSXEvent(
+              event->timestamp,
+              joystick_map[pair<UInt32, UInt32>()],
+              (bool)event->value));
+    }
+  }
+  joystick_events.clear();
+
+  set<OsWindowData*>::iterator window;
+  for (window = all_windows.begin(); window != all_windows.end(); window++) {
+    WindowThink(*window);
   }
 }
 
 void Os::WindowThink(OsWindowData* data) {
-  if (data->agl_context == NULL) {
-    return;
-  }
-  aglSwapBuffers(data->agl_context);
 }
 
 OSStatus aglReportError(void) {
@@ -322,8 +733,10 @@ void GlopCreateAGLContext(OsWindowData* data) {
     data->agl_context = aglCreateContext(pixel_format, NULL);
     err = aglReportError();
     aglDestroyPixelFormat(pixel_format);
+    SetPort(GetWindowPort(data->window));
   }
-  aglSetHIViewRef(data->agl_context, HIViewGetRoot(data->window));
+  aglSetDrawable(data->agl_context, GetWindowPort(data->window));
+//  aglSetHIViewRef(data->agl_context, HIViewGetRoot(data->window));
   if (data->full_screen) {
     aglSetFullScreen(data->agl_context, 0, 0, 0, 0);
   }
@@ -331,7 +744,11 @@ void GlopCreateAGLContext(OsWindowData* data) {
 
 void GlopEnterFullScreen(OsWindowData* data) {
   GlopCreateAGLContext(data);
-  printf("Entering fullscreen with dimensions %d,%d\n", data->full_screen_dimensions.right,data->full_screen_dimensions.bottom);
+  printf(
+      "Entering fullscreen with dimensions %d,%d\n",
+      data->full_screen_dimensions.right,
+      data->full_screen_dimensions.bottom);
+  Os::SetCurrentContext(data);
   aglSetFullScreen(
       data->agl_context,
       data->full_screen_dimensions.right,
@@ -342,7 +759,6 @@ void GlopEnterFullScreen(OsWindowData* data) {
 
 void GlopOpenWindow(OsWindowData* data) {
 //  OSStatus result =
-  printf("%d %d %d %d\n", data->bounds.left, data->bounds.right, data->bounds.top, data->bounds.bottom);
       CreateNewWindow(
           kDocumentWindowClass,
               kWindowCollapseBoxAttribute |
@@ -429,7 +845,12 @@ OsWindowData* Os::CreateWindow(
     SetRect(&data->full_screen_dimensions, 0, 0, width, height);
     GlopEnterFullScreen(data);
   } else {
-    SetRect(&data->bounds, x, y, x + width, y + height);
+    //TODO(jwills): for -1, find a nice way of centering the window on the screen
+    if (x == -1 && y == -1) {
+      SetRect(&data->bounds, 100, 100, 100 + width, 100 + height);
+    } else {
+      SetRect(&data->bounds, x, y, x + width, y + height);
+    }
     SetRect(&data->full_screen_dimensions, 0, 0, 1600, 1050);
     GlopOpenWindow(data);
   }
@@ -438,15 +859,18 @@ OsWindowData* Os::CreateWindow(
 }
 
 void Os::SetCurrentContext(OsWindowData* data) {
-  if (data->agl_context == NULL || aglGetCurrentContext() == data->agl_context) {
-    if (data->agl_context == NULL)
-      printf("No agl context, can't set context.\n");
+  if (data->agl_context == NULL) {
+    printf("No agl context, can't set context.\n");
     return;
   }
-  if (!aglSetCurrentContext(data->agl_context))
+  if (!aglSetCurrentContext(data->agl_context)) {
     aglReportError();
-  if (!aglUpdateContext(data->agl_context))
+    printf("Error!\n");
+  }
+  if (!aglUpdateContext(data->agl_context)) {
     aglReportError();
+    printf("Error!\n");
+  }
 }
 
 
@@ -473,8 +897,8 @@ void Os::GetWindowPosition(const OsWindowData* data, int* x, int* y) {
 }
 
 void Os::GetWindowSize(const OsWindowData* data, int* width, int* height) {
-  *width  = data->bounds.left - data->bounds.right;
-  *height = data->bounds.top - data->bounds.bottom;
+  *width  = data->bounds.right - data->bounds.left;
+  *height = data->bounds.bottom - data->bounds.top;
 }
 
 void Os::SetTitle(OsWindowData* data, const string& title) {
@@ -490,6 +914,10 @@ void Os::SetIcon(OsWindowData *window, const Image *icon) {
   // and on macs
 }
 
+void Os::SetWindowSize(OsWindowData *window, int width, int height) {
+  // TODO(jwills): Rawr!!!
+}
+
 // Input functions
 // ===============
 
@@ -498,7 +926,31 @@ void Os::SetIcon(OsWindowData *window, const Image *icon) {
 vector<Os::KeyEvent> Os::PollInput(OsWindowData *window, bool *is_num_lock_set,
                                    bool *is_caps_lock_set, int *cursor_x, int *cursor_y,
                                    int *mouse_dx, int *mouse_dy) {
-  return vector<Os::KeyEvent>();
+  vector<Os::KeyEvent> ret;
+  sort(raw_events.begin(), raw_events.end());
+  ret.reserve(raw_events.size());
+  for (int i = 0; i < raw_events.size(); i++) {
+    ret.push_back(raw_events[i].event);
+    printf("%f\n", raw_events[i].timestamp);
+  }
+  if (raw_events.size())
+  printf("------");
+  raw_events.resize(0);
+  if (mouse_dx) {
+    *mouse_dx = mouse_delta.x;
+  }
+  if (mouse_dy) {
+    *mouse_dy = mouse_delta.y;
+  }
+  mouse_delta.x = 0;
+  mouse_delta.y = 0;
+  if (cursor_x) {
+    *cursor_x = mouse_location.x;
+  }
+  if (cursor_y) {
+    *cursor_y = mouse_location.y;
+  }
+  return ret;
 }
 
 void Os::SetMousePosition(int x, int y) {
@@ -524,7 +976,13 @@ void Os::RefreshJoysticks(OsWindowData *window) {
 }
 
 int Os::GetNumJoysticks(OsWindowData *window) {
-	return 0;
+  int num_joysticks = 0;
+  for (int i = 0; i < joystick_devices.size(); i++) {
+    if (joystick_devices[i] != NULL) {
+      num_joysticks++;
+    }
+  }
+  return num_joysticks;
 }
 
 // Threading functions
@@ -611,6 +1069,7 @@ int Os::GetTime() {
 }
 
 void Os::SwapBuffers(OsWindowData* data) {
+  aglSwapBuffers(data->agl_context);
 }
 
 #endif // MACOSX
