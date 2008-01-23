@@ -1,5 +1,0 @@
-//
-// Prefix header for all source files of the 'GlopUser' target in the 'GlopUser' project.
-//
-
-#include <Carbon/Carbon.h>
