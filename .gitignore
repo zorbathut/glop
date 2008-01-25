@@ -1,4 +1,7 @@
 # .DS_Store files are for viewing preferences in OSX
 .DS_Store
 
+# XCode user preferences files
+*.pbxuser
+*.mode1v3
 
