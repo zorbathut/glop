@@ -243,6 +243,7 @@
 		C0E91ACA08A95435008D54AB /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ARCHS = "$(NATIVE_ARCH_32_BIT)";
 				DEPLOYMENT_LOCATION = NO;
 				GCC_PREPROCESSOR_DEFINITIONS = MACOSX;
 				GCC_WARN_ABOUT_RETURN_TYPE = YES;

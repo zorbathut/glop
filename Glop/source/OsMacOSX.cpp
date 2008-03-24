@@ -103,6 +103,7 @@ struct GlopOSXEvent {
   GlopOSXEvent(double _timestamp, GlopKey key, float pressed_amount) :
       timestamp(_timestamp),
       event(key, pressed_amount) {}
+  GlopOSXEvent(double _timestamp, Os::KeyEvent _event) : timestamp(_timestamp), event(_event) {}
 };
 bool operator < (const GlopOSXEvent& a, const GlopOSXEvent& b) {
   if (a.timestamp != b.timestamp)
@@ -393,6 +394,7 @@ static void GlopProcessJoysticks(const void* value, void* context) {
 	IOHIDDeviceRef device_ref = (IOHIDDeviceRef)value;
   // We match all devices and in here we check all elements.  This might be slow,
   // but this also shouldn't happen very often, typically just once at startup.
+  printf("new device:\n");
 	if (device_ref) {
     CFArrayRef elements = IOHIDDeviceCopyMatchingElements(device_ref, NULL, 0);
     int index = -1;
@@ -676,18 +678,44 @@ void Os::Think() {
     if (joystick_map.size() == 0) {
 //      joystick_map[pair<UInt32, UInt32>(0x09,)] = 0;
     }
+    printf("page: 0x%x\tusage: 0x%x\n", event->page, event->usage);
     if (event->page == 0x09) {
       raw_events.push_back(
           GlopOSXEvent(
               event->timestamp,
-              GetJoystickButton(event->queue, event->usage - 1),
+              GetJoystickButton(event->usage - 1, event->queue),
               (bool)event->value));
-    } else if (0) {
-      raw_events.push_back(
-          GlopOSXEvent(
-              event->timestamp,
-              joystick_map[pair<UInt32, UInt32>()],
-              (bool)event->value));
+    } else if (event->page == 0x01 && event->usage >= 0x30 && event->usage <= 0x35) {
+      printf("value: %d\n", event->value);
+      printf("queue: %d\n", event->queue);
+      if (event->value < 128) {
+        printf("Making neg axis event\n");
+        raw_events.push_back(
+            GlopOSXEvent(
+                event->timestamp,
+                Os::KeyEvent(
+                    GetJoystickAxisNeg(
+                        event->usage - 0x30, event->queue), 1.f - (event->value/128.f))));
+      } else
+      if (event->value > 128) {
+        printf("Making pos axis event\n");
+        raw_events.push_back(
+            GlopOSXEvent(
+                event->timestamp,
+                Os::KeyEvent(
+                    GetJoystickAxisPos(
+                        event->usage - 0x30, event->queue), (event->value/128.f))));
+      } else {
+        printf("Making 0 axis event\n");
+        raw_events.push_back(
+            GlopOSXEvent(
+                event->timestamp,
+                Os::KeyEvent(GetJoystickAxisNeg(event->usage - 0x30, event->queue), 0.f)));
+        raw_events.push_back(
+            GlopOSXEvent(
+                event->timestamp,
+                Os::KeyEvent(GetJoystickAxisPos(event->usage - 0x30, event->queue), 0.f)));
+      }
     }
   }
   joystick_events.clear();
@@ -887,7 +915,7 @@ bool Os::IsWindowMinimized(const OsWindowData* data) {
 void Os::GetWindowFocusState(OsWindowData* data, bool* is_in_focus, bool* focus_changed) {
   bool active = IsWindowActive(data->window);
   *is_in_focus = active;
-  *focus_changed = active != data->was_active;
+  *focus_changed = active && active != data->was_active;
   data->was_active = active;
 }
 
@@ -931,7 +959,7 @@ vector<Os::KeyEvent> Os::PollInput(OsWindowData *window, bool *is_num_lock_set,
   ret.reserve(raw_events.size());
   for (int i = 0; i < raw_events.size(); i++) {
     ret.push_back(raw_events[i].event);
-    printf("%f\n", raw_events[i].timestamp);
+    printf("%d\t%d\t%f\n", raw_events[i].event.key.index, raw_events[i].event.key.device, raw_events[i].timestamp);
   }
   if (raw_events.size())
   printf("------");
