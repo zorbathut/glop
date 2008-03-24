@@ -126,99 +126,6 @@ Input *input() {
   return gSystem->window()->input();
 }
 
-// InputPollingThread
-// ==================
-
-// This is a thread devoted to calling Os::PollInput on regular intervals, regardless of how
-// fast our frame rate is. While keyboard events should never be lost by the operating system,
-// there is no such guarantee on, say, joystick events. Doing regular, fast polling helps prevent
-// that from happening.
-class InputPollingThread: public Thread {
- public:
-  // Constructor - the polling thread will always be tied to the given window.
-  InputPollingThread(OsWindowData **os_window_data): os_window_data_(os_window_data) {}
-
-  // Returns all data that has been polled since the last call to GetData. It is guaranteed that
-  // Poll will be called at least once.
-  vector<vector<Os::KeyEvent> > GetData(vector<int> *time, vector<bool> *is_num_lock_set,
-                                        vector<bool> *is_caps_lock_set,
-                                        vector<int> *cursor_x, vector<int> *cursor_y,
-                                        vector<int> *mouse_dx, vector<int> *mouse_dy) {
-    // Ensure the accessing is exclusive with updates, and do at least one poll
-    mutex_.Acquire();
-    if (key_events_.size() == 0)
-      DoPoll();   
-
-    // Get the results
-    *time = time_;
-    *is_num_lock_set = is_num_lock_set_;
-    *is_caps_lock_set = is_caps_lock_set_;
-    *cursor_x = cursor_x_;
-    *cursor_y = cursor_y_;
-    *mouse_dx = mouse_dx_;
-    *mouse_dy = mouse_dy_;
-    vector<vector<Os::KeyEvent> > result = key_events_;
-
-    // Clear internal aggregated values and return
-    key_events_.clear();
-    time_.clear();
-    is_num_lock_set_.clear();
-    is_caps_lock_set_.clear();
-    cursor_x_.clear();
-    cursor_y_.clear();
-    mouse_dx_.clear();
-    mouse_dy_.clear();
-    mutex_.Release();
-    return result;
-  }
-
-  // Calls Os::RefreshJoysticks, but blocks while other input related activities are going on.
-  void RefreshJoysticks() {
-    mutex_.Acquire();
-    Os::RefreshJoysticks(*os_window_data_);
-    mutex_.Release();
-  }
-
- protected:
-  // Attempts to poll
-  void Run() {
-    while (!IsStopRequested()) {
-      mutex_.Acquire();
-      DoPoll();
-      mutex_.Release();
-      gSystem->Sleep(10);
-    }
-  }
-
- private:
-  // Calls Os::PollInput and aggregates the results.
-  void DoPoll() {
-    bool temp_num_lock_set, temp_caps_lock_set;
-    int temp_cursor_x, temp_cursor_y;
-    int temp_mouse_dx, temp_mouse_dy;
-    vector<Os::KeyEvent> temp_keys = Os::PollInput(*os_window_data_, &temp_num_lock_set,
-                                                   &temp_caps_lock_set, &temp_cursor_x,
-                                                   &temp_cursor_y, &temp_mouse_dx, &temp_mouse_dy);
-    key_events_.push_back(temp_keys);
-    time_.push_back(gSystem->GetTime());
-    is_num_lock_set_.push_back(temp_num_lock_set);
-    is_caps_lock_set_.push_back(temp_caps_lock_set);
-    cursor_x_.push_back(temp_cursor_x);
-    cursor_y_.push_back(temp_cursor_y);
-    mouse_dx_.push_back(temp_mouse_dx);
-    mouse_dy_.push_back(temp_mouse_dy);
-  }
-
-  OsWindowData **os_window_data_;
-  Mutex mutex_;
-  vector<vector<Os::KeyEvent> > key_events_;
-  vector<int> time_;
-  vector<bool> is_num_lock_set_, is_caps_lock_set_;
-  vector<int> cursor_x_, cursor_y_;
-  vector<int> mouse_dx_, mouse_dy_;
-  DISALLOW_EVIL_CONSTRUCTORS(InputPollingThread);
-};
-
 // GlopKey
 // =======
 
@@ -650,7 +557,6 @@ void Input::InitDerivedKeys() {
 
 Input::Input(GlopWindow *window)
 : window_(window),
-  polling_thread_(new InputPollingThread(&window->os_data_)),
   last_poll_time_(0),
   window_x_(-1),
   window_y_(-1),
@@ -668,19 +574,6 @@ Input::Input(GlopWindow *window)
   GetKeyTracker(kMouseLeft)->SetReleaseDelay(100);
 }
 
-Input::~Input() {
-  delete polling_thread_;
-}
-
-void Input::StartPolling() {
-  polling_thread_->Start();
-}
-
-void Input::StopPolling() {
-  polling_thread_->RequestStop();
-  polling_thread_->Join();
-}
-
 // Performs all per-frame logic for the input manager. lost_focus indicates whether the owning
 // window either lost input focus or was recreated during the last frame. In either case, we need
 // to forget all key down information because it may no longer be current.
@@ -696,7 +589,7 @@ void Input::Think(bool lost_focus, int frame_dt) {
   if (joystick_refresh_time_ < kJoystickRefreshDelay) {
     joystick_refresh_time_ += frame_dt;
   } else if (requested_joystick_refresh_) {
-    polling_thread_->RefreshJoysticks();
+    Os::RefreshJoysticks(window_->os_data_);
     int new_num_joysticks = Os::GetNumJoysticks(window_->os_data_);
     if (num_joysticks_ != new_num_joysticks) {
       lost_focus = true;
@@ -710,27 +603,19 @@ void Input::Think(bool lost_focus, int frame_dt) {
 
   // What has happened since our last poll? Even if we have gone out of focus, we should still
   // check the polling thread so that the information gets cleared.
-  vector<bool> is_num_lock_set, is_caps_lock_set;
-  vector<int> time;
-  vector<int> cursor_x, cursor_y;
-  vector<int> mouse_dx, mouse_dy;
-  vector<vector<Os::KeyEvent> > os_events;
-  os_events = polling_thread_->GetData(&time, &is_num_lock_set, &is_caps_lock_set, &cursor_x,
-                                       &cursor_y, &mouse_dx, &mouse_dy); 
-  int n = (int)os_events.size();
+  vector<Os::KeyEvent> events = Os::GetInputEvents(window_->os_data_);
   Os::GetWindowPosition(window_->os_data_, &window_x_, &window_y_);
-  for (int i = 0; i < n; i++) {
-    cursor_x[i] -= window_x_;
-    cursor_y[i] -= window_y_;
-  }
+  int n = (int)events.size();
 
   // If we have lost focus, clear all key state. Note that down_keys_frame_ is rebuilt every frame
   // regardless, so we do not need to worry about it here.
   if (lost_focus) {
-    is_num_lock_set_ = is_num_lock_set[n - 1];
-    is_caps_lock_set_ = is_caps_lock_set[n - 1];
-    mouse_x_ = cursor_x[n - 1];
-    mouse_y_ = cursor_y[n - 1];
+    if (n > 0) {
+      is_num_lock_set_ = events[n - 1].is_num_lock_set;
+      is_caps_lock_set_ = events[n - 1].is_caps_lock_set;
+      mouse_x_ = events[n - 1].cursor_x - window_x_;
+      mouse_y_ = events[n - 1].cursor_y - window_y_;
+    }
     for (int i = kMinDevice; i <= GetMaxDevice(); i++)
     for (int j = 0; j < GetNumKeys(i); j++)
     if (GetKeyTracker(GlopKey(j, i))->Clear() == KeyEvent::Release)
@@ -747,44 +632,64 @@ void Input::Think(bool lost_focus, int frame_dt) {
   // Now update key statuses for this frame. We only do this if !lost_focus. Otherwise, some down
   // key events might have been generated before losing focus, and the corresponding up key event
   // may never happen.
-  // Process all OS event phases
   if (!lost_focus)
-  for (int i = 0; i < n; i++) {
+  for (int i = 0; ; i++) {
     // Calculate the time differential for this phase and add mouse motion events
-    int this_dt = time[i] - (i == 0? last_poll_time_ : time[i-1]);
+    const int kTimeGranularity = 10;
+    int new_t = (i == n? gSystem->GetTime() : events[i].timestamp);
+    int old_t = (i == 0? last_poll_time_ : events[i-1].timestamp);
+    ASSERT(new_t >= old_t);
+    int t_boundary = ((old_t + kTimeGranularity - 1) / kTimeGranularity) * kTimeGranularity;
+    last_poll_time_ = new_t;
+    for (int t = t_boundary; t < new_t; t += kTimeGranularity) {
+      // Send elapsed time messages
+      for (int j = kMinDevice; j <= GetMaxDevice(); j++)
+      for (int k = 0; k < GetNumKeys(j); k++) {
+        KeyTracker *info = GetKeyTracker(GlopKey(k, j));
+        KeyEvent::Type type = info->OnKeyEventDt(kTimeGranularity);
+        if (type != KeyEvent::Nothing)
+          OnKeyEvent(KeyEvent(GlopKey(k, j), type), 0);
+      }
+      float mouse_scale = mouse_sensitivity_ * kBaseMouseSensitivity / kTimeGranularity;
+/*      OnKeyEvent(
+      os_events[i].push_back(Os::KeyEvent(kMouseUp, -mouse_dy_ * mouse_scale));
+      os_events[i].push_back(Os::KeyEvent(kMouseRight, mouse_dx_ * mouse_scale));
+      os_events[i].push_back(Os::KeyEvent(kMouseDown, mouse_dy_ * mouse_scale));
+      os_events[i].push_back(Os::KeyEvent(kMouseLeft, -mouse_dx_ * mouse_scale));*/
+      mouse_dx_ = mouse_dy_ = 0;
+      OnKeyEvent(KeyEvent(kNoKey, KeyEvent::Nothing), kTimeGranularity);
+    }
+    if (i == n) break;
 
     // Update the new settings
-    is_num_lock_set_ = is_num_lock_set[i];
-    is_caps_lock_set_ = is_caps_lock_set[i];
-    mouse_x_ = cursor_x[i];
-    mouse_y_ = cursor_y[i];
+    is_num_lock_set_ = events[i].is_num_lock_set;
+    is_caps_lock_set_ = events[i].is_caps_lock_set;
+    mouse_x_ = events[i].cursor_x - window_x_;
+    mouse_y_ = events[i].cursor_y - window_y_;
 
     // Add mouse mouse events - note this requires dt > 0.
-    if (this_dt > 0) {
-      float mouse_scale = mouse_sensitivity_ * kBaseMouseSensitivity / this_dt;
-      os_events[i].push_back(Os::KeyEvent(kMouseUp, -mouse_dy[i] * mouse_scale));
-      os_events[i].push_back(Os::KeyEvent(kMouseRight, mouse_dx[i] * mouse_scale));
-      os_events[i].push_back(Os::KeyEvent(kMouseDown, mouse_dy[i] * mouse_scale));
-      os_events[i].push_back(Os::KeyEvent(kMouseLeft, -mouse_dx[i] * mouse_scale));
+    if (events[i].key == kNoKey) {
+      mouse_dx_ += events[i].mouse_dx;
+      mouse_dy_ += events[i].mouse_dy;
+      continue;
     }
 
     // Process all key up/key down events from this phase
-    for (int j = 0; j < (int)os_events[i].size(); j++) {
-      ASSERT(!os_events[i][j].key.IsDerivedKey());
+    ASSERT(!events[i].key.IsDerivedKey());
 
-      // Get the key information and press amount (accounting for the deadzone)
-      KeyTracker *info = GetKeyTracker(os_events[i][j].key);
-      float amt = os_events[i][j].press_amount;
-      if (os_events[i][j].key.IsJoystickKey())
-        amt = (amt - kJoystickAxisThreshold) / (1 - kJoystickAxisThreshold);
-      amt = max(amt, 0.0f);
-      if (amt == info->GetPressAmountNow())
-        continue;
-      KeyEvent::Type type = info->SetPressAmount(amt);
-      if (type != KeyEvent::Nothing)
-        OnKeyEvent(KeyEvent(os_events[i][j].key, type), 0);
+    // Get the key information and press amount (accounting for the deadzone)
+    KeyTracker *info = GetKeyTracker(events[i].key);
+    float amt = events[i].press_amount;
+    if (events[i].key.IsJoystickKey())
+      amt = (amt - kJoystickAxisThreshold) / (1 - kJoystickAxisThreshold);
+    amt = max(amt, 0.0f);
+    if (amt == info->GetPressAmountNow())
+      continue;
+    KeyEvent::Type type = info->SetPressAmount(amt);
+    if (type != KeyEvent::Nothing)
+      OnKeyEvent(KeyEvent(events[i].key, type), 0);
 
-      // Update derived keys that could possibly be affected
+/*    // Update derived keys that could possibly be affected
       if (os_events[i][j].key.IsJoystickKey()) {
         if (os_events[i][j].key.IsJoystickAxis()) {
           UpdateDerivedKey(GetJoystickAxisPos(os_events[i][j].key.GetJoystickAxisNumber()));
@@ -795,17 +700,17 @@ void Input::Think(bool lost_focus, int frame_dt) {
       }
       for (int k = 0; k < GetNumDerivedKeys(); k++)
         UpdateDerivedKey(GlopKey(k, kDeviceDerived));
-    }
+    }*/
 
     // Send elapsed time messages
-    for (int j = kMinDevice; j <= GetMaxDevice(); j++)
+    /*for (int j = kMinDevice; j <= GetMaxDevice(); j++)
     for (int k = 0; k < GetNumKeys(j); k++) {
       KeyTracker *info = GetKeyTracker(GlopKey(k, j));
       KeyEvent::Type type = info->OnKeyEventDt(this_dt);
       if (type != KeyEvent::Nothing)
         OnKeyEvent(KeyEvent(GlopKey(k, j), type), 0);
     }
-    OnKeyEvent(KeyEvent(kNoKey, KeyEvent::Nothing), this_dt);
+    OnKeyEvent(KeyEvent(kNoKey, KeyEvent::Nothing), this_dt);*/
   }
 
   // Fill the down keys vector
@@ -813,9 +718,6 @@ void Input::Think(bool lost_focus, int frame_dt) {
   for (int j = 0; j < GetNumKeys(i); j++)
   if (GetKeyTracker(GlopKey(j, i))->IsDownFrame())
     down_keys_frame_.push_back(GlopKey(j, i));
-
-  // Update the time
-  last_poll_time_ = time[n - 1];
 }
 
 // Recalculates how pressed a derived key is, and then updates our internal records, possibly

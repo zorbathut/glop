@@ -18,6 +18,8 @@
 //  - Think more about rendering order, perhaps add movetofront to multiparentframe
 //  - Allow DummyMenuFrames to render even when empty
 
+//  - Investigate new input mechanism, especially making sure time events are called frequently
+
 // Includes
 #include "../Glop/include/Base.h"
 #include "../Glop/include/BinaryFileManager.h"

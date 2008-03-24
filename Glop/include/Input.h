@@ -71,7 +71,6 @@ using namespace std;
 
 // Class declarations
 class Input;
-class InputPollingThread;
 struct OsKeyEvent;
 struct OsWindowData;
 
@@ -539,14 +538,10 @@ class Input {
   // Interface to GlopWindow
   friend class GlopWindow;
   Input(GlopWindow *window);
-  ~Input();
-  void StartPolling();
-  void StopPolling();
   void Think(bool lost_focus, int dt);
 
   // Meta-state
   GlopWindow *window_;                            // The window that owns us
-  InputPollingThread *polling_thread_;            // For polling the OS input events
   int last_poll_time_;                            // The time at which we last did a poll
   int window_x_, window_y_;                       // Current window coordinates - used for tracking
                                                   //  mouse position. Note this is different from
@@ -555,6 +550,8 @@ class Input {
   bool is_num_lock_set_, is_caps_lock_set_;       // Are num lock and caps lock on right now?
   float mouse_sensitivity_;                       // Scale for mouse motion events
   int mouse_x_, mouse_y_;                         // The current cusors position in window coords
+  int mouse_dx_, mouse_dy_;                       // Amount the mouse has moved in mickeys since we
+                                                  //  last created mouse motion events.
   bool is_cursor_visible_, os_is_cursor_visible_; // Has the user set the cursor to be shown? And
                                                   //  have we told the Os to actually show it?
   int num_joysticks_;                             // The number of joysticks we have detected

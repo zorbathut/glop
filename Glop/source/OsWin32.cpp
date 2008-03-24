@@ -3,6 +3,8 @@
 // Includes
 #include "Os.h"
 #include "../include/Image.h"
+#include "../include/System.h"
+#include "../include/Thread.h"
 #define DIRECTINPUT_VERSION 0x0500	// We do not need a new version
 #include <dinput.h>
 #include <process.h>
@@ -26,7 +28,13 @@ struct OsMutex {
 };
 
 // OsWindowData struct definition
+class InputPollingThread;
 struct OsWindowData {
+  OsWindowData()
+  : icon_handle(0), window_handle(0), device_context(0), rendering_context(0), direct_input(0),
+    keyboard_device(0), mouse_device(0), input_polling_thread(0), is_full_screen(0), x(0), y(0),
+    width(0), height(0), is_in_focus(false), focus_changed(false), is_minimized(false) {}
+
   // Operating system values and handles. icon_handle is only non-zero if it will need to be
   // deleted eventually.
   HICON icon_handle;
@@ -36,6 +44,8 @@ struct OsWindowData {
   LPDIRECTINPUT direct_input;
   LPDIRECTINPUTDEVICE keyboard_device, mouse_device;
   vector<LPDIRECTINPUTDEVICE2> joystick_devices;
+  InputPollingThread *input_polling_thread;
+  Mutex input_mutex;
 
   // Queriable window properties
   bool is_full_screen;
@@ -105,14 +115,203 @@ const GlopKey kDIToGlopKeyIndex[] = {0,
 static LARGE_INTEGER gTimerFrequency;
 static map<HWND, OsWindowData*> gWindowMap;
 
+
+// This is a thread devoted to calling Os::PollInput on regular intervals, regardless of how
+// fast our frame rate is. While keyboard events should never be lost by the operating system,
+// there is no such guarantee on, say, joystick events. Doing regular, fast polling helps prevent
+// that from happening.
+class InputPollingThread: public Thread {
+ public:
+  // Constructor - the polling thread will always be tied to the given window.
+  InputPollingThread(OsWindowData *window): window_(window) {}
+
+  vector<Os::KeyEvent> GetData() {
+    window_->input_mutex.Acquire();
+    vector<Os::KeyEvent> result = data_;
+    data_.clear();
+    window_->input_mutex.Release();
+    return result;
+  }
+
+ protected:
+  // Attempts to poll
+  void Run() {
+    while (!IsStopRequested()) {
+      window_->input_mutex.Acquire();
+      int timestamp = gSystem->GetTime();
+
+      // Read metastate
+ 	    POINT cursor_pos;
+	    GetCursorPos(&cursor_pos);
+      bool is_num_lock_set = (GetKeyState(VK_NUMLOCK) & 1) > 0;
+      bool is_caps_lock_set = (GetKeyState(VK_CAPITAL) & 1) > 0;
+
+      // Read keyboard events
+      DWORD num_items = kDirectInputBufferSize;
+      DIDEVICEOBJECTDATA buffer[kDirectInputBufferSize];
+      HRESULT hr = window_->keyboard_device->GetDeviceData(sizeof(buffer[0]), buffer,
+                                                           &num_items, 0);
+      if (hr == DIERR_INPUTLOST || hr == DIERR_NOTACQUIRED) {
+        window_->keyboard_device->Acquire();
+        hr = window_->keyboard_device->GetDeviceData(sizeof(buffer[0]), buffer, &num_items, 0);
+      }
+      if (!FAILED(hr)) {
+        for (int i = 0; i < (int)num_items; i++) {
+          bool is_pressed = ((buffer[i].dwData & 0x80) > 0);
+          if (buffer[i].dwOfs < 255 && kDIToGlopKeyIndex[buffer[i].dwOfs] != -1)
+            data_.push_back(Os::KeyEvent(kDIToGlopKeyIndex[buffer[i].dwOfs], is_pressed, timestamp,
+                                         cursor_pos.x, cursor_pos.y, is_num_lock_set,
+                                         is_caps_lock_set));
+        }
+      }
+
+      // Read the mouse state
+      DIMOUSESTATE mouse_state;
+      hr = window_->mouse_device->GetDeviceState(sizeof(mouse_state), &mouse_state);
+      if (hr == DIERR_INPUTLOST || hr == DIERR_NOTACQUIRED) {
+        window_->mouse_device->Acquire(); 
+        hr = window_->mouse_device->GetDeviceState(sizeof(mouse_state), &mouse_state);
+      }
+      if (!FAILED(hr)) {
+        data_.push_back(Os::KeyEvent(mouse_state.lX, mouse_state.lY, timestamp, cursor_pos.x,
+                                     cursor_pos.y, is_num_lock_set, is_caps_lock_set));
+        data_.push_back(Os::KeyEvent(kMouseWheelDown, mouse_state.lZ < 0, timestamp, cursor_pos.x,
+                                     cursor_pos.y, is_num_lock_set, is_caps_lock_set));
+        data_.push_back(Os::KeyEvent(kMouseWheelUp, mouse_state.lZ > 0, timestamp, cursor_pos.x,
+                                     cursor_pos.y, is_num_lock_set, is_caps_lock_set));
+        data_.push_back(Os::KeyEvent(kMouseLButton, (mouse_state.rgbButtons[0] & 0x80) > 0,
+                                     timestamp, cursor_pos.x, cursor_pos.y, is_num_lock_set,
+                                     is_caps_lock_set));
+        data_.push_back(Os::KeyEvent(kMouseRButton, (mouse_state.rgbButtons[1] & 0x80) > 0,
+                                     timestamp, cursor_pos.x, cursor_pos.y, is_num_lock_set,
+                                     is_caps_lock_set));
+        data_.push_back(Os::KeyEvent(kMouseMButton, (mouse_state.rgbButtons[2] & 0x80) > 0,
+                                     timestamp, cursor_pos.x, cursor_pos.y, is_num_lock_set,
+                                     is_caps_lock_set));
+      }
+
+      // Read the joystick states
+      DIJOYSTATE2 joy_state;
+      for (int i = 0; i < (int)window_->joystick_devices.size(); i++) {
+        // Try to poll the device
+        hr = window_->joystick_devices[i]->Poll();
+        if (hr == DIERR_INPUTLOST || hr == DIERR_NOTACQUIRED) {
+          window_->joystick_devices[i]->Acquire();
+          hr = window_->joystick_devices[i]->Poll();
+        }
+        if (FAILED(window_->joystick_devices[i]->GetDeviceState(sizeof(joy_state), &joy_state)))
+          continue;
+
+        // Read axis data
+        ASSERT(kJoystickNumAxes == 6);
+        data_.push_back(Os::KeyEvent(GetJoystickRight(i), float(joy_state.lX)/kJoystickAxisRange,
+                                     timestamp, cursor_pos.x, cursor_pos.y, is_num_lock_set,
+                                     is_caps_lock_set));
+        data_.push_back(Os::KeyEvent(GetJoystickLeft(i), float(-joy_state.lX)/kJoystickAxisRange,
+                                     timestamp, cursor_pos.x, cursor_pos.y, is_num_lock_set,
+                                     is_caps_lock_set));
+        data_.push_back(Os::KeyEvent(GetJoystickUp(i), float(-joy_state.lY)/kJoystickAxisRange,
+                                     timestamp, cursor_pos.x, cursor_pos.y, is_num_lock_set,
+                                     is_caps_lock_set));
+        data_.push_back(Os::KeyEvent(GetJoystickDown(i), float(joy_state.lY)/kJoystickAxisRange,
+                                     timestamp, cursor_pos.x, cursor_pos.y, is_num_lock_set,
+                                     is_caps_lock_set));
+        data_.push_back(Os::KeyEvent(GetJoystickAxisPos(2, i),
+                                     float(joy_state.lZ) / kJoystickAxisRange,
+                                     timestamp, cursor_pos.x, cursor_pos.y, is_num_lock_set,
+                                     is_caps_lock_set));
+        data_.push_back(Os::KeyEvent(GetJoystickAxisNeg(2, i),
+                                     float(-joy_state.lZ) / kJoystickAxisRange,
+                                     timestamp, cursor_pos.x, cursor_pos.y, is_num_lock_set,
+                                     is_caps_lock_set));
+        data_.push_back(Os::KeyEvent(GetJoystickAxisPos(3, i),
+                                     float(joy_state.lRz) / kJoystickAxisRange,
+                                     timestamp, cursor_pos.x, cursor_pos.y, is_num_lock_set,
+                                     is_caps_lock_set));
+        data_.push_back(Os::KeyEvent(GetJoystickAxisNeg(3, i),
+                                     float(-joy_state.lRz) / kJoystickAxisRange,
+                                     timestamp, cursor_pos.x, cursor_pos.y, is_num_lock_set,
+                                     is_caps_lock_set));
+        data_.push_back(Os::KeyEvent(GetJoystickAxisPos(4, i),
+                                     float(joy_state.lRx) / kJoystickAxisRange,
+                                     timestamp, cursor_pos.x, cursor_pos.y, is_num_lock_set,
+                                     is_caps_lock_set));
+        data_.push_back(Os::KeyEvent(GetJoystickAxisNeg(4, i),
+                                     float(-joy_state.lRx) / kJoystickAxisRange,
+                                     timestamp, cursor_pos.x, cursor_pos.y, is_num_lock_set,
+                                     is_caps_lock_set));
+        data_.push_back(Os::KeyEvent(GetJoystickAxisPos(5, i),
+                                     float(joy_state.lRy) / kJoystickAxisRange,
+                                     timestamp, cursor_pos.x, cursor_pos.y, is_num_lock_set,
+                                     is_caps_lock_set));
+        data_.push_back(Os::KeyEvent(GetJoystickAxisNeg(5, i),
+                                     float(-joy_state.lRy) / kJoystickAxisRange,
+                                     timestamp, cursor_pos.x, cursor_pos.y, is_num_lock_set,
+                                     is_caps_lock_set));
+    
+        // Read hat data
+        ASSERT(kJoystickNumHats <= 4);
+        for (int j = 0; j < kJoystickNumHats; j++) {
+          int angle = joy_state.rgdwPOV[j];
+          float hx = 0, hy = 0;
+          if (LOWORD(angle) != 0xFFFF) {
+            if (angle < 4500) hx = float(angle) / 4500;
+            else if (angle <= 13500) hx = 1;
+            else if (angle < 22500) hx = 1 - float(angle-13500) / 4500;
+            else if (angle <= 31500) hx = -1;
+            else hx = -1 + float(angle-31500) / 4500;
+            if (angle < 4500) hy = 1;
+            else if (angle <= 13500) hy = 1 - float(angle-4500) / 4500;
+            else if (angle < 22500) hy = -1;
+            else if (angle <= 31500) hy = -1 + float(angle-22500) / 4500;
+            else hy = 1;
+          }
+          data_.push_back(Os::KeyEvent(GetJoystickHatUp(j, i), hy, timestamp, cursor_pos.x,
+                                       cursor_pos.y, is_num_lock_set, is_caps_lock_set));
+          data_.push_back(Os::KeyEvent(GetJoystickHatRight(j, i), hx, timestamp, cursor_pos.x,
+                                       cursor_pos.y, is_num_lock_set, is_caps_lock_set));
+          data_.push_back(Os::KeyEvent(GetJoystickHatDown(j, i), -hy, timestamp, cursor_pos.x,
+                                       cursor_pos.y, is_num_lock_set, is_caps_lock_set));
+          data_.push_back(Os::KeyEvent(GetJoystickHatLeft(j, i), -hx, timestamp, cursor_pos.x,
+                                       cursor_pos.y, is_num_lock_set, is_caps_lock_set));
+        }
+
+        // Read button data
+        ASSERT(kJoystickNumButtons <= 128);
+        for (int j = 0; j < kJoystickNumButtons; j++) {
+          bool is_pressed = ((joy_state.rgbButtons[j] & 0x80) > 0);
+          data_.push_back(Os::KeyEvent(GetJoystickButton(j, i), is_pressed, timestamp,
+                                        cursor_pos.x, cursor_pos.y, is_num_lock_set,
+                                        is_caps_lock_set));
+        }
+      }
+
+      window_->input_mutex.Release();
+      Os::Sleep(10);
+    }
+  }
+
+  vector<Os::KeyEvent> data_;
+  OsWindowData *window_;
+  DISALLOW_EVIL_CONSTRUCTORS(InputPollingThread);
+};
+
+
+
 // Initialization/Shut down
 // ========================
 
 void Os::Init() {
+  for (map<HWND, OsWindowData*>::iterator it = gWindowMap.begin(); it != gWindowMap.end(); it++)
+    it->second->input_mutex.Acquire();
+
   // Timer initialization. timeBeginPeriod(1) ensures that Sleep calls return promptly when they
   // are supposed to, and QueryPerformanceFrequency is needed for Os::GetTime.
   timeBeginPeriod(1);
   QueryPerformanceFrequency(&gTimerFrequency);
+
+  for (map<HWND, OsWindowData*>::iterator it = gWindowMap.begin(); it != gWindowMap.end(); it++)
+    it->second->input_mutex.Release();
 }
 
 void Os::ShutDown() {}
@@ -262,7 +461,6 @@ OsWindowData *Os::CreateWindow(const string &title, int x, int y,
   const char *const kClassName = "GlopWin32";
   static bool is_class_initialized = false;
   OsWindowData *result = new OsWindowData();
-  memset(result, 0, sizeof(*result));
   
   // Create a window class. This is essentially used by Windows to group together several windows
   // for various purposes.
@@ -430,13 +628,20 @@ OsWindowData *Os::CreateWindow(const string &title, int x, int y,
   prop_buffer_size.dwData = kDirectInputBufferSize;
   result->keyboard_device->SetProperty(DIPROP_BUFFERSIZE, &prop_buffer_size.diph);
   RefreshJoysticks(result);
-  
+
+  // Begin the input polling
+  result->input_polling_thread = new InputPollingThread(result);
+  result->input_polling_thread->Start();
+
   // All done
   return result;
 }
 
 // Destroys a window that is completely or partially created.
 void Os::DestroyWindow(OsWindowData *window) {
+  window->input_polling_thread->RequestStop();
+  window->input_polling_thread->Join();
+  delete window->input_polling_thread;
   if (window->is_full_screen && !window->is_minimized)
     ChangeDisplaySettings(NULL, 0);
   if (window->keyboard_device) {
@@ -507,116 +712,9 @@ void Os::SetWindowSize(OsWindowData *window, int width, int height) {
 
 // See Os.h
 
-vector<Os::KeyEvent> Os::PollInput(OsWindowData *window, bool *is_num_lock_set,
-                                   bool *is_caps_lock_set, int *cursor_x, int *cursor_y,
-                                   int *mouse_dx, int *mouse_dy) {
-  vector<Os::KeyEvent> key_events;
 
-  // Read keyboard events
-  DWORD num_items = kDirectInputBufferSize;
-  DIDEVICEOBJECTDATA buffer[kDirectInputBufferSize];
-  HRESULT hr = window->keyboard_device->GetDeviceData(sizeof(buffer[0]), buffer, &num_items, 0);
-  if (hr == DIERR_INPUTLOST || hr == DIERR_NOTACQUIRED) {
-    window->keyboard_device->Acquire();
-    hr = window->keyboard_device->GetDeviceData(sizeof(buffer[0]), buffer, &num_items, 0);
-  }
-  if (!FAILED(hr)) {
-    for (int i = 0; i < (int)num_items; i++) {
-      bool is_pressed = ((buffer[i].dwData & 0x80) > 0);
-      if (buffer[i].dwOfs < 255 && kDIToGlopKeyIndex[buffer[i].dwOfs] != -1)
-        key_events.push_back(KeyEvent(kDIToGlopKeyIndex[buffer[i].dwOfs], is_pressed));
-    }
-  }
-  *is_num_lock_set = (GetKeyState(VK_NUMLOCK) & 1) > 0;
-  *is_caps_lock_set = (GetKeyState(VK_CAPITAL) & 1) > 0;
-
-  // Read the mouse state
-	POINT cursor_pos;
-	GetCursorPos(&cursor_pos);
-  *cursor_x = cursor_pos.x;
-  *cursor_y = cursor_pos.y;
-  DIMOUSESTATE mouse_state;
-  hr = window->mouse_device->GetDeviceState(sizeof(mouse_state), &mouse_state);
-  if (hr == DIERR_INPUTLOST || hr == DIERR_NOTACQUIRED) {
-    window->mouse_device->Acquire(); 
-    hr = window->mouse_device->GetDeviceState(sizeof(mouse_state), &mouse_state);
-  }
-  if (!FAILED(hr)) {
-    *mouse_dx = mouse_state.lX;
-    *mouse_dy = mouse_state.lY;
-    key_events.push_back(KeyEvent(kMouseWheelDown, mouse_state.lZ < 0));
-    key_events.push_back(KeyEvent(kMouseWheelUp, mouse_state.lZ > 0));
-    key_events.push_back(KeyEvent(kMouseLButton, (mouse_state.rgbButtons[0] & 0x80) > 0));
-    key_events.push_back(KeyEvent(kMouseRButton, (mouse_state.rgbButtons[1] & 0x80) > 0));
-    key_events.push_back(KeyEvent(kMouseMButton, (mouse_state.rgbButtons[2] & 0x80) > 0));
-  }
-
-  // Read the joystick states
-  DIJOYSTATE2 joy_state;
-  for (int i = 0; i < (int)window->joystick_devices.size(); i++) {
-    // Try to poll the device
-    hr = window->joystick_devices[i]->Poll();
-    if (hr == DIERR_INPUTLOST || hr == DIERR_NOTACQUIRED) {
-      window->joystick_devices[i]->Acquire();
-      hr = window->joystick_devices[i]->Poll();
-    }
-    if (FAILED(window->joystick_devices[i]->GetDeviceState(sizeof(joy_state), &joy_state)))
-      continue;
-
-    // Read axis data
-    ASSERT(kJoystickNumAxes == 6);
-    key_events.push_back(KeyEvent(GetJoystickRight(i),float(joy_state.lX) / kJoystickAxisRange));
-    key_events.push_back(KeyEvent(GetJoystickLeft(i), float(-joy_state.lX) / kJoystickAxisRange));
-    key_events.push_back(KeyEvent(GetJoystickUp(i), float(-joy_state.lY) / kJoystickAxisRange));
-    key_events.push_back(KeyEvent(GetJoystickDown(i), float(joy_state.lY) / kJoystickAxisRange));
-    key_events.push_back(KeyEvent(GetJoystickAxisPos(i, 2),
-                                  float(joy_state.lZ) / kJoystickAxisRange));
-    key_events.push_back(KeyEvent(GetJoystickAxisNeg(i, 2),
-                                  float(-joy_state.lZ) / kJoystickAxisRange));
-    key_events.push_back(KeyEvent(GetJoystickAxisPos(i, 3),
-                                  float(joy_state.lRz) / kJoystickAxisRange));
-    key_events.push_back(KeyEvent(GetJoystickAxisNeg(i, 3),
-                                  float(-joy_state.lRz) / kJoystickAxisRange));
-    key_events.push_back(KeyEvent(GetJoystickAxisPos(i, 4),
-                                  float(joy_state.lRx) / kJoystickAxisRange));
-    key_events.push_back(KeyEvent(GetJoystickAxisNeg(i, 4),
-                                  float(-joy_state.lRx) / kJoystickAxisRange));
-    key_events.push_back(KeyEvent(GetJoystickAxisPos(i, 5),
-                                  float(joy_state.lRy) / kJoystickAxisRange));
-    key_events.push_back(KeyEvent(GetJoystickAxisNeg(i, 5),
-                                  float(-joy_state.lRy) / kJoystickAxisRange));
-    
-    // Read hat data
-    ASSERT(kJoystickNumHats <= 4);
-    for (int j = 0; j < kJoystickNumHats; j++) {
-      int angle = joy_state.rgdwPOV[j];
-      float hx = 0, hy = 0;
-      if (LOWORD(angle) != 0xFFFF) {
-        if (angle < 4500) hx = float(angle) / 4500;
-        else if (angle <= 13500) hx = 1;
-        else if (angle < 22500) hx = 1 - float(angle-13500) / 4500;
-        else if (angle <= 31500) hx = -1;
-        else hx = -1 + float(angle-31500) / 4500;
-        if (angle < 4500) hy = 1;
-        else if (angle <= 13500) hy = 1 - float(angle-4500) / 4500;
-        else if (angle < 22500) hy = -1;
-        else if (angle <= 31500) hy = -1 + float(angle-22500) / 4500;
-        else hy = 1;
-      }
-      key_events.push_back(KeyEvent(GetJoystickHatUp(i, j), hy));
-      key_events.push_back(KeyEvent(GetJoystickHatRight(i, j), hx));
-      key_events.push_back(KeyEvent(GetJoystickHatDown(i, j), -hy));
-      key_events.push_back(KeyEvent(GetJoystickHatLeft(i, j), -hx));
-    }
-
-    // Read button data
-    ASSERT(kJoystickNumButtons <= 128);
-    for (int j = 0; j < kJoystickNumButtons; j++) {
-      bool is_pressed = ((joy_state.rgbButtons[j] & 0x80) > 0);
-      key_events.push_back(KeyEvent(GetJoystickButton(i, j), is_pressed));
-    }
-  }
-  return key_events;
+vector<Os::KeyEvent> Os::GetInputEvents(OsWindowData *window) {
+  return window->input_polling_thread->GetData();
 }
 
 void Os::SetMousePosition(int x, int y) {
@@ -660,6 +758,8 @@ BOOL CALLBACK JoystickCallback(const DIDEVICEINSTANCE *device_instance, void *vo
 }
 
 void Os::RefreshJoysticks(OsWindowData *window) {
+  window->input_mutex.Acquire();
+
   // Get the current joystick devices
   vector<LPDIRECTINPUTDEVICE2> old_devices = window->joystick_devices;
   window->joystick_devices.clear();
@@ -676,6 +776,8 @@ void Os::RefreshJoysticks(OsWindowData *window) {
   }
   for (int i = 0; i < (int)old_devices.size(); i++)
     old_devices[i]->Release();
+
+  window->input_mutex.Release();
 }
 
 int Os::GetNumJoysticks(OsWindowData *window) {

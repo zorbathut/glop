@@ -51,7 +51,6 @@ bool GlopWindow::Create(int width, int height, bool full_screen,
       return false;
     }
   }
-  input_->StartPolling();
 
   // Fix the OpenGl settings for the new Gl window. Many of the Open Gl settings are presumably
   // set by default, but it's better to be safe than sorry.
@@ -90,7 +89,6 @@ bool GlopWindow::Create(int width, int height, bool full_screen,
 void GlopWindow::Destroy() {
   if (is_created_) {
     GlDataManager::GlShutDownAll();
-    input_->StopPolling();
     Os::DestroyWindow(os_data_);
     os_data_ = 0;
     is_created_ = false;
