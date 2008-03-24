@@ -314,8 +314,8 @@ class CubeFrame: public CameraFrame {
                input()->GetKeyPressAmountFrame(kMouseLeft);
     float ry = input()->GetKeyPressAmountFrame(kMouseDown) -
                input()->GetKeyPressAmountFrame(kMouseUp);
-    float strafe = input()->GetKeyPressAmountFrame('D') - input()->GetKeyPressAmountFrame('A');
-    float step = input()->GetKeyPressAmountFrame('W') - input()->GetKeyPressAmountFrame('S');
+    float strafe = input()->GetKeyPressAmountFrame('d') - input()->GetKeyPressAmountFrame('a');
+    float step = input()->GetKeyPressAmountFrame('w') - input()->GetKeyPressAmountFrame('s');
     c.Rotate(kYAxis, dt*0.2f*rx);
     c.Rotate(c.right(), dt*0.2f*ry);
     c.Translate(step * c.forwards() * 0.1f + strafe * c.right() * 0.1f);

@@ -543,6 +543,7 @@ class Input {
   // Meta-state
   GlopWindow *window_;                            // The window that owns us
   int last_poll_time_;                            // The time at which we last did a poll
+  bool last_poll_time_set_;                       // Whether we have ever set last_poll_time_.
   int window_x_, window_y_;                       // Current window coordinates - used for tracking
                                                   //  mouse position. Note this is different from
                                                   //  GlopWindow coordinates, which are valid only
@@ -575,6 +576,7 @@ class Input {
   static vector<vector<vector<bool> > > derived_key_bindings_down_;
 
   // Utility functions
+  void OnOsKeyEvent(const GlopKey &key, float press_amount);
   void UpdateDerivedKey(const GlopKey &key);
   void OnKeyEvent(const KeyEvent &event, int dt);
   const KeyTracker *GetKeyTracker(const GlopKey &key) const;

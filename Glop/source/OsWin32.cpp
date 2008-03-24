@@ -115,26 +115,37 @@ const GlopKey kDIToGlopKeyIndex[] = {0,
 static LARGE_INTEGER gTimerFrequency;
 static map<HWND, OsWindowData*> gWindowMap;
 
-
-// This is a thread devoted to calling Os::PollInput on regular intervals, regardless of how
-// fast our frame rate is. While keyboard events should never be lost by the operating system,
-// there is no such guarantee on, say, joystick events. Doing regular, fast polling helps prevent
-// that from happening.
+// InputPollingThread
+// ==================
+//
+// A separate thread devoted entirely to polling the input device state at regular intervals. This
+// is necessitated on Windows because joystick event trapping seems not to work. By polling in a
+// separate thread, we guarantee fast response times even when the program's frame rate lags.
 class InputPollingThread: public Thread {
  public:
-  // Constructor - the polling thread will always be tied to the given window.
+  // Constructor.
   InputPollingThread(OsWindowData *window): window_(window) {}
 
+  // Returns all events since the last call to GetData.
   vector<Os::KeyEvent> GetData() {
+    // Get the data
     window_->input_mutex.Acquire();
     vector<Os::KeyEvent> result = data_;
     data_.clear();
     window_->input_mutex.Release();
+
+    // Add a current state event
+ 	  POINT cursor_pos;
+	  GetCursorPos(&cursor_pos);
+    bool is_num_lock_set = (GetKeyState(VK_NUMLOCK) & 1) > 0;
+    bool is_caps_lock_set = (GetKeyState(VK_CAPITAL) & 1) > 0;
+    data_.push_back(Os::KeyEvent(gSystem->GetTime(), cursor_pos.x, cursor_pos.y, is_num_lock_set,
+                                 is_caps_lock_set));
     return result;
   }
 
  protected:
-  // Attempts to poll
+  // Continuously polls the input.
   void Run() {
     while (!IsStopRequested()) {
       window_->input_mutex.Acquire();
@@ -295,8 +306,6 @@ class InputPollingThread: public Thread {
   OsWindowData *window_;
   DISALLOW_EVIL_CONSTRUCTORS(InputPollingThread);
 };
-
-
 
 // Initialization/Shut down
 // ========================
@@ -711,7 +720,6 @@ void Os::SetWindowSize(OsWindowData *window, int width, int height) {
 // ===============
 
 // See Os.h
-
 
 vector<Os::KeyEvent> Os::GetInputEvents(OsWindowData *window) {
   return window->input_polling_thread->GetData();

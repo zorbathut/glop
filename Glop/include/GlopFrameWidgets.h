@@ -1,4 +1,6 @@
-// This file contains a set of useful stand-alone frames.
+// This file contains a set of useful stand-alone frames. See GlopFrame.h for a high-level overview
+// on using GlopFrames.
+//
 // WARNING: Many of these frames require a valid font, which is not loaded by default. To avoid
 //          errors, load a font (see Font.h) and call InitDefaultFrameStyle (see FrameStyle.h).
 //
@@ -6,12 +8,13 @@
 //              facilitate changing how frames look, they delegate to View objects for all
 //              rendering. These View objects are defined in GlopFrameStyle.
 //
-//              To faciliate changing how frames act, many frames have a Dummy version. These have
-//              all the same essential features but their state can only be changed
-//              programmatically. These are then overloaded to give the desired functionality. These
-//              overloads further support some key rebindings. As much as possible, they depend only
-//              on the Gui derived keys in Input. Thus, their behavior can be changed by remapping
-//              those keys.
+//              To faciliate changing how frames act, many frames have a dummy version. These have
+//              all the same essential features, but their state can only be changed
+//              programmatically. Separate classes then provide the desired user interface,
+//              delegating to the dummy version as appropriate. The default implementations here
+//              also support some limited customization. Where possible, all key detection is
+//              restricted to the GUI derived keys in Input. Thus, basic GUI behavior can be changed
+//              by remapping those keys.
 //
 //              Finally, recall that a frame only receives input events if it is wrapped in a
 //              FocusFrame. By convention, all the major interactive frames here have a convenience

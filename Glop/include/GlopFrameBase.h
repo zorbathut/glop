@@ -1,6 +1,8 @@
-// A GlopFrame is the basic unit of autonomous logic in Glop. A frame can render itself,
-// be positioned and sized, think each tick, and trap input events. The exact pipeline is as
-// follows:
+// A GlopFrame is the basic unit of autonomous logic in Glop. See GlopFrame.h for a high-level on
+// how to use them. Here, we discuss the lower level details.
+//
+// A frame can render itself, be positioned and sized, think each tick, and trap input events. The
+// exact pipeline is as follows:
 //  - The Glop client calls gSystem->Think()
 //    - All frames receive OnWindowResize messages if appropriate.
 //    - All frames think.
@@ -13,44 +15,48 @@
 //    - All frames render.
 //  - Repeat.
 //
+// All GlopFrames are organized in a tree structure. The top-level frame is a TableauFrame that is
+// maintained by the GlopWindow. All other frames have exactly one parent frame, and any number of
+// children frames.
+//
 // Overview of focus: A frame is said to be "in focus" if it should be responding to user input.
-//   All focus is handled within the context of FocusFrames. A Focus Frame and anything descended
-//   from it is considered an autonomous unit of focus. If the FocusFrame gains focus, so do all
+//   All focus is handled within the context of FocusFrames. A FocusFrame and anything descended
+//   from it are considered an autonomous unit of focus. If the FocusFrame gains focus, so do all
 //   of its children. One exception to this is if a FocusFrame contains another FocusFrame, they
 //   are considered different. For example, a scrolling window might contain a button, but they are
 //   treated as separate units of focus.
 //   A frame will only ever be given focus if it is wrapped inside a FocusFrame. The GlopWindow
 //   maintains a list of FocusFrames, and controls which one has focus (possibly none of them, if
-//   the entire GlopWindow is out of focus), taking into account the tab key and mouse clicking.
-//   This focus is then immediately propogated down to descendants of the FocusFrame. Also:
-//     - Whenever a key press occurs, a FocusFrame queries its children. If any of them call this a
-//       "magnet" KeyEvent, and no child of the active FocusFrame calls it a "focus keeper"
-//       KeyEvent, the FocusFrame immediately takes focus. This occurs before the children receive
-//       the KeyEvent, so they can now process the event normally. Note: only presses can be magnets
-//       but new presses, repeat presses & double-presses can be distinguished.
+//   the entire GlopWindow is out of focus), taking into account the tab key, mouse clicking, etc.
+//   (Some of that behavior can be customized by rebinding the GUI derived keys in Input.) This
+//   focus is then immediately propogated down to descendants of the FocusFrame. Also:
+//     - Whenever a key press occurs, it is sent to the active FocusFrame. If that FocusFrame
+//       does not handle the event in OnKeyEvent, then any ancestor FocusFrames are given a chance
+//       to respond to the KeyEvent. If they also do not handle the event, ANY FocusFrame is allowed
+//       to trap it. If any FocusFrame (or child of a FocusFrame) declares that event to be a
+//       "magnet" KeyEvent, focus immediately switches to that FocusFrame, and that FocusFrame then
+//       also receives normal notification of the same event.
+//       Note: Only key presses (repeat, single, or double) can be focus magnet events. For example,
+//             a key release cannot be a focus magnet event.
 //     - A GlopFrame is notified via OnFocusChange whenever its focus changed. It can use this
-//       opportunity to respond.
+//       opportunity to react accordingly.
 //     - A GlopWindow may PushFocus. If this happens, all current FocusFrames lose focus, and will
 //       never gain it back again until PopFocus is called. In the meantime, a new circular queue
 //       of FocusFrames is formed.
-//   Note that ALL input frames should be inside a FocusFrame. Thus, if we have a scrolling menu,
-//   it should be encapsulated as FocusFrame -> ScrollingFrame -> MenuFrame, because the
-//   ScrollingFrame needs to receive input. An individual frame may find it's encapsulating focus
-//   frame. This can be useful for various purposes: using it to demand focus, finding it's size
-//   so as to know what clicks are part of the same "object" as seen by the user, etc.
-//   Frames all track what FocusFrame, if any, owns them. The primary use of this is so they can
-//   determine what exactly is in focus. For example, if a button is directly encapsulated in a
-//   focus frame, it responds differently from a button owned by a slider frame, which is then
-//   encapsulated in a focus frame.
+//   Note that all input frames should be inside a FocusFrame. An individual frame may find its
+//   encapsulating focus frame. Frames all track what FocusFrame, if any, owns them. The primary use
+//   of this is so they can determine what exactly is in focus. For example, if a button is directly
+//   encapsulated in a focus frame, it responds differently from a button owned by a slider frame,
+//   which is then encapsulated in a focus frame.
 //
 // Overview of sizing: A frame's size is limited in two ways: its logical size, and its clipping
 //   rectangle (stored in WINDOW coordinates). The clipping coordinates are propogated via
 //   SetPosition, and are most likely changed only by ClippedFrames. The logical size is set in the
 //   following manner:
 //     - Every tick, the topmost frame receives an UpdateSize request with recommended size of
-//        the entire screen.
+//       the entire screen.
 //     - If a frame receives an UpdateSize request, it does the following:
-//       - If it's size is not dirty and if it has been recommended the same size as on the
+//       - If its size is not dirty and if it has been recommended the same size as on the
 //         previous call, it exits immediately.
 //       - Otherwise it executes the virtual function, RecomputeSize.
 //       - This function calls UpdateSize on all children with recommended sizes chosen as it
