@@ -353,7 +353,7 @@ static void GlopProcessModifierHIDs(const void* value, void* context) {
       IOHIDElementRef element_ref = (IOHIDElementRef)CFArrayGetValueAtIndex(elements, i);
       int page = IOHIDElementGetUsagePage(element_ref);
       int usage = IOHIDElementGetUsage(element_ref);
-      if (page == 0x07 && (usage >= 0xE0 && usage <= 0xE7) || usage == 0x39) {
+      if (page == 0x07 && ((usage >= 0xE0 && usage <= 0xE7) || usage == 0x39)) {
         if (!queue_created) {
           modifier_queues.push_back(IOHIDQueueCreate(NULL, device_ref, 100, kIOHIDOptionsTypeNone));
           queue_created = true;
@@ -671,7 +671,8 @@ void Os::Think() {
   // events by clearing the whole thing here.
 
   ExtractEvents(&joystick_queues, &joystick_events);
-//  printf("Num Joystick Queues: %d\n", joystick_queues.size());
+  //  printf("Num Joystick Queues: %d\n", joystick_queues.size());
+
   for (event = joystick_events.begin(); event != joystick_events.end(); event++) {
     printf("Event: %f %d %d %d\n", event->timestamp, event->page, event->usage, event->value);
     static map<pair<UInt32, UInt32>, int> joystick_map;
@@ -688,7 +689,7 @@ void Os::Think() {
     } else if (event->page == 0x01 && event->usage >= 0x30 && event->usage <= 0x35) {
       printf("value: %d\n", event->value);
       printf("queue: %d\n", event->queue);
-      if (event->value < 128) {
+      if (event->value < 127) {
         printf("Making neg axis event\n");
         raw_events.push_back(
             GlopOSXEvent(
@@ -704,7 +705,7 @@ void Os::Think() {
                 event->timestamp,
                 Os::KeyEvent(
                     GetJoystickAxisPos(
-                        event->usage - 0x30, event->queue), (event->value/128.f))));
+                        event->usage - 0x30, event->queue), (event->value - 127) / 128.f)));
       } else {
         printf("Making 0 axis event\n");
         raw_events.push_back(
@@ -716,6 +717,28 @@ void Os::Think() {
                 event->timestamp,
                 Os::KeyEvent(GetJoystickAxisPos(event->usage - 0x30, event->queue), 0.f)));
       }
+    } else if (event->page == 0x01 && event->usage >= 0x39) {
+      printf("rawr!\n");
+      raw_events.push_back(
+          GlopOSXEvent(
+              event->timestamp,
+              Os::KeyEvent(GetJoystickHatUp(0, event->queue),
+                  event->value == 0x07 || event->value <= 0x01)));
+      raw_events.push_back(
+          GlopOSXEvent(
+              event->timestamp,
+              Os::KeyEvent(GetJoystickHatRight(0, event->queue),
+                  event->value >= 0x01 && event->value <= 0x03)));
+      raw_events.push_back(
+          GlopOSXEvent(
+              event->timestamp,
+              Os::KeyEvent(GetJoystickHatDown(0, event->queue),
+                  event->value >= 0x03 && event->value <= 0x05)));
+      raw_events.push_back(
+          GlopOSXEvent(
+              event->timestamp,
+              Os::KeyEvent(GetJoystickHatLeft(0, event->queue),
+                  event->value >= 0x05 && event->value <= 0x07)));
     }
   }
   joystick_events.clear();
