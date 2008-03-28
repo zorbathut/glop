@@ -6,8 +6,7 @@
 //  - Onquit
 //  - Rework file stuff
 //  - Why is object slightly visible even when deep in the fog?
-//  - Add general GlopFrame comments, and formalize render expectations vis a vis gl settings
-//    Also look at FrameStyle
+//  - Look at FrameStyle
 //  - Add KeyPromptFrame?
 //  - Vsync
 //  - Cease tab grab in some way on slider motion
@@ -17,8 +16,6 @@
 //  - Further prune calls to UpdateDerivedKey?
 //  - Think more about rendering order, perhaps add movetofront to multiparentframe
 //  - Allow DummyMenuFrames to render even when empty
-
-//  - Investigate new input mechanism, especially making sure time events are called frequently
 
 // Includes
 #include "../Glop/include/Base.h"
@@ -37,7 +34,7 @@
 Image *gIcon;
 
 void IntroScreen() {
-  GlopFrame *info = new FancyTextFrame("\1bu\1\1cFF8080\1Glop Test Program\1/b/u\1\1cFFFFFF\1\n\n"
+  GlopFrame *info = new FancyTextFrame("\1BUCff8080\1Glop Test Program\1Cffffff/B/U\1\n\n"
                                        "Select tests to verify that Glop performs as expected.");
   GlopFrame *img = new HollowBoxFrame(new ImageFrame("glop.jpg"), kWhite);
   gWindow->AddFrame(new ColFrame(info, new RecHeightFrame(new EmptyFrame(), 0.1f), img));
@@ -63,7 +60,7 @@ void GlUtils2dTest() {
     "You should see a yellow filled box surrounded by a black box, surrounded "
     "by a yellow box. There should be red diagonals in the box (not overlapping "
     "the black part.)\n\n"
-    "\1c0000FF\1Press any key to continue", kBlack);
+    "\1C0000ff\1Press any key to continue", kBlack);
   gWindow->AddFrame(new RecWidthFrame(info, 0.6f), 0.5f, 0.4f, 0.5f, 0.4f);
   input()->WaitForKeyPress();
 }
@@ -329,7 +326,7 @@ class CubeFrame: public CameraFrame {
 void CameraTest() {
   GlopFrame *info = new FancyTextFrame("Rotating Cube with fog\n\n"
                                        "Move the camera with the mouse and with W,A,D,S\n\n\n"
-                                       "\1cFFFF00\1Press Escape to continue",
+                                       "\1Cffff00\1Press Escape to continue",
                                        kWhite);
   GlopFrame *cube = new HollowBoxFrame(new CubeFrame(), kWhite);
   GlopFrame *content = new ColFrame(
@@ -341,8 +338,8 @@ void CameraTest() {
 }
 
 void GuiTest() {
-  string text = "This is a long string of text from \1u\1Ender's Game\1/u\1. It is a good "
-                "test for scrolling and for fancy text frames:\1i\1\n\n"
+  string text = "This is a long string of text from \1U\1Ender's Game\1/U\1. It is a good "
+                "test for scrolling and for fancy text frames:\1I\1\n\n"
                 "But they let go of him. And as soon as they did, Ender kicked out high and hard, "
                 "catching Stilson square in the breastbone. He dropped. It took Ender by surprise "
                 "-- he hadn't thought to put Stilson on the ground with one kick. It didn't occur "
@@ -386,8 +383,8 @@ void BuildMainMenu() {
   column->SetCell(4, new TextFrame("5. Input", kWhite));
   column->SetCell(5, new TextFrame("6. Threading", kWhite));
   column->SetCell(6, new TextFrame("7. Camera frame", kWhite));
-  column->SetCell(6, new TextFrame("8. GUI", kWhite));
-  column->SetCell(7, new TextFrame("9. Quit", kWhite));
+  column->SetCell(7, new TextFrame("8. GUI", kWhite));
+  column->SetCell(8, new TextFrame("9. Quit", kWhite));
   gWindow->AddFrame(column, 0.5f, 0.4f, 0.5f, 0.4f);
   gSystem->Think();
 }

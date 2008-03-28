@@ -279,72 +279,82 @@ FancyTextFrame::ParseResult FancyTextFrame::ParseNextCharacter(
 
   // Handle tags
   while (s[status->pos] == '\1') {
-    // Read until the end of the tag
-    int pos2;
-    for (pos2 = status->pos+1; s[pos2] != 0 && s[pos2] != '\1'; pos2++);
-    if (pos2 == status->pos+1 || s[status->pos] == 0)
-      return Error;
+    status->pos++;
+    bool hit_end_tag = false;
+    while (!hit_end_tag) {
+      int pos2 = status->pos;
+      switch (s[status->pos]) {
+        // Handle bold/italics/underline
+        case 'B':
+          status->style.flags |= kFontBold;
+          status->pos++;
+          break;
+        case 'I':
+          status->style.flags |= kFontItalics;
+          status->pos++;
+          break;
+        case 'U':
+          status->style.flags |= kFontUnderline;
+          status->pos++;
+          break;
+        case '/':
+          if (s[status->pos+1] == 'B') status->style.flags &= (~kFontBold);
+          else if (s[status->pos+1] == 'I') status->style.flags &= (~kFontItalics);
+          else if (s[status->pos+1] == 'U') status->style.flags &= (~kFontUnderline);
+          else return Error;
+          status->pos += 2;
+          break;
 
-    // Read the tag
-    string tag = s.substr(status->pos + 1, pos2 - status->pos -1);
-    switch (tag[0]) {
-      // Bold, italics, underline
-      case 'b':
-      case 'i':
-      case 'u':
-      case '/':
-        for (int i = 0; i < (int)tag.size(); i++) {
-          if (tag[i] == 'b') {
-            status->style.flags |= kFontBold;
-          } else if (tag[i] == 'i') {
-            status->style.flags |= kFontItalics;
-          } else if (tag[i] == 'u') {
-            status->style.flags |= kFontUnderline;
-          } else if (tag[i] == '/') {
-            if (tag[i+1] == 'b') status->style.flags &= (~kFontBold);
-            else if (tag[i+1] == 'i') status->style.flags &= (~kFontItalics);
-            else if (tag[i+1] == 'u') status->style.flags &= (~kFontUnderline);
-            else return Error;
-            i++;
-          } else {
+        // Handle color
+        case 'C':
+          pos2++;
+          while ((s[pos2] >= '0' && s[pos2] <= '9') || (s[pos2] >= 'a' && s[pos2] <= 'f'))
+            pos2++;
+          if (pos2 - status->pos != 7 && pos2 - status->pos != 9)
             return Error;
+          status->style.color = Color(ToInt(s.substr(status->pos + 1, 2), 16) / 255.0f,
+                                      ToInt(s.substr(status->pos + 3, 2), 16) / 255.0f,
+                                      ToInt(s.substr(status->pos + 5, 2), 16) / 255.0f, 1.0f);
+          if (pos2 - status->pos == 9)
+            status->style.color[3] = ToInt(s.substr(status->pos + 7, 2), 16) / 255.0f;
+          status->pos = pos2;
+          break;
+
+        // Handle font
+        case 'F':
+          pos2++;
+          while ((s[pos2] >= '0' && s[pos2] <= '9') || (s[pos2] >= 'a' && s[pos2] <= 'f'))
+            pos2++;
+          status->style.font = (Font*)ToPointer(s.substr(status->pos + 1, pos2 - status->pos - 1));
+          status->pos = pos2;
+          break;
+         
+        // Handle justification, sizing
+        case 'J':
+        case 'S':
+          pos2++;
+          while ((s[pos2] >= '0' && s[pos2] <= '9') || s[pos2] == '.')
+            pos2++;
+          if (s[status->pos] == 'J') {
+            if (!ToFloat(s.substr(status->pos + 1, pos2 - status->pos - 1), &status->horz_justify))
+              return Error;
+          } else {
+            if (!ToFloat(s.substr(status->pos + 1, pos2 - status->pos - 1), &status->style.size))
+              return Error;
+            status->style.size *= text_style_.size;
           }
-        }
-        break;
-      // Color
-      case 'c':
-        if (tag.size() != 7 && tag.size() != 9)
+          status->pos = pos2;
+          break;
+
+        // Handle other tags
+        case 1:
+          hit_end_tag = true;
+          status->pos++;
+          break;
+        default:
           return Error;
-        int c[4];
-        if (!ToInt(tag.substr(1, 2), &c[0], 16, true) ||
-            !ToInt(tag.substr(3, 2), &c[1], 16, true) ||
-            !ToInt(tag.substr(5, 2), &c[2], 16, true))
-          return Error;
-        if (tag.size() == 7)
-          c[3] = 255;
-        else if (!ToInt(tag.substr(7, 2), &c[3], 16, true))
-          return Error;
-        status->style.color = Color(c[0] / 255.0f, c[1] / 255.0f, c[2] / 255.0f, c[3] / 255.0f);
-        break;
-      // Font
-      case 'f':
-        if (!ToPointer(tag.substr(1), (void**)&status->style.font))
-          return Error;
-        break;
-      // Justify
-      case 'j':
-        if (!ToFloat(tag.substr(1), &status->horz_justify)) return Error;
-        break;
-      // Size
-      case 's':
-        if (!ToFloat(tag.substr(1), &status->style.size))
-          return Error;
-        status->style.size *= text_style_.size;
-        break;
-      default:
-        return Error;
+      }
     }
-    status->pos = pos2 + 1;
   }
 
   // Read the next ASCII character

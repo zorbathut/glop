@@ -260,22 +260,23 @@ class TextFrame: public GlopFrame {
 //    as soft returns so that the FancyTextFrame will not exceed its recommended width. The latter
 //    feature can be disabled by setting add_soft_returns to false.
 //  - Horizontal justification. This is used to align different lines of different sizes.
-//  - Varying style via tags. The text for a FancyTextFrame can contain tags delimited by ASCII
-//    value 1 (thus, to turn a section bold, add the text "\1b\1"). These change the style of all
-//    future text.
+//  - Varying style via tags. A character with ASCII value 1 enters and exits tag mode. During tag
+//    mode, characters specify formatting options, instead of things to print. For example:
+//    "\1bs2\1thunder" would print thunder in bold at twice the normal size. Formatting options:
 //
-//     Bold/Italics/Underline: (concatenation of "b", "/b", "i", "/i", "u", "/u") Turns bold,
-//       italics, or underlining on or off.
-//     Italics: ("i" or "nu") Turns italics on or off.
-//     Underline: ("u" or "nu") Turns underlining on or off.
-//     Horz Justify: ("j<num>", e.g. "j0.5") Sets horizontal justification for future text. Takes
+//     Bold: ("B" or "/B") Turns bold on or off.
+//     Italics: ("I" or "/I") Turns italics on or off.
+//     Underline: ("U" or "/U") Turns underlining on or off.
+//     Horz Justify: ("J<num>", e.g. "J0.5") Sets horizontal justification for future text. Takes
 //       effect on this line if this line is still empty. Otherwise, takes effect on the next line.
-//     Font: ("f<ptr>", e.g. "fDEADBEEF") Sets the active font to the one pointed to by font.
-//     Size: ("s<size>", e.g. "s2.5") Sets the active font to have size the given multiple of the
+//     Font: ("F<ptr>", e.g. "Fdeadbeef") Sets the active font to the one pointed to by font. The
+//       pointer m
+//     Size: ("S<size>", e.g. "s2.5") Sets the active font to have size the given multiple of the
 //       the original size. Note this is RELATIVE to the base size, unlike other tags.
-//     Color: ("c<r><g><b>" or "c<r><g><b><a>", e.g. "cFF0000") Sets the active color.
+//     Color: ("C<r><g><b>" or "C<r><g><b><a>", e.g. "Cff0000") Sets the active color.
 //
-//    Tags can also be created using the static methods, _Tag, below.
+//    Note that capital letters are always reserved for tag names, and lower case 'a'-'f' are
+//    reserved for hexadecimal. Tags can also be created using the static Tag methods below.
 class FancyTextFrame: public MultiParentFrame {
  public:
   // Constructors. horz_justify is used to align different rows of text.
@@ -296,9 +297,9 @@ class FancyTextFrame: public MultiParentFrame {
       min(max(int(color[0] * 255), 0), 255), min(max(int(color[1] * 255), 0), 255),
       min(max(int(color[2] * 255), 0), 255), min(max(int(color[3] * 255), 0), 255));
   }
-  static const string FTag(const Font *font) {return Format("\1f%p\1", font);}
-  static const string JTag(float horz_justify) {return Format("\1j%f\1", horz_justify);}
-  static const string STag(float size_multiplier) {return Format("\1s%f\1", size_multiplier);}
+  static const string FTag(const Font *font) {return Format("F%p", font);}
+  static const string JTag(float horz_justify) {return Format("J%f", horz_justify);}
+  static const string STag(float size_multiplier) {return Format("S%f", size_multiplier);}
     
   // Accessors and mutators
   const string &GetText() const {return text_;}

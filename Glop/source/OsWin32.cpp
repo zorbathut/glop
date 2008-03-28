@@ -139,8 +139,8 @@ class InputPollingThread: public Thread {
 	  GetCursorPos(&cursor_pos);
     bool is_num_lock_set = (GetKeyState(VK_NUMLOCK) & 1) > 0;
     bool is_caps_lock_set = (GetKeyState(VK_CAPITAL) & 1) > 0;
-    data_.push_back(Os::KeyEvent(gSystem->GetTime(), cursor_pos.x, cursor_pos.y, is_num_lock_set,
-                                 is_caps_lock_set));
+    result.push_back(Os::KeyEvent(gSystem->GetTime(), cursor_pos.x, cursor_pos.y, is_num_lock_set,
+                                  is_caps_lock_set));
     return result;
   }
 

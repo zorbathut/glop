@@ -639,19 +639,19 @@ void Input::Think(bool lost_focus, int frame_dt) {
     const int kTimeGranularity = 10;
     int new_t = os_events[i].timestamp;
     int old_t = (i == 0? last_poll_time_ : os_events[i-1].timestamp);
-    int t_boundary = ((old_t + kTimeGranularity - 1) / kTimeGranularity) * kTimeGranularity;
-
+    
     // Handle the case where last_poll_time_ is not yet initialized.
     if (!last_poll_time_set_) {
       last_poll_time_ = old_t = new_t;
       last_poll_time_set_ = true;
     }
+    int t_boundary = ((old_t + kTimeGranularity - 1) / kTimeGranularity) * kTimeGranularity;
 
     // Update last_poll_time_, accounting for both overflow and for the fact that new_t may be
     // less than last_poll_time_.
     if ( (new_t - last_poll_time_) >= 0)
       last_poll_time_ = new_t;
-    for (int t = t_boundary; t < new_t; t += kTimeGranularity) {
+    for (int t = t_boundary; (t - new_t) < 0; t += kTimeGranularity) {
       // Send elapsed time messages
       for (int j = kMinDevice; j <= GetMaxDevice(); j++)
       for (int k = 0; k < GetNumKeys(j); k++) {
