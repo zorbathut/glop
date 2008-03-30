@@ -29,6 +29,7 @@
 #include "../Glop/include/System.h"
 #include "../Glop/include/Thread.h"
 #include "../Glop/include/glop3d/Camera.h"
+#include "../Glop/include/glop3d/Mesh.h"
 
 // Globals
 Image *gIcon;
@@ -259,6 +260,13 @@ class CubeFrame: public CameraFrame {
  public:
   CubeFrame(): pos_(Vec3(0,0,6)) {
     SetFog(kWhite*0.3f, 5, 8);
+    texture_ = Texture::Load("ninja.jpg");
+    ASSERT(texture_ != 0);
+    mesh_ = StockMeshes::NewCubeMesh(2, kWhite, texture_);
+  }
+
+  ~CubeFrame() {
+    delete texture_;
   }
 
   void Render3d() const {
@@ -266,39 +274,7 @@ class CubeFrame: public CameraFrame {
     glPushMatrix();
     pos_.FillTransformationMatrix(m);
     glMultMatrixf(m);
-
-    glBegin(GL_QUADS);
-    GlUtils::SetColor(kBlue);
-		glVertex3f( 1.0f, 1.0f,-1.0f);
-		glVertex3f(-1.0f, 1.0f,-1.0f);
-		glVertex3f(-1.0f, 1.0f, 1.0f);
-		glVertex3f( 1.0f, 1.0f, 1.0f);
-    GlUtils::SetColor(kRed);
-		glVertex3f( 1.0f,-1.0f, 1.0f);
-		glVertex3f(-1.0f,-1.0f, 1.0f);
-		glVertex3f(-1.0f,-1.0f,-1.0f);
-		glVertex3f( 1.0f,-1.0f,-1.0f);
-    GlUtils::SetColor(kGreen);
-		glVertex3f( 1.0f, 1.0f, 1.0f);
-		glVertex3f(-1.0f, 1.0f, 1.0f);
-		glVertex3f(-1.0f,-1.0f, 1.0f);
-		glVertex3f( 1.0f,-1.0f, 1.0f);
-    GlUtils::SetColor(kYellow);
-		glVertex3f( 1.0f,-1.0f,-1.0f);
-		glVertex3f(-1.0f,-1.0f,-1.0f);
-		glVertex3f(-1.0f, 1.0f,-1.0f);
-		glVertex3f( 1.0f, 1.0f,-1.0f);
-    GlUtils::SetColor(kWhite);
-		glVertex3f(-1.0f, 1.0f, 1.0f);
-		glVertex3f(-1.0f, 1.0f,-1.0f);
-		glVertex3f(-1.0f,-1.0f,-1.0f);
-		glVertex3f(-1.0f,-1.0f, 1.0f);
-    GlUtils::SetColor(kPurple);
-		glVertex3f( 1.0f, 1.0f,-1.0f);
-		glVertex3f( 1.0f, 1.0f, 1.0f);
-		glVertex3f( 1.0f,-1.0f, 1.0f);
-		glVertex3f( 1.0f,-1.0f,-1.0f);
-	  glEnd();	
+    mesh_->Render();
 
     glPopMatrix();
     GlUtils::SetColor(kWhite);
@@ -320,6 +296,8 @@ class CubeFrame: public CameraFrame {
   }
 
  private:
+  Texture *texture_;
+  Mesh *mesh_;
   Viewpoint pos_;
 };
 

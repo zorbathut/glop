@@ -11,7 +11,7 @@
 
 // Point3 class definition
 class Point3 {
-public:
+ public:
 	// Constructors
 	Point3() {data_[0] = data_[1] = data_[2] = 0;}
 	Point3(float x, float y, float z) {
@@ -32,8 +32,8 @@ public:
 	// Accessors
   float operator[](int index) const {return data_[index];}
 	float &operator[](int index) {return data_[index];}
-	const float *getData() const {return data_;}
-	float *getData() {return data_;}
+	const float *GetData() const {return data_;}
+	float *GetData() {return data_;}
 	
 	// Translation
 	const Point3 &operator+=(const Point3 &rhs) {
