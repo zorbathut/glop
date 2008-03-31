@@ -79,6 +79,7 @@ class Mesh {
   // Utilities
   float GetRadius() const;
   void DirtyRadius() {radius_ = -1;}
+  void Render(const Viewpoint &viewpoint);
   void Render() const;
   void DirtyRendering() {num_groups_ = -1;}
 

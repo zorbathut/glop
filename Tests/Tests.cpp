@@ -253,6 +253,7 @@ void ThreadTest() {
   gWindow->AddFrame(new TextFrame(info, kWhite), 0.5f, 0.4f, kJustifyCenter, 0.4f);
   gWindow->AddFrame(new TextFrame("Press any key to continue...", kYellow),
                      0.5f, 1.0f, kJustifyCenter, kJustifyBottom);
+  gSystem->Sleep(1000);
   input()->WaitForKeyPress();
 }
 

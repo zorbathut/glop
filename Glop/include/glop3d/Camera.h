@@ -23,7 +23,7 @@ class Camera: public Viewpoint {
   : Viewpoint(view_point),
     near_plane_(0.1f),
     far_plane_(150.0f),
-    field_of_view_(90.0f) {}
+    field_of_view_(60.0f) {}
   const Camera &operator=(const Camera &rhs) {
     Viewpoint::operator=(rhs);
     near_plane_ = rhs.near_plane_;

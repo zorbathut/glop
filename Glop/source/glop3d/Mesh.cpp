@@ -116,6 +116,15 @@ float Mesh::GetRadius() const {
   return radius_;
 }
 
+void Mesh::Render(const Viewpoint &viewpoint) {
+  static float m[16];
+  glPushMatrix();
+  viewpoint.FillTransformationMatrix(m);
+  glMultMatrixf(m);
+  Render();
+  glPopMatrix();
+}
+
 void Mesh::Render() const {
   // Rebuild rendering data if necessary
   if (num_groups_ == -1) {
@@ -209,6 +218,7 @@ void Mesh::Render() const {
     glDrawElements(GL_TRIANGLES, group_size_[i], GL_UNSIGNED_SHORT,
       vertex_indices_ + group_start_[i]);
 	}
+  GlUtils::SetNoTexture();
 }
 
 Mesh *StockMeshes::NewBoxMesh(float width, float height, float depth, const Color &color,
@@ -217,50 +227,50 @@ Mesh *StockMeshes::NewBoxMesh(float width, float height, float depth, const Colo
   Mesh *result = new Mesh(24, 12, true, true, true);
 
   // Top face
-  result->AddPoint(Point3(-x/2,  y/2, -z/2), Point3(0, 1, 0), color, 0, 1);
-  result->AddPoint(Point3(-x/2,  y/2,  z/2), Point3(0, 1, 0), color, 0, 0);
-  result->AddPoint(Point3( x/2,  y/2,  z/2), Point3(0, 1, 0), color, 1, 0);
-  result->AddPoint(Point3( x/2,  y/2, -z/2), Point3(0, 1, 0), color, 1, 1);
+  result->AddPoint(Point3(-x,  y, -z), Point3(0, 1, 0), color, 0, 1);
+  result->AddPoint(Point3(-x,  y,  z), Point3(0, 1, 0), color, 0, 0);
+  result->AddPoint(Point3( x,  y,  z), Point3(0, 1, 0), color, 1, 0);
+  result->AddPoint(Point3( x,  y, -z), Point3(0, 1, 0), color, 1, 1);
   result->AddTriangle(0, 1, 2, texture);
   result->AddTriangle(0, 2, 3, texture);
 
   // Front face
-  result->AddPoint(Point3(-x/2, -y/2,  -z/2), Point3(0, 0, -1), color, 0, 1);
-  result->AddPoint(Point3(-x/2,  y/2,  -z/2), Point3(0, 0, -1), color, 0, 0);
-  result->AddPoint(Point3( x/2,  y/2,  -z/2), Point3(0, 0, -1), color, 1, 0);
-  result->AddPoint(Point3( x/2, -y/2,  -z/2), Point3(0, 0, -1), color, 1, 1);
+  result->AddPoint(Point3(-x, -y,  -z), Point3(0, 0, -1), color, 0, 1);
+  result->AddPoint(Point3(-x,  y,  -z), Point3(0, 0, -1), color, 0, 0);
+  result->AddPoint(Point3( x,  y,  -z), Point3(0, 0, -1), color, 1, 0);
+  result->AddPoint(Point3( x, -y,  -z), Point3(0, 0, -1), color, 1, 1);
   result->AddTriangle(4, 5, 6, texture);
   result->AddTriangle(4, 6, 7, texture);
 
   // Left face
-  result->AddPoint(Point3(-x/2, -y/2,  z/2), Point3(-1, 0, 0), color, 0, 1);
-  result->AddPoint(Point3(-x/2,  y/2,  z/2), Point3(-1, 0, 0), color, 0, 0);
-  result->AddPoint(Point3(-x/2,  y/2, -z/2), Point3(-1, 0, 0), color, 1, 0);
-  result->AddPoint(Point3(-x/2, -y/2, -z/2), Point3(-1, 0, 0), color, 1, 1);
+  result->AddPoint(Point3(-x, -y,  z), Point3(-1, 0, 0), color, 0, 1);
+  result->AddPoint(Point3(-x,  y,  z), Point3(-1, 0, 0), color, 0, 0);
+  result->AddPoint(Point3(-x,  y, -z), Point3(-1, 0, 0), color, 1, 0);
+  result->AddPoint(Point3(-x, -y, -z), Point3(-1, 0, 0), color, 1, 1);
   result->AddTriangle(8, 9, 10, texture);
   result->AddTriangle(8, 10, 11, texture);
 
   // Back face
-  result->AddPoint(Point3( x/2, -y/2,  z/2), Point3(0, 0, 1), color, 0, 1);
-  result->AddPoint(Point3( x/2,  y/2,  z/2), Point3(0, 0, 1), color, 0, 0);
-  result->AddPoint(Point3(-x/2,  y/2,  z/2), Point3(0, 0, 1), color, 1, 0);
-  result->AddPoint(Point3(-x/2, -y/2,  z/2), Point3(0, 0, 1), color, 1, 1);
+  result->AddPoint(Point3( x, -y,  z), Point3(0, 0, 1), color, 0, 1);
+  result->AddPoint(Point3( x,  y,  z), Point3(0, 0, 1), color, 0, 0);
+  result->AddPoint(Point3(-x,  y,  z), Point3(0, 0, 1), color, 1, 0);
+  result->AddPoint(Point3(-x, -y,  z), Point3(0, 0, 1), color, 1, 1);
   result->AddTriangle(12, 13, 14, texture);
   result->AddTriangle(12, 14, 15, texture);
 
   // Right face
-  result->AddPoint(Point3( x/2, -y/2, -z/2), Point3(1, 0, 0), color, 0, 1);
-  result->AddPoint(Point3( x/2,  y/2, -z/2), Point3(1, 0, 0), color, 0, 0);
-  result->AddPoint(Point3( x/2,  y/2,  z/2), Point3(1, 0, 0), color, 1, 0);
-  result->AddPoint(Point3( x/2, -y/2,  z/2), Point3(1, 0, 0), color, 1, 1);
+  result->AddPoint(Point3( x, -y, -z), Point3(1, 0, 0), color, 0, 1);
+  result->AddPoint(Point3( x,  y, -z), Point3(1, 0, 0), color, 0, 0);
+  result->AddPoint(Point3( x,  y,  z), Point3(1, 0, 0), color, 1, 0);
+  result->AddPoint(Point3( x, -y,  z), Point3(1, 0, 0), color, 1, 1);
   result->AddTriangle(16, 17, 18, texture);
   result->AddTriangle(16, 18, 19, texture);
 
   // Bottom face
-  result->AddPoint(Point3(-x/2, -y/2,  z/2), Point3(0, -1, 0), color, 0, 1);
-  result->AddPoint(Point3(-x/2, -y/2, -z/2), Point3(0, -1, 0), color, 0, 0);
-  result->AddPoint(Point3( x/2, -y/2, -z/2), Point3(0, -1, 0), color, 1, 0);
-  result->AddPoint(Point3( x/2, -y/2,  z/2), Point3(0, -1, 0), color, 1, 1);
+  result->AddPoint(Point3(-x, -y,  z), Point3(0, -1, 0), color, 0, 1);
+  result->AddPoint(Point3(-x, -y, -z), Point3(0, -1, 0), color, 0, 0);
+  result->AddPoint(Point3( x, -y, -z), Point3(0, -1, 0), color, 1, 0);
+  result->AddPoint(Point3( x, -y,  z), Point3(0, -1, 0), color, 1, 1);
   result->AddTriangle(20, 21, 22, texture);
   result->AddTriangle(20, 22, 23, texture);
 

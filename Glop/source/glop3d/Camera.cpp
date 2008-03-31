@@ -32,11 +32,10 @@ void CameraFrame::Render() const {
 	glLoadIdentity();
   glViewport(GetX(), gWindow->GetHeight() - GetY() - GetHeight(), GetWidth(), GetHeight());
   float near_height = float(tan(camera().GetFieldOfView() * kPi / 360 ) *
-                            camera().GetNearPlane() / 2);
+                            camera().GetNearPlane());
 	float near_width = near_height * float(GetWidth()) / GetHeight();
   glFrustum(-near_width, near_width, -near_height, near_height, camera_.GetNearPlane(),
             camera_.GetFarPlane());
-
 	glMatrixMode(GL_MODELVIEW);	
 	glPushMatrix();
 	glLoadIdentity();
@@ -102,7 +101,7 @@ bool CameraFrame::IsInFrustum(const Point3 &center, float radius) const {
 
 void CameraFrame::UpdateNormals() {
   float near_height = float(tan(camera().GetFieldOfView() * kPi / 360 ) *
-                            camera().GetNearPlane() / 2);
+                            camera().GetNearPlane());
 	float near_width = near_height * float(GetWidth()) / GetHeight();
 	front_normal_ = camera().forwards();
   back_normal_ = -camera().forwards();
