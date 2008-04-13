@@ -70,6 +70,8 @@ class Image {
   static Image *LoadGif(BinaryFileReader reader);
   static bool IsJpg(BinaryFileReader reader);
   static Image *LoadJpg(BinaryFileReader reader);
+  static bool IsTga(BinaryFileReader reader);
+  static Image *LoadTga(BinaryFileReader reader);
 
   unsigned char *data_;
   int width_, height_;

@@ -56,6 +56,8 @@ Image *Image::Load(BinaryFileReader reader) {
     return LoadGif(reader);
   if (IsJpg(reader))
     return LoadJpg(reader);
+  if (IsTga(reader))
+    return LoadTga(reader);
   return 0;
 }
 
@@ -695,4 +697,84 @@ error:
     free(pixels);
   jpeg_destroy_decompress(&info);
   return result;
+}
+
+// Tga loading
+// ===========
+
+bool Image::IsTga(BinaryFileReader reader) {
+  int start_offset = reader.Tell();
+  unsigned char tag[3];
+  bool is_tga = (reader.ReadChars(3, tag) == 3 && tag[1] == 0 &&
+                 (tag[2] == 2 || tag[2] == 10));
+  reader.Seek(start_offset, BinaryFileReader::Start);
+  return is_tga;
+}
+
+Image *Image::LoadTga(BinaryFileReader reader) {
+  // Read header data
+  int header_to_data_offset = reader.ReadChar();
+  reader.Seek(1, BinaryFileReader::Current);
+  bool is_compressed = (reader.ReadChar() == 10);
+  reader.Seek(9, BinaryFileReader::Current);
+  int width = reader.ReadShort();
+  int height = reader.ReadShort();
+  int bpp = reader.ReadChar();
+  int bytes_per_row = ((width*(bpp/8)+3)/4)*4;
+  reader.Seek(header_to_data_offset + 1, BinaryFileReader::Current); 
+
+  // Read an uncompressed image
+  unsigned char *pixels = new unsigned char[height*bytes_per_row];
+  if (!is_compressed) {
+    // Read the data
+    if (reader.ReadChars(height * width * bpp/8, pixels) != height*width*bpp/8) {
+      delete pixels;
+      return 0;
+    }
+
+    // Convert from BGR to RGB
+    for (int i = 0; i < width*height; i++) {
+      char temp = pixels[i*(bpp/8) + 0];
+      pixels[i*(bpp/8) + 0] = pixels[i*(bpp/8) + 2];
+      pixels[i*(bpp/8) + 2] = temp;
+    }
+  }
+
+  // Read a run-length encoded image
+  else {
+    int pos = 0, data;
+    char new_color[4];
+    while (pos < width*height) {
+      data = reader.ReadChar();
+
+      // Handle non-encoded data
+      if (data < 128) {
+        for (int i = 0; i <= data; i++) {
+          reader.ReadChars(bpp/8, new_color);
+          if (bpp >= 24) {
+            char temp = new_color[0];
+            new_color[0] = new_color[2];
+            new_color[2] = temp;
+          }
+          memcpy(&pixels[pos*(bpp/8)], new_color, bpp/8);
+          pos++;
+        }
+      }
+
+      // Handle encoded data
+      else {
+        reader.ReadChars(bpp/8, new_color);
+        if (bpp >= 24) {
+          char temp = new_color[0];
+          new_color[0] = new_color[2];
+          new_color[2] = temp;
+        }
+        for (int i = 128; i <= data; i++) {
+          memcpy(&pixels[pos*(bpp/8)], new_color, bpp/8);
+          pos++;
+        }
+      }
+    }
+  }
+  return new Image(pixels, width, height, bpp);
 }
