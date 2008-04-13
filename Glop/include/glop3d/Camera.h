@@ -58,7 +58,7 @@ class CameraFrame: public GlopFrame {
   void Render() const;
 
   // Camera control
-  const Camera &camera() const {return camera_;}
+  const Camera &GetCamera() const {return camera_;}
   void SetCamera(const Camera &camera) {
     camera_ = camera;
     UpdateNormals();

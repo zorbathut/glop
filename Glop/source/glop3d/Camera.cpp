@@ -31,8 +31,8 @@ void CameraFrame::Render() const {
 	glPushMatrix();
 	glLoadIdentity();
   glViewport(GetX(), gWindow->GetHeight() - GetY() - GetHeight(), GetWidth(), GetHeight());
-  float near_height = float(tan(camera().GetFieldOfView() * kPi / 360 ) *
-                            camera().GetNearPlane());
+  float near_height = float(tan(GetCamera().GetFieldOfView() * kPi / 360 ) *
+                            GetCamera().GetNearPlane());
 	float near_width = near_height * float(GetWidth()) / GetHeight();
   glFrustum(-near_width, near_width, -near_height, near_height, camera_.GetNearPlane(),
             camera_.GetFarPlane());
@@ -41,20 +41,20 @@ void CameraFrame::Render() const {
 	glLoadIdentity();
 	glScalef(1, 1, -1);
 	static float transformation[16];
-	transformation[0] = camera().right()[0];
-	transformation[4] = camera().right()[1];
-	transformation[8] = camera().right()[2];
-	transformation[1] = camera().up()[0];
-	transformation[5] = camera().up()[1];
-	transformation[9] = camera().up()[2];
-	transformation[2] = camera().forwards()[0];
-	transformation[6] = camera().forwards()[1];
-	transformation[10] = camera().forwards()[2];
+	transformation[0] = GetCamera().right()[0];
+	transformation[4] = GetCamera().right()[1];
+	transformation[8] = GetCamera().right()[2];
+	transformation[1] = GetCamera().up()[0];
+	transformation[5] = GetCamera().up()[1];
+	transformation[9] = GetCamera().up()[2];
+	transformation[2] = GetCamera().forwards()[0];
+	transformation[6] = GetCamera().forwards()[1];
+	transformation[10] = GetCamera().forwards()[2];
   transformation[3] = transformation[7] = transformation[11]
 	                  = transformation[12] = transformation[13] = transformation[14] = 0;
 	transformation[15] = 1;
 	glMultMatrixf(transformation);
-	glTranslatef(-camera().position()[0], -camera().position()[1], -camera().position()[2]);
+	glTranslatef(-GetCamera().position()[0], -GetCamera().position()[1], -GetCamera().position()[2]);
 
 	glDepthMask(true);
 	glEnable(GL_DEPTH_TEST);
@@ -100,17 +100,17 @@ bool CameraFrame::IsInFrustum(const Point3 &center, float radius) const {
 }
 
 void CameraFrame::UpdateNormals() {
-  float near_height = float(tan(camera().GetFieldOfView() * kPi / 360 ) *
-                            camera().GetNearPlane());
+  float near_height = float(tan(GetCamera().GetFieldOfView() * kPi / 360 ) *
+                            GetCamera().GetNearPlane());
 	float near_width = near_height * float(GetWidth()) / GetHeight();
-	front_normal_ = camera().forwards();
-  back_normal_ = -camera().forwards();
-	left_normal_ = (-camera().GetNearPlane()*camera().right() +
-                  camera().forwards()*near_width).GetNormal();
-	right_normal_ = (camera().GetNearPlane()*camera().right() +
-                   camera().forwards()*near_width).GetNormal();
-	top_normal_ = (camera().GetNearPlane()*camera().up() +
-                 camera().forwards()*near_height).GetNormal();
-	bottom_normal_ = (-camera().GetNearPlane()*camera().up() +
-                    camera().forwards()*near_height).GetNormal();
+	front_normal_ = GetCamera().forwards();
+  back_normal_ = -GetCamera().forwards();
+	left_normal_ = (-GetCamera().GetNearPlane()*GetCamera().right() +
+                  GetCamera().forwards()*near_width).GetNormal();
+	right_normal_ = (GetCamera().GetNearPlane()*GetCamera().right() +
+                   GetCamera().forwards()*near_width).GetNormal();
+	top_normal_ = (GetCamera().GetNearPlane()*GetCamera().up() +
+                 GetCamera().forwards()*near_height).GetNormal();
+	bottom_normal_ = (-GetCamera().GetNearPlane()*GetCamera().up() +
+                    GetCamera().forwards()*near_height).GetNormal();
 }

@@ -101,6 +101,7 @@ class Mesh {
 
   // Other data
   mutable float radius_;
+  DISALLOW_EVIL_CONSTRUCTORS(Mesh);
 };
 
 // StockMeshes class definition.
@@ -111,6 +112,9 @@ class StockMeshes {
   static Mesh *NewCubeMesh(float size, const Color &color, const Texture *texture = 0) {
     return NewBoxMesh(size, size, size, color, texture);
   }
+
+ private:
+  DISALLOW_EVIL_CONSTRUCTORS(StockMeshes);
 };
 
 #endif // GLOP_GLOP3D_MESH_H__
