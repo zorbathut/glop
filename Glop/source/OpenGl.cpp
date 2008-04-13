@@ -168,13 +168,28 @@ void GlUtils2d::FillRectangle(int x1, int y1, int x2, int y2) {
   glEnd();
 }
 
+void GlUtils2d::FillRectangleTexture(int x1, int y1, int x2, int y2, const Texture *texture)
+{
+  int min_x = min(x1, x2), max_x = max(x1, x2);
+  int min_y = min(y1, y2), max_y = max(y1, y2);
+  int num_tiles_x = (max_x - min_x)/texture->GetWidth();
+  int num_tiles_y = (max_y - min_y)/texture->GetHeight();
+  float x_extra = (max_x - min_x)%texture->GetWidth()/(float)texture->GetWidth();
+  float y_extra = (max_y - min_y)%texture->GetHeight()/(float)texture->GetHeight();
+  float x_scale = float(texture->GetWidth()) / texture->GetInternalWidth();
+  float y_scale = float(texture->GetHeight()) / texture->GetInternalHeight();
+  RenderSubTexture(x1, y1, x2, y2, 0, 0, x_scale * num_tiles_x + x_scale * x_extra, y_scale * num_tiles_y + y_scale * y_extra, false, texture);
+}
+
 void GlUtils2d::RenderSubTexture(int x1, int y1, int x2, int y2, float tu1, float tv1, float tu2,
-                                 float tv2, const Texture *texture) {
+                                 float tv2, bool clamp, const Texture *texture) {
   int min_x = min(x1, x2), max_x = max(x1, x2);
   int min_y = min(y1, y2), max_y = max(y1, y2);
   GlUtils::SetTexture(texture);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);  // Prevents texture bleeding across
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);  //  top & bottom
+  if (clamp) {
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);  // Prevents texture bleeding across
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);  //  top & bottom
+  }
   glBegin(GL_QUADS);
   glTexCoord2f(tu1, tv1);
   glVertex2i(min_x, min_y);
@@ -185,7 +200,9 @@ void GlUtils2d::RenderSubTexture(int x1, int y1, int x2, int y2, float tu1, floa
   glTexCoord2f(tu1, tv2);
   glVertex2i(min_x, max_y + 1);
   glEnd();
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+  if (clamp) {
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+  }
   GlUtils::SetNoTexture(); 
 }

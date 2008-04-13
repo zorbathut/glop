@@ -136,6 +136,7 @@ class GlUtils2d {
     GlUtils::SetColor(color);
     FillRectangle(x1, y1, x2, y2);
   }
+  static void FillRectangleTexture(int x1, int y1, int x2, int y2, const Texture *texture);
 
   // Texture rendering without tiling:
   //  - The first function render the full texture (excluding padding to make its size a power of 2)
@@ -147,16 +148,16 @@ class GlUtils2d {
   }
   static void RenderTexture(int x1, int y1, int x2, int y2, const Texture *texture) {
     RenderSubTexture(x1, y1, x2, y2, 0, 0, float(texture->GetWidth()) / texture->GetInternalWidth(),
-                     float(texture->GetHeight()) / texture->GetInternalHeight(), texture);
+                     float(texture->GetHeight()) / texture->GetInternalHeight(), true, texture);
   }
-  static void RenderSubTexture(int x1, int y1, float tu1, float tv1, float tu2, float tv2,
+  static void RenderSubTexture(int x1, int y1, float tu1, float tv1, float tu2, float tv2, bool clamp,
                                const Texture *texture) {
     RenderSubTexture(x1, y1, int(x1 + (tu2-tu1)*texture->GetInternalWidth() - 1),
                      int(y1 + (tv2-tv1)*texture->GetInternalHeight() - 1),
-                     tu1, tv1, tu2, tv2, texture);
+                     tu1, tv1, tu2, tv2, clamp, texture);
   }
-  static void RenderSubTexture(int x1, int y1, int x2, int y2, float tu1, float tv1, float tu2,
-                               float tv2, const Texture *texture);
+  static void GlUtils2d::RenderSubTexture(int x1, int y1, int x2, int y2, float tu1, float tv1, float tu2,
+                      float tv2, bool clamp, const Texture *texture);
 };
 
 #endif // GLOP_OPEN_GL_H__
