@@ -60,10 +60,14 @@ int Mesh::AddPoint(const Point3 &position) {
 int Mesh::AddPoint(const Point3 &position, const Vec3 &normal, const Color &color,
                    float tu, float tv) {
   memcpy(&points_[3*num_points_], position.GetData(), 3 * sizeof(float));
-  memcpy(&normals_[3*num_points_], normal.GetData(), 3 * sizeof(float));
-  memcpy(&colors_[4*num_points_], color.GetData(), 4 * sizeof(float));
-  texture_coords_[2*num_points_+0] = tu;
-  texture_coords_[2*num_points_+1] = tv;
+  if (normals_ != 0)
+    memcpy(&normals_[3*num_points_], normal.GetData(), 3 * sizeof(float));
+  if (colors_ != 0)
+    memcpy(&colors_[4*num_points_], color.GetData(), 4 * sizeof(float));
+  if (textures_ != 0) {
+    texture_coords_[2*num_points_+0] = tu;
+    texture_coords_[2*num_points_+1] = tv;
+  }
   return (num_points_++);
 }
 
@@ -152,7 +156,7 @@ void Mesh::Render() const {
         }
 
         // Begin the new group
-        group_start_[num_groups_] = 3*i;
+        group_start_[num_groups_] = i;
         if (group_is_fixed_color_ != 0)
           group_is_fixed_color_[num_groups_] = true;
         if (group_is_fixed_normal_ != 0)
@@ -172,7 +176,7 @@ void Mesh::Render() const {
 
       // End this group if appropriate
       if (i == num_triangles_-1 || (textures_ != 0 && textures_[i+1] != textures_[i])) {
-        group_size_[num_groups_] = 3*(i+1) - group_start_[num_groups_];
+        group_size_[num_groups_] = (i+1) - group_start_[num_groups_];
         num_groups_++;
         need_new_group = true;
       }
@@ -187,7 +191,7 @@ void Mesh::Render() const {
     
 	// Loop through each rendering group
   for (int i = 0; i < num_groups_; i++) {
-    int start = group_start_[i], v0 = vertex_indices_[start];
+    int start = group_start_[i], v0 = vertex_indices_[3*start];
 
 		// Set the texture
     if (textures_ != 0 && textures_[start] != 0) {
@@ -215,8 +219,8 @@ void Mesh::Render() const {
     }
 
 		// Render the group
-    glDrawElements(GL_TRIANGLES, group_size_[i], GL_UNSIGNED_SHORT,
-      vertex_indices_ + group_start_[i]);
+    glDrawElements(GL_TRIANGLES, 3*group_size_[i], GL_UNSIGNED_SHORT,
+      vertex_indices_ + 3*group_start_[i]);
 	}
   GlUtils::SetNoTexture();
 }

@@ -382,7 +382,10 @@ class Input {
     // registered as down for a little while even after it is marked as up. This is useful for very
     // choppy "keys", such as mouse motion.
     KeyTracker(int release_delay = 0);
-    void SetReleaseDelay(int delay) {release_delay_ = delay;}
+    void SetReleaseDelay(int delay, bool keep_press_amount) {
+      release_delay_ = delay;
+      keep_press_amount_on_release_delay_ = keep_press_amount;
+    }
 
     // Marks the key as up, ignoring the release_delay. Useful, for example, when focus is lost.
     // Returns any event caused by this: None or Release.
@@ -401,7 +404,7 @@ class Input {
     void Think();
 
     // Instantaneous status - see top of the file and Input class below.
-    float GetPressAmountNow() const {return press_amount_now_;}
+    float GetPressAmountNow() const {return press_amount_virtual_;}
     bool IsDownNow() const {return is_down_now_;}
 
     // Frame status - see top of the file and Input class below.
@@ -414,12 +417,15 @@ class Input {
     
   private:
     float press_amount_now_,      // Instantaneous press_amount for the key
-          press_amount_frame_;    // Total press_amount for the key this frame
-    bool is_down_now_,            // Is the key down now - not quite the same as cur_press_amount > 0
+          press_amount_frame_,    // Total press_amount for the key this frame
+          press_amount_virtual_;  // What we claim our press amount is
+    bool is_down_now_,            // Is the key down now - not quite the same as cur_press_amount>0
          is_down_frame_;          // Was the key down at any point this frame (See IsKeyDown)
     int total_frame_time_;        // Total time spent during this frame
     int release_delay_left_,      // Minimum time until cur_is_down can be reverted to false
         release_delay_;           // The max value for release_delay_left_
+    bool keep_press_amount_on_release_delay_; // If we artifically keeping the pressed down, do we
+                                              // hold it's press amount, or claim it is 0?       
     int double_press_time_left_;  // Used for tracking double presses
     int repeat_delay_left_;       // Time remaining until we generate a repeat event
     bool was_pressed_,            // Was a key press event generated for this key this frame

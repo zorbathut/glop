@@ -577,6 +577,9 @@ class TableauFrame: public MultiParentFrame {
   // both invoke DirtySize.
   LightSetId AddChild(GlopFrame *frame, float rel_x, float rel_y,
                       float horz_justify, float vert_justify, int depth = 0);
+  LightSetId AddChild(GlopFrame *frame, int depth = 0) {
+    return AddChild(frame, 0.5f, 0.5f, kJustifyCenter, kJustifyCenter, depth);
+  }
   void MoveChild(LightSetId id, int depth);
   void MoveChild(LightSetId id, float rel_x, float rel_y);
   void MoveChild(LightSetId id, float rel_x, float rel_y, int depth) {

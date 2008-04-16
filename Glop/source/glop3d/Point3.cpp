@@ -5,59 +5,60 @@
 // Point3
 // ======
 
-float Point3::GetNorm() const {
-	return (float)sqrt(Dot(*this));
+float Point3::Norm() const {
+	return (float)sqrt(Dot(*this, *this));
 }
 
 // Rotation using the formula:
 //   p' = p*cos(theta) - (p x axis)*sin(theta) + axis*(p . axis)*(1 - cos(theta)).
 // Note that scalar*scalar*vector is evaluated fastest by multiplying scalars first.
 void Point3::Rotate(const Point3 &axis, float degrees) {
-  Vec3 norm_ax = axis.GetNormal();
+  Vec3 norm_ax = ::Normalize(axis);
 	float c = (float)cos(degrees * kPi / 180);
 	float s = (float)sin(degrees * kPi / 180);
-  *this = (*this)*c - Cross(norm_ax)*s + norm_ax*(Dot(norm_ax)*(1-c));
+  *this = (*this)*c - Cross(*this, norm_ax)*s + norm_ax*(Dot(*this, norm_ax)*(1-c));
 }
 
 // Viewpoint
 // =========
 
 void Viewpoint::SetDirection(const Point3 &forward_vector, const Point3 &up_vector) {
-  forward_vector_ = forward_vector.GetNormal();
-	right_vector_ = up_vector.Cross(forward_vector_).GetNormal();
-	up_vector_ = forward_vector_.Cross(right_vector_);
+  forward_vector_ = Normalize(forward_vector);
+	right_vector_ = Normalize(Cross(up_vector, forward_vector_));
+	up_vector_ = Cross(forward_vector_, right_vector_);
 }
 
 // We do not use Point3::Rotate so that we only need to compute the cosine and sine once.
 void Viewpoint::Rotate(const Vec3 &axis, float degrees) {
-  Vec3 norm_ax = axis.GetNormal();
+  Vec3 norm_ax = Normalize(axis);
 	float c = (float)cos(degrees * kPi / 180);
 	float s = (float)sin(degrees * kPi / 180);
-  forward_vector_ = forward_vector_*c - forward_vector_.Cross(norm_ax)*s +
-                    norm_ax*(forward_vector_.Dot(norm_ax)*(1-c));
-  up_vector_ = up_vector_*c - up_vector_.Cross(norm_ax)*s +
-               norm_ax*(up_vector_.Dot(norm_ax)*(1-c));
-  right_vector_ = right_vector_*c - right_vector_.Cross(norm_ax)*s +
-                  norm_ax*(right_vector_.Dot(norm_ax)*(1-c));
+  forward_vector_ = forward_vector_*c - Cross(forward_vector_, norm_ax)*s +
+                    norm_ax*(Dot(forward_vector_, norm_ax)*(1-c));
+  up_vector_ = up_vector_*c - Cross(up_vector_, norm_ax)*s +
+               norm_ax*(Dot(up_vector_, norm_ax)*(1-c));
+  right_vector_ = right_vector_*c - Cross(right_vector_, norm_ax)*s +
+                  norm_ax*(Dot(right_vector_, norm_ax)*(1-c));
 }
 
 Point3 Viewpoint::LocalToGlobal(const Point3 &p) const {
-	return p[0]*right_vector_ + p[1]*up_vector_ + p[2]*forward_vector_;
+	return p[0]*right_vector_ + p[1]*up_vector_ + p[2]*forward_vector_ + position_;
 }
 Point3 Viewpoint::GlobalToLocal(const Point3 &p) const {
-	return Point3(p.Dot(right_vector_), p.Dot(up_vector_), p.Dot(forward_vector_));
+  Point3 q = p - position_;
+	return Point3(Dot(q, right_vector_), Dot(q, up_vector_), Dot(q, forward_vector_));
 }
 Viewpoint Viewpoint::LocalToGlobal(const Viewpoint &vp) const {
     return Viewpoint(LocalToGlobal(vp.position_),
-                     LocalToGlobal(vp.forward_vector_),
-                     LocalToGlobal(vp.up_vector_),
-                     LocalToGlobal(vp.right_vector_));
+                     LocalToGlobal(vp.forward_vector_) - position_,
+                     LocalToGlobal(vp.up_vector_) - position_,
+                     LocalToGlobal(vp.right_vector_) - position_);
 }
 Viewpoint Viewpoint::GlobalToLocal(const Viewpoint &vp) const {
     return Viewpoint(GlobalToLocal(vp.position_),
-                     GlobalToLocal(vp.forward_vector_),
-                     GlobalToLocal(vp.up_vector_),
-                     GlobalToLocal(vp.right_vector_));
+                     GlobalToLocal(vp.forward_vector_ + position_),
+                     GlobalToLocal(vp.up_vector_ + position_),
+                     GlobalToLocal(vp.right_vector_ + position_));
 }
 
 void Viewpoint::FillTransformationMatrix(float *matrix) const {

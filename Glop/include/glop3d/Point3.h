@@ -82,45 +82,18 @@ class Point3 {
     return (temp/=scale);
   }
 
-  // Vector mutators
-  void Normalize() {operator/=(GetNorm());}
+  // Utilities - see also non-class functions below for non-unary operations or for
+  // versions of Rotate/Project/Normalize that return the result instead of modifying the point
+  // directly.
+  void Normalize() {operator/=(Norm());}
 	void Rotate(const Point3 &axis, float degrees);
 	void Rotate(const Point3 &origin, const Point3 &axis, float degrees) {
     operator-=(origin);
     Rotate(axis, degrees);
     operator+=(origin);
   }
-  void Project(const Point3 &axis) {
-    operator=(axis * (Dot(axis) / axis.Dot(axis)));
-  }
-
-  // Vector utilities. For rotation, angles are specified in degrees counter-clockwise.
-	Point3 Cross(const Point3 &rhs) const {
-		return Point3(data_[1]*rhs.data_[2] - data_[2]*rhs.data_[1],
-					        data_[2]*rhs.data_[0] - data_[0]*rhs.data_[2],
-					        data_[0]*rhs.data_[1] - data_[1]*rhs.data_[0]);
-  }
-	float Dot(const Point3 &rhs) const {
-		return data_[0]*rhs.data_[0] + data_[1]*rhs.data_[1] + data_[2]*rhs.data_[2];
-  }
-  float GetNorm() const;
-  Point3 GetNormal() const {return *this / GetNorm();}
-  float GetDist(const Point3 &rhs) const {return (*this - rhs).GetNorm();}
-  Point3 GetRotation(const Point3 &axis, float degrees) const {
-    Point3 temp(*this);
-    temp.Rotate(axis, degrees);
-    return temp;
-  }
-	Point3 GetRotation(const Point3 &origin, const Point3 &axis, float degrees) const {
-    Point3 temp(*this);
-    temp.Rotate(origin, axis, degrees);
-    return temp;
-  }
-  Point3 GetProjection(const Point3 &axis) const {
-    Point3 temp(*this);
-    temp.Project(axis);
-    return temp;
-  }
+  inline void Project(const Point3 &axis);
+  float Norm() const;
 
   // Comparators
   bool operator==(const Point3 &rhs) const {
@@ -143,6 +116,33 @@ const Point3 kOrigin(0, 0, 0);
 const Vec3 kXAxis(1, 0, 0);
 const Vec3 kYAxis(0, 1, 0);
 const Vec3 kZAxis(0, 0, 1);
+
+// Point utilities
+inline Point3 Normalize(Point3 x) {x.Normalize(); return x;}
+inline Point3 Cross(const Point3 &lhs, const Point3 &rhs) {
+	return Point3(lhs[1]*rhs[2] - lhs[2]*rhs[1],
+					      lhs[2]*rhs[0] - lhs[0]*rhs[2],
+					      lhs[0]*rhs[1] - lhs[1]*rhs[0]);
+}
+inline float Dot(const Point3 &lhs, const Point3 &rhs) {
+	return lhs[0]*rhs[0] + lhs[1]*rhs[1] + lhs[2]*rhs[2];
+}
+inline float Dist(const Point3 &lhs, const Point3 &rhs) {return (rhs - lhs).Norm();}
+inline Point3 Rotate(Point3 x, const Point3 &axis, float degrees) {
+  x.Rotate(axis, degrees);
+  return x;
+}
+inline Point3 Rotate(Point3 x, const Point3 &origin, const Point3 &axis, float degrees) {
+  x.Rotate(origin, axis, degrees);
+  return x;
+}
+inline void Point3::Project(const Point3 &axis) {
+  operator=(axis * (Dot(*this, axis) / Dot(axis, axis)));
+}
+inline Point3 Project(Point3 x, const Point3 &axis) {
+  x.Project(axis);
+  return x;
+}
 
 // Viewpoint class definition. This is a position plus a view orientation.
 class Viewpoint {
@@ -179,6 +179,7 @@ class Viewpoint {
 
 	// Accessors
 	const Point3 &position() const {return position_;}
+  Point3 &position() {return position_;}
 	const Vec3 &forwards() const {return forward_vector_;}
 	const Vec3 &up() const {return up_vector_;}
 	const Vec3 &right() const {return right_vector_;}
@@ -197,7 +198,8 @@ class Viewpoint {
 
   // Coordinate transformations. Each Viewpoint can be thought of specifying its own coordinate
   // system. Here, we provide utilities for switching between that coordinate system and the
-  // "global" one (i.e., the normal, base coordinate system).
+  // "global" one (i.e., the normal, base coordinate system). Note that the first two functions
+  // are designed for points, not vectors.
 	Point3 LocalToGlobal(const Point3 &p) const;
 	Point3 GlobalToLocal(const Point3 &p) const;
 	Viewpoint LocalToGlobal(const Viewpoint &vp) const;
