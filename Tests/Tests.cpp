@@ -283,7 +283,7 @@ class CubeFrame: public CameraFrame {
 
   void Think(int dt) {
     pos_.Rotate(Vec3(1,2,3), dt*0.1f);
-    Camera c = camera();
+    Camera c = GetCamera();
     float rx = input()->GetKeyPressAmountFrame(kMouseRight) -
                input()->GetKeyPressAmountFrame(kMouseLeft);
     float ry = input()->GetKeyPressAmountFrame(kMouseDown) -

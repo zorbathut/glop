@@ -4,6 +4,38 @@
 #include "../../include/OpenGl.h"
 #include <cmath>
 
+void Camera::LookAt(const Point3 &top_left, const Point3 &top_right, const Point3 &bottom_left) {
+  float vert_dist = Dist(top_left, bottom_left);
+  float eye_dist = (vert_dist / 2) / float(tan(GetFieldOfView() * kPi / 360));
+  Point3 origin = (top_right + bottom_left) / 2;
+  Point3 forward = Normalize(Cross(top_right - top_left, top_left - bottom_left));
+  SetPosition(origin - forward * eye_dist);
+  SetDirection(forward, top_left - bottom_left);
+}
+
+void CameraFrame::Project(const Point3 &val, int *x, int *y) const {
+  Point3 local = camera_.GlobalToLocal(val);
+  float height = float(tan(GetCamera().GetFieldOfView() * kPi / 360) * local[2]);
+	float width = height * float(GetWidth()) / GetHeight();
+  *x = int(GetX() + GetWidth() * (local[0] / width + 1)/2);
+  *y = int(GetY2() - GetHeight() * (local[1] / height + 1)/2);
+}
+
+void CameraFrame::LookAt(const Point3 &top_left, const Point3 &top_right,
+                         const Point3 &bottom_left, float field_of_view) {
+  camera_.SetFieldOfView(field_of_view);
+  LookAt(top_left, top_right, bottom_left);
+}
+
+void CameraFrame::LookAt(const Point3 &top_left, const Point3 &top_right,
+                         const Point3 &bottom_left) {
+  // We update our normals now even though it will also be done when the frame resizes so that
+  // the correct normals will be available immediately.
+  camera_.LookAt(top_left, top_right, bottom_left);
+  FixAspectRatio((top_right - top_left).Norm() / (bottom_left - top_left).Norm());
+  UpdateNormals();
+}
+
 void CameraFrame::Render() const {
   // Enable clipping - see ClippedFrame. We do it ourselves instead of actually using a
   // ClippedFrame so that the user can both extend CameraFrame and instantiate it without being
@@ -88,29 +120,37 @@ void CameraFrame::Render() const {
 
 bool CameraFrame::IsInFrustum(const Point3 &center, float radius) const {
 	Point3 local_center = center - camera_.position();
-	float z_dist = local_center.Dot(front_normal_);
+	float z_dist = Dot(local_center, front_normal_);
   if (z_dist+radius < camera_.GetNearPlane() || z_dist-radius > camera_.GetFarPlane() ||
       (is_fog_enabled_ && z_dist-radius > fog_end_))
     return false;
-  if (local_center.Dot(top_normal_) < -radius) return false;
-	if (local_center.Dot(bottom_normal_) < -radius) return false;
-	if (local_center.Dot(right_normal_) < -radius) return false;
- 	if (local_center.Dot(left_normal_) < -radius) return false;
+  if (Dot(local_center, top_normal_) < -radius) return false;
+	if (Dot(local_center, bottom_normal_) < -radius) return false;
+	if (Dot(local_center, right_normal_) < -radius) return false;
+ 	if (Dot(local_center, left_normal_) < -radius) return false;
 	return true;
 }
 
+void CameraFrame::RecomputeSize(int rec_width, int rec_height) {
+  if (aspect_ratio_ != -1)
+    SetToMaxSize(rec_width, rec_height, aspect_ratio_);
+  else
+    SetSize(rec_width, rec_height);
+  UpdateNormals();
+}
+
 void CameraFrame::UpdateNormals() {
-  float near_height = float(tan(GetCamera().GetFieldOfView() * kPi / 360 ) *
+  float near_height = float(tan(GetCamera().GetFieldOfView() * kPi / 360) *
                             GetCamera().GetNearPlane());
 	float near_width = near_height * float(GetWidth()) / GetHeight();
 	front_normal_ = GetCamera().forwards();
   back_normal_ = -GetCamera().forwards();
-	left_normal_ = (-GetCamera().GetNearPlane()*GetCamera().right() +
-                  GetCamera().forwards()*near_width).GetNormal();
-	right_normal_ = (GetCamera().GetNearPlane()*GetCamera().right() +
-                   GetCamera().forwards()*near_width).GetNormal();
-	top_normal_ = (GetCamera().GetNearPlane()*GetCamera().up() +
-                 GetCamera().forwards()*near_height).GetNormal();
-	bottom_normal_ = (-GetCamera().GetNearPlane()*GetCamera().up() +
-                    GetCamera().forwards()*near_height).GetNormal();
+	left_normal_ = Normalize(-GetCamera().GetNearPlane()*GetCamera().right() +
+                           GetCamera().forwards()*near_width);
+	right_normal_ = Normalize(GetCamera().GetNearPlane()*GetCamera().right() +
+                            GetCamera().forwards()*near_width);
+	top_normal_ = Normalize(GetCamera().GetNearPlane()*GetCamera().up() +
+                          GetCamera().forwards()*near_height);
+	bottom_normal_ = Normalize(-GetCamera().GetNearPlane()*GetCamera().up() +
+                             GetCamera().forwards()*near_height);
 }

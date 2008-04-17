@@ -267,7 +267,7 @@ void ClippedFrame::SetPosition(int screen_x, int screen_y, int cx1, int cy1, int
   cx1 = max(cx1, is_standard_clipping_? screen_x : req_clip_x1_);
   cy1 = max(cy1, is_standard_clipping_? screen_y : req_clip_y1_);
   cx2 = min(cx2, is_standard_clipping_? screen_x + GetWidth() - 1: req_clip_x2_);
-  cy2 = min(cy2, is_standard_clipping_? screen_x + GetHeight() - 1: req_clip_y2_);
+  cy2 = min(cy2, is_standard_clipping_? screen_y + GetHeight() - 1: req_clip_y2_);
   SingleParentFrame::SetPosition(screen_x, screen_y, cx1, cy1, cx2, cy2);
 }
 

@@ -288,6 +288,7 @@ KeyEvent::Type Input::KeyTracker::SetPressAmount(float amount) {
 
   // Handle presses
   if (amount > 0) {
+    press_amount_virtual_ = amount;
     release_delay_left_ = release_delay_;
     if (!is_down_now_) {
       is_down_now_ = true;
@@ -306,10 +307,13 @@ KeyEvent::Type Input::KeyTracker::SetPressAmount(float amount) {
   }
 
   // Handle releases
-  if (amount == 0 && is_down_now_ && release_delay_ == 0) {
+  else if (is_down_now_ && release_delay_ == 0) {
+    press_amount_virtual_ = 0;
     is_down_now_ = false;
     was_released_ = true;
     return KeyEvent::Release;
+  } else if (is_down_now_ && !keep_press_amount_on_release_delay_) {
+    press_amount_virtual_ = 0;
   }
   return KeyEvent::Nothing;
 }
@@ -330,15 +334,16 @@ KeyEvent::Type Input::KeyTracker::OnKeyEventDt(int dt) {
 
   // Update frame info
   is_down_frame_ |= is_down_now_;
-  press_amount_frame_ = (press_amount_frame_ * total_frame_time_ + press_amount_now_ * dt) /
+  press_amount_frame_ = (press_amount_frame_ * total_frame_time_ + press_amount_virtual_ * dt) /
                         (total_frame_time_ + dt);
   total_frame_time_ += dt;
 
   if (is_down_now_) {
     // Handle releases
     if (press_amount_now_ == 0) {
-      release_delay_ -= dt;
-      if (release_delay_ <= 0) {
+      release_delay_left_ -= dt;
+      if (release_delay_left_ <= 0) {
+        press_amount_virtual_ = 0;
         is_down_now_ = false;
         was_released_ = true;
         return KeyEvent::Release;
@@ -567,10 +572,12 @@ Input::Input(GlopWindow *window)
   num_joysticks_(0),
   joystick_refresh_time_(kJoystickRefreshDelay),
   requested_joystick_refresh_(true) {
-  GetKeyTracker(kMouseUp)->SetReleaseDelay(100);
-  GetKeyTracker(kMouseRight)->SetReleaseDelay(100);
-  GetKeyTracker(kMouseDown)->SetReleaseDelay(100);
-  GetKeyTracker(kMouseLeft)->SetReleaseDelay(100);
+  GetKeyTracker(kMouseUp)->SetReleaseDelay(100, false);
+  GetKeyTracker(kMouseRight)->SetReleaseDelay(100, false);
+  GetKeyTracker(kMouseDown)->SetReleaseDelay(100, false);
+  GetKeyTracker(kMouseLeft)->SetReleaseDelay(100, false);
+  GetKeyTracker(kMouseWheelUp)->SetReleaseDelay(150, true);
+  GetKeyTracker(kMouseWheelDown)->SetReleaseDelay(150, true);
 }
 
 // Performs all per-frame logic for the input manager. lost_focus indicates whether the owning

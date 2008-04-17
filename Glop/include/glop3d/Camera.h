@@ -18,7 +18,7 @@ class GlopWindow;
 // Camera class definition
 class Camera: public Viewpoint {
  public:
-  // Constructors
+  // Constructors - field_of_view is the vertical angle spanned by the top and bottom planes seen.
 	Camera(const Viewpoint &view_point = Viewpoint())
   : Viewpoint(view_point),
     near_plane_(0.1f),
@@ -43,6 +43,13 @@ class Camera: public Viewpoint {
 	float GetFarPlane() const {return far_plane_;}
 	void SetFarPlane(float dist) {far_plane_ = dist;}
 
+  // Moves and rotates the camera so it is looking directly at the plane spanned by the given
+  // points, and such that the top and bottom are the topmost and bottommost points visible on
+  // the plane. The left and right bounds are used to center the camera, but we cannot guarantee
+  // they will be the exact leftmost and rightmost bounds until we know the aspect ratio to render
+  // in. The top and left edges should be perpendicular.
+  void LookAt(const Point3 &top_left, const Point3 &top_right, const Point3 &bottom_left);
+
  private:
   float near_plane_, far_plane_, field_of_view_;
 };
@@ -51,7 +58,21 @@ class Camera: public Viewpoint {
 class CameraFrame: public GlopFrame {
  public:
   CameraFrame(const Camera &camera = Camera())
-  : camera_(camera), is_fog_enabled_(false) {}
+  : aspect_ratio_(-1), camera_(camera), is_fog_enabled_(false) {}
+
+  // Returns the x and y coordinates where the given 3d point would be projected to.
+  void Project(const Point3 &val, int *x, int *y) const;
+
+  // This function can be used to ensure the CameraFrame maintains an aspect ratio (width / height)
+  // as given. LookAt uses this to ensure the CameraFrame views precisely the given rectangle
+  // without distortion.
+  void FixAspectRatio(float aspect_ratio) {
+    aspect_ratio_ = aspect_ratio;
+    DirtySize();
+  }
+  void LookAt(const Point3 &top_left, const Point3 &top_right, const Point3 &bottom_left,
+              float field_of_view);
+  void LookAt(const Point3 &top_left, const Point3 &top_right, const Point3 &bottom_left);
 
   // Rendering. Render3d should be overloaded, NOT render.
   virtual void Render3d() const = 0;
@@ -87,13 +108,12 @@ class CameraFrame: public GlopFrame {
   const Vec3 &GetBottomNormal() const {return bottom_normal_;}
 
  protected:
-  void RecomputeSize(int rec_width, int rec_height) {
-    GlopFrame::RecomputeSize(rec_width, rec_height);
-    UpdateNormals();
-  }
+  void RecomputeSize(int rec_width, int rec_height);
 
  private:
   void UpdateNormals();
+
+  float aspect_ratio_;
   Camera camera_;
   bool is_fog_enabled_;
   float fog_start_, fog_end_;
