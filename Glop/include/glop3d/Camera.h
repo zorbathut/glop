@@ -60,8 +60,9 @@ class CameraFrame: public GlopFrame {
   CameraFrame(const Camera &camera = Camera())
   : aspect_ratio_(-1), camera_(camera), is_fog_enabled_(false) {}
 
-  // Returns the x and y coordinates where the given 3d point would be projected to.
+  // Switches between 3d coordinates and screen coordinates.
   void Project(const Point3 &val, int *x, int *y) const;
+  Point3 Unproject(int x, int y, float depth) const;
 
   // This function can be used to ensure the CameraFrame maintains an aspect ratio (width / height)
   // as given. LookAt uses this to ensure the CameraFrame views precisely the given rectangle
@@ -75,7 +76,6 @@ class CameraFrame: public GlopFrame {
   void LookAt(const Point3 &top_left, const Point3 &top_right, const Point3 &bottom_left);
 
   // Rendering. Render3d should be overloaded, NOT render.
-  virtual void Render3d() const = 0;
   void Render() const;
 
   // Camera control
@@ -108,6 +108,7 @@ class CameraFrame: public GlopFrame {
   const Vec3 &GetBottomNormal() const {return bottom_normal_;}
 
  protected:
+  virtual void Render3d() const = 0;
   void RecomputeSize(int rec_width, int rec_height);
 
  private:

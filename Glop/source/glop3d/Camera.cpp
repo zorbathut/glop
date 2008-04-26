@@ -21,6 +21,15 @@ void CameraFrame::Project(const Point3 &val, int *x, int *y) const {
   *y = int(GetY2() - GetHeight() * (local[1] / height + 1)/2);
 }
 
+Point3 CameraFrame::Unproject(int x, int y, float depth) const {
+  float x_frac = float(x - GetX()) / GetWidth();
+  float y_frac = float(y - GetY()) / GetHeight();
+  float height = float(tan(GetCamera().GetFieldOfView() * kPi / 360) * 2 * depth);
+	float width = height * float(GetWidth()) / GetHeight();
+  Point3 local((x_frac - 0.5f) * width, (0.5f - y_frac) * width, depth);
+  return camera_.LocalToGlobal(local);
+}
+
 void CameraFrame::LookAt(const Point3 &top_left, const Point3 &top_right,
                          const Point3 &bottom_left, float field_of_view) {
   camera_.SetFieldOfView(field_of_view);

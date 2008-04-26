@@ -105,17 +105,17 @@ class Point3 {
     return !operator==(rhs);
   }
 
-private:
+ private:
 	float data_[3];
 };
 inline Point3 operator*(float scale, const Point3 &rhs) {return rhs * scale;}
 typedef Point3 Vec3;
 
 // Point constants
-const Point3 kOrigin(0, 0, 0);
-const Vec3 kXAxis(1, 0, 0);
-const Vec3 kYAxis(0, 1, 0);
-const Vec3 kZAxis(0, 0, 1);
+const Point3 kOrigin3(0, 0, 0);
+const Vec3 kXAxis3(1, 0, 0);
+const Vec3 kYAxis3(0, 1, 0);
+const Vec3 kZAxis3(0, 0, 1);
 
 // Point utilities
 inline Point3 Normalize(Point3 x) {x.Normalize(); return x;}
