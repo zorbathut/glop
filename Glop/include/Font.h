@@ -30,7 +30,6 @@
 #include "Base.h"
 #include "BinaryFileManager.h"
 #include "Color.h"
-#include "LightSet.h"
 #include <vector>
 using namespace std;
 

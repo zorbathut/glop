@@ -89,7 +89,7 @@
 // Includes
 #include "Base.h"
 #include "GlopFrameStyle.h"
-#include "LightSet.h"
+#include "List.h"
 #include <vector>
 using namespace std;
 
@@ -359,9 +359,9 @@ class SingleParentFrame: public GlopFrame {
 // implementations of RecomputeSize and OnSetPosition are provided, but they just position all
 // children at our position, and set our size to be their max size.
 //
-// It is guaranteed that a MultiParentFrame will assign id's to its children using InsertItem and
-// RemoveItem from LightSet. This is so that auxiliary data can easily be stored for each
-// child. See for example TableauFrame.
+// It is guaranteed that a MultiParentFrame will assign id's to its children using push_back from
+// List. This is so that auxiliary data can easily be stored for each child. See for example
+// TableauFrame.
 class MultiParentFrame: public GlopFrame {
  public:
   MultiParentFrame() {}
@@ -382,21 +382,21 @@ class MultiParentFrame: public GlopFrame {
   // Child manipulation. Note that any child added to a parent frame becomes owned by the
   // parent, and will be deleted on removal from the parent unless RemoveChildNoDelete is
   // called.
-  const GlopFrame *GetChild(LightSetId id) const {return children_[id];}
-  GlopFrame *GetChild(LightSetId id) {return children_[id];}
-  LightSetId GetFirstChildId() const {return children_.GetFirstId();}
-  int GetNumChildren() const {return children_.GetSize();}
-  LightSetId GetNextChildId(LightSetId id) const {return children_.GetNextId(id);}
-  LightSetId AddChild(GlopFrame *frame);
-  LightSetId RemoveChild(LightSetId id);
-  GlopFrame *RemoveChildNoDelete(LightSetId id);
+  const GlopFrame *GetChild(ListId id) const {return children_[id];}
+  GlopFrame *GetChild(ListId id) {return children_[id];}
+  int GetNumChildren() const {return children_.size();}
+  List<GlopFrame*>::const_iterator children_begin() const {return children_.begin();}
+  List<GlopFrame*>::const_iterator children_end() const {return children_.end();}
+  ListId AddChild(GlopFrame *frame);
+  ListId RemoveChild(ListId id);
+  GlopFrame *RemoveChildNoDelete(ListId id);
   void ClearChildren();
   void OnWindowResize(int width, int height);
   string GetContextStringHelper(bool extend_down, bool extend_up, const string &prefix) const;
   
  private:
   friend class GlopWindow;
-  LightSet<GlopFrame*> children_;
+  List<GlopFrame*> children_;
   DISALLOW_EVIL_CONSTRUCTORS(MultiParentFrame);
 };
 
@@ -564,31 +564,31 @@ class TableauFrame: public MultiParentFrame {
   virtual void Render() const;
   
   // Child accessors
-  const GlopFrame *GetChild(LightSetId id) const {return MultiParentFrame::GetChild(id);}
-  GlopFrame *GetChild(LightSetId id) {return MultiParentFrame::GetChild(id);}
-  float GetChildRelX(LightSetId id) const {return child_pos_[id].rel_x;}
-  float GetChildRelY(LightSetId id) const {return child_pos_[id].rel_y;}
-  int GetChildDepth(LightSetId id) const {return child_pos_[id].depth;}
-  float GetChildHorzJustify(LightSetId id) const {return child_pos_[id].horz_justify;}
-  float GetChildVertJustify(LightSetId id) const {return child_pos_[id].vert_justify;}
+  const GlopFrame *GetChild(ListId id) const {return MultiParentFrame::GetChild(id);}
+  GlopFrame *GetChild(ListId id) {return MultiParentFrame::GetChild(id);}
+  float GetChildRelX(ListId id) const {return child_pos_[id].rel_x;}
+  float GetChildRelY(ListId id) const {return child_pos_[id].rel_y;}
+  int GetChildDepth(ListId id) const {return child_pos_[id].depth;}
+  float GetChildHorzJustify(ListId id) const {return child_pos_[id].horz_justify;}
+  float GetChildVertJustify(ListId id) const {return child_pos_[id].vert_justify;}
   
   // Child mutators. Note that MoveChild(int) moves a child in front of any other children at
   // the same depth. Also note that MoveChild(float, float) and SetChildJustify(float, float)
   // both invoke DirtySize.
-  LightSetId AddChild(GlopFrame *frame, float rel_x, float rel_y,
-                      float horz_justify, float vert_justify, int depth = 0);
-  LightSetId AddChild(GlopFrame *frame, int depth = 0) {
+  ListId AddChild(GlopFrame *frame, float rel_x, float rel_y,
+                  float horz_justify, float vert_justify, int depth = 0);
+  ListId AddChild(GlopFrame *frame, int depth = 0) {
     return AddChild(frame, 0.5f, 0.5f, kJustifyCenter, kJustifyCenter, depth);
   }
-  void MoveChild(LightSetId id, int depth);
-  void MoveChild(LightSetId id, float rel_x, float rel_y);
-  void MoveChild(LightSetId id, float rel_x, float rel_y, int depth) {
+  void MoveChild(ListId id, int depth);
+  void MoveChild(ListId id, float rel_x, float rel_y);
+  void MoveChild(ListId id, float rel_x, float rel_y, int depth) {
     MoveChild(id, depth);
     MoveChild(id, rel_x, rel_y);
   }
-  void SetChildJustify(LightSetId id, float horz_justify, float vert_justify);
-  void RemoveChild(LightSetId id);
-  GlopFrame *RemoveChildNoDelete(LightSetId id);
+  void SetChildJustify(ListId id, float horz_justify, float vert_justify);
+  void RemoveChild(ListId id);
+  GlopFrame *RemoveChildNoDelete(ListId id);
   void ClearChildren();
   
   // Sizing and positioning (see GlopFrame)
@@ -607,7 +607,7 @@ class TableauFrame: public MultiParentFrame {
   class ChildOrderCompare {
    public:
      ChildOrderCompare(const TableauFrame *tableau): tableau_(tableau) {}
-     bool operator()(LightSetId id1, LightSetId id2) {
+     bool operator()(ListId id1, ListId id2) {
        if (id1 == 0 || id2 == 0)
          return (id2 == 0);
        else
@@ -616,8 +616,8 @@ class TableauFrame: public MultiParentFrame {
    private:
     const TableauFrame *tableau_;
   };
-  LightSet<ChildPosition> child_pos_;
-  mutable vector<LightSetId> ordered_children_;
+  List<ChildPosition> child_pos_;
+  mutable vector<ListId> ordered_children_;
   mutable bool order_dirty_;
   DISALLOW_EVIL_CONSTRUCTORS(TableauFrame);
 };
@@ -758,7 +758,7 @@ class TableFrame: public MultiParentFrame {
   struct CellInfo {
     CellSize width, height;
     float horz_justify, vert_justify;
-    LightSetId child_id;
+    ListId child_id;
   };
   CellInfo *cell_info_;
   DISALLOW_EVIL_CONSTRUCTORS(TableFrame);

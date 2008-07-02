@@ -59,12 +59,12 @@
 // Note that the Input class silently uses a separate thread for polling the Os input. This ensures
 // that the input will be accurate even if the frame rate is bad.
 
-#ifndef INPUT_H__
-#define INPUT_H__
+#ifndef GLOP_INPUT_H__
+#define GLOP_INPUT_H__
 
 // Includes
 #include "Base.h"
-#include "LightSet.h"
+#include "List.h"
 #include <string>
 #include <vector>
 using namespace std;
@@ -355,7 +355,7 @@ class KeyListener {
   void BeginKeyListening();
   void StopKeyListening();
  private:
-  LightSetId listener_id_;
+  ListId listener_id_;
   friend class Input;
   DISALLOW_EVIL_CONSTRUCTORS(KeyListener);
 };
@@ -566,7 +566,7 @@ class Input {
                                                   //  refresh. Used to prevent doing refreshes too
                                                   //  often.
   bool requested_joystick_refresh_;               // Whether the user wants to do a joystick refresh
-  LightSet<KeyListener*> key_listeners_;
+  List<KeyListener*> key_listeners_;
 
   // Key status
   vector<GlopKey> down_keys_frame_, pressed_keys_frame_;

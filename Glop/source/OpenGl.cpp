@@ -2,7 +2,6 @@
 #include "../include/OpenGl.h"
 #include "../include/GlopWindow.h"
 #include "../include/Image.h"
-#include "../include/LightSet.h"
 #include "GlopInternalData.h"
 
 // Texture class

@@ -16,6 +16,7 @@
 //  - Further prune calls to UpdateDerivedKey?
 //  - Think more about rendering order, perhaps add movetofront to multiparentframe
 //  - Allow DummyMenuFrames to render even when empty
+//  - Comment GetContextStringHelper
 
 // Includes
 #include "../Glop/include/Base.h"
@@ -87,7 +88,7 @@ void IconTitleTest() {
   TextFrame *text2 = new TextFrame("and the icon should be the default.",
                                    kWhite);
   ColFrame *col = new ColFrame(text1, text2);
-  LightSetId id = gWindow->AddFrame(col, 0.5f, 0.4f, kJustifyCenter, 0.4f);
+  ListId id = gWindow->AddFrame(col, 0.5f, 0.4f, kJustifyCenter, 0.4f);
   gWindow->AddFrame(new TextFrame("Press any key to continue...", kYellow),
                      0.5f, 1.0f, kJustifyCenter, kJustifyBottom);
   input()->WaitForKeyPress();
@@ -290,7 +291,7 @@ class CubeFrame: public CameraFrame {
                input()->GetKeyPressAmountFrame(kMouseUp);
     float strafe = input()->GetKeyPressAmountFrame('d') - input()->GetKeyPressAmountFrame('a');
     float step = input()->GetKeyPressAmountFrame('w') - input()->GetKeyPressAmountFrame('s');
-    c.Rotate(kYAxis, dt*0.2f*rx);
+    c.Rotate(kYAxis3, dt*0.2f*rx);
     c.Rotate(c.right(), dt*0.2f*ry);
     c.Translate(step * c.forwards() * 0.1f + strafe * c.right() * 0.1f);
     SetCamera(c);

@@ -2,7 +2,7 @@
 #define GLOP_GLOP_INTERNAL_DATA_H__
 
 // Includes
-#include "../include/LightSet.h"
+#include "../include/List.h"
 
 // Class declarations
 class DisplayList;
@@ -26,28 +26,28 @@ class GlDataManager {
   static void GlInitAll();
   static void GlShutDownAll();
 
-  static LightSetId RegisterTexture(Texture *texture) {
-    return textures_.InsertItem(texture);
+  static ListId RegisterTexture(Texture *texture) {
+    return textures_.push_back(texture);
   }
-  static void UnregisterTexture(LightSetId id) {
-    textures_.RemoveItem(id);
+  static void UnregisterTexture(ListId id) {
+    textures_.erase(id);
   }
-  static LightSetId RegisterDisplayList(DisplayList *dlist) {
-    return display_lists_.InsertItem(dlist);
+  static ListId RegisterDisplayList(DisplayList *dlist) {
+    return display_lists_.push_back(dlist);
   }
-  static void UnregisterDisplayList(LightSetId id) {
-    display_lists_.RemoveItem(id);
+  static void UnregisterDisplayList(ListId id) {
+    display_lists_.erase(id);
   }
-  static LightSetId RegisterDisplayLists(DisplayLists *dlists) {
-    return multi_display_lists_.InsertItem(dlists);
+  static ListId RegisterDisplayLists(DisplayLists *dlists) {
+    return multi_display_lists_.push_back(dlists);
   }
-  static void UnregisterDisplayLists(LightSetId id) {
-    multi_display_lists_.RemoveItem(id);
+  static void UnregisterDisplayLists(ListId id) {
+    multi_display_lists_.erase(id);
   }
  private:
-  static LightSet<Texture*> textures_;
-  static LightSet<DisplayList*> display_lists_;
-  static LightSet<DisplayLists*> multi_display_lists_;
+  static List<Texture*> textures_;
+  static List<DisplayList*> display_lists_;
+  static List<DisplayLists*> multi_display_lists_;
 };
 
 #endif // GLOP_GLOP_INTERNAL_DATA_H__

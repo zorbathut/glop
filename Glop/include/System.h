@@ -1,10 +1,9 @@
-#ifndef SYSTEM_H__
-#define SYSTEM_H__
+#ifndef GLOP_SYSTEM_H__
+#define GLOP_SYSTEM_H__
 
 // Includes
 #include "Base.h"
 #include "BinaryFileManager.h"
-#include "LightSet.h"
 #include <vector>
 
 // Class declarations

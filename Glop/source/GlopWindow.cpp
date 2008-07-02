@@ -111,41 +111,41 @@ void GlopWindow::SetTitle(const string &title) {
 // ===============
 
 string GlopWindow::GetFrameContextString() const {return frame_->GetContextString();}
-const GlopFrame *GlopWindow::GetFrame(LightSetId id) const {return frame_->GetChild(id);}
-GlopFrame *GlopWindow::GetFrame(LightSetId id) {return frame_->GetChild(id);}
-LightSetId GlopWindow::GetFirstFrameId() const {return frame_->GetFirstChildId();}
-LightSetId GlopWindow::GetNextFrameId(LightSetId id) const {return frame_->GetNextChildId(id);}
-float GlopWindow::GetFrameRelX(LightSetId id) const {return frame_->GetChildRelX(id);}
-float GlopWindow::GetFrameRelY(LightSetId id) const {return frame_->GetChildRelY(id);}
-int GlopWindow::GetFrameDepth(LightSetId id) const {return frame_->GetChildDepth(id);}
-float GlopWindow::GetFrameHorzJustify(LightSetId id) const {
+const GlopFrame *GlopWindow::GetFrame(ListId id) const {return frame_->GetChild(id);}
+GlopFrame *GlopWindow::GetFrame(ListId id) {return frame_->GetChild(id);}
+List<GlopFrame*>::const_iterator GlopWindow::frame_begin() const {return frame_->children_begin();}
+List<GlopFrame*>::const_iterator GlopWindow::frame_end() const {return frame_->children_end();}
+float GlopWindow::GetFrameRelX(ListId id) const {return frame_->GetChildRelX(id);}
+float GlopWindow::GetFrameRelY(ListId id) const {return frame_->GetChildRelY(id);}
+int GlopWindow::GetFrameDepth(ListId id) const {return frame_->GetChildDepth(id);}
+float GlopWindow::GetFrameHorzJustify(ListId id) const {
   return frame_->GetChildHorzJustify(id);
 }
-float GlopWindow::GetFrameVertJustify(LightSetId id) const {
+float GlopWindow::GetFrameVertJustify(ListId id) const {
   return frame_->GetChildVertJustify(id);
 }
 
 // Frame mutators
 // ==============
 
-LightSetId GlopWindow::AddFrame(GlopFrame *frame, float rel_x, float rel_y,
+ListId GlopWindow::AddFrame(GlopFrame *frame, float rel_x, float rel_y,
                                 float horz_justify, float vert_justify, int depth) {
   return frame_->AddChild(frame, rel_x, rel_y, horz_justify, vert_justify, depth);
 }
-void GlopWindow::MoveFrame(LightSetId id, int depth) {frame_->MoveChild(id, depth);}
-void GlopWindow::MoveFrame(LightSetId id, float rel_x, float rel_y) {
+void GlopWindow::MoveFrame(ListId id, int depth) {frame_->MoveChild(id, depth);}
+void GlopWindow::MoveFrame(ListId id, float rel_x, float rel_y) {
   frame_->MoveChild(id, rel_x, rel_y);
 }
-void GlopWindow::MoveFrame(LightSetId id, float rel_x, float rel_y, int depth) {
+void GlopWindow::MoveFrame(ListId id, float rel_x, float rel_y, int depth) {
   frame_->MoveChild(id, rel_x, rel_y, depth);
 }
-void GlopWindow::SetFrameJustify(LightSetId id, float horz_justify, float vert_justify) {
+void GlopWindow::SetFrameJustify(ListId id, float horz_justify, float vert_justify) {
   frame_->SetChildJustify(id, horz_justify, vert_justify);
 }
-GlopFrame *GlopWindow::RemoveFrameNoDelete(LightSetId id) {
+GlopFrame *GlopWindow::RemoveFrameNoDelete(ListId id) {
   return frame_->RemoveChildNoDelete(id);
 }
-void GlopWindow::RemoveFrame(LightSetId id) {frame_->RemoveChild(id);}
+void GlopWindow::RemoveFrame(ListId id) {frame_->RemoveChild(id);}
 void GlopWindow::ClearFrames() {frame_->ClearChildren();}
 
 // Internal logic
@@ -231,15 +231,14 @@ void GlopWindow::Think(int dt) {
   recreated_this_frame_ = false;
 
   // Update our content frames. All pings are handled in batch here after frames have resized. This
-  // is so that a frame can be guaranteed of it's size being current when it handles a ping, even
+  // is so that a frame can be guaranteed of its size being current when it handles a ping, even
   // if it is a new frame. Note, however, that one ping can actually generate another ping while
   // this is going on.
   frame_->UpdateSize(width_, height_); 
   is_resolving_ping_ = true;
-  for (LightSetId id = ping_list_.GetFirstId(); id != 0; id = ping_list_.GetNextId(id)) {
-    PropogatePing(ping_list_[id]);
-    id = ping_list_.RemoveItem(id);
-  }
+  for (List<GlopFrame::Ping*>::iterator it = ping_list_.begin(); it != ping_list_.end(); ++it)
+    PropogatePing(*it);
+  ping_list_.clear();
   is_resolving_ping_ = false;
   frame_->SetPosition(0, 0, 0, 0, width_-1, height_-1);
 
@@ -286,11 +285,14 @@ void GlopWindow::ChooseValidSize(int width, int height, int *new_width, int *new
 // Unregisters all pings a frame has created. A frame does this when it is deleted.
 // See GlopFrameBase.h.
 void GlopWindow::UnregisterAllPings(GlopFrame *frame) {
-  for (LightSetId id = ping_list_.GetFirstId(); id != 0; id = ping_list_.GetNextId(id))
-    if (ping_list_[id]->GetFrame() == frame) {
-      delete ping_list_[id];
-      id = ping_list_.RemoveItem(id);
+  for (List<GlopFrame::Ping*>::iterator it = ping_list_.begin(); it != ping_list_.end();) {
+    if ((*it)->GetFrame() == frame) {
+      delete *it;
+      it = ping_list_.erase(it);
+    } else {
+      ++it;
     }
+  }
 }
 
 // We wish to handle a ping as an autonomous unit. This ensures that if ping1 was requested before
@@ -301,7 +303,7 @@ void GlopWindow::RegisterPing(GlopFrame::Ping *ping) {
   if (is_resolving_ping_)
     PropogatePing(ping);
   else
-    ping_list_.InsertItem(ping);
+    ping_list_.push_back(ping);
 }
 
 // Internal utility to propogate a ping upwards to its child frame.

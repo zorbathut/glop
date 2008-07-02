@@ -2,7 +2,6 @@
 #include "../include/GlopFrameBase.h"
 #include "../include/GlopFrameWidgets.h"
 #include "../include/GlopWindow.h"
-#include "../include/LightSet.h"
 #include "../include/OpenGl.h"
 #include <algorithm>
 using namespace std;
@@ -141,93 +140,94 @@ string SingleParentFrame::GetContextStringHelper(bool extend_down, bool extend_u
 // Renders all child frames. We automatically prune the children if they are completely outside
 // the clipping rectangle.
 void MultiParentFrame::Render() const {
-  for (LightSetId id = children_.GetFirstId(); id != 0; id = children_.GetNextId(id)) {
-    int x = children_[id]->GetX(), y = children_[id]->GetY(),
-        w = children_[id]->GetWidth(), h = children_[id]->GetHeight();
+  for (List<GlopFrame*>::const_iterator it = children_.begin(); it != children_.end(); ++it) {
+    int x = (*it)->GetX(), y = (*it)->GetY(), w = (*it)->GetWidth(), h = (*it)->GetHeight();
     if (x+w > clip_x1_ && y+h > clip_y1_ && x <= clip_x2_ && y <= clip_y2_)
-      children_[id]->Render();
+      (*it)->Render();
   }
 }
 
 bool MultiParentFrame::OnKeyEvent(const KeyEvent &event, int dt) {
   bool result = false;
-  for (LightSetId id = children_.GetFirstId(); id != 0; id = children_.GetNextId(id))
-  if (!children_[id]->IsFocusFrame())
-    result |= children_[id]->OnKeyEvent(event, dt);
+  for (List<GlopFrame*>::iterator it = children_.begin(); it != children_.end(); ++it)
+  if (!(*it)->IsFocusFrame())
+    result |= (*it)->OnKeyEvent(event, dt);
   return result;
 }
 
 void MultiParentFrame::Think(int dt) {
-  for (LightSetId id = children_.GetFirstId(); id != 0; id = children_.GetNextId(id))
-    children_[id]->Think(dt);
+  for (List<GlopFrame*>::iterator it = children_.begin(); it != children_.end(); ++it)
+    (*it)->Think(dt);
 }
 
-void MultiParentFrame::SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2) {
+void MultiParentFrame::SetPosition(int screen_x, int screen_y,
+                                   int cx1, int cy1, int cx2, int cy2) {
   GlopFrame::SetPosition(screen_x, screen_y, cx1, cy1, cx2, cy2);
-  for (LightSetId id = children_.GetFirstId(); id != 0; id = children_.GetNextId(id))
-    children_[id]->SetPosition(screen_x, screen_y, cx1, cy1, cx2, cy2);
+  for (List<GlopFrame*>::iterator it = children_.begin(); it != children_.end(); ++it)
+    (*it)->SetPosition(screen_x, screen_y, cx1, cy1, cx2, cy2);
 }
 
 bool MultiParentFrame::IsFocusMagnet(const KeyEvent &event) const {
-  for (LightSetId id = children_.GetFirstId(); id != 0; id = children_.GetNextId(id))
-    if (!children_[id]->IsFocusFrame() && children_[id]->IsFocusMagnet(event))
+  for (List<GlopFrame*>::const_iterator it = children_.begin(); it != children_.end(); ++it)
+    if (!(*it)->IsFocusFrame() && (*it)->IsFocusMagnet(event))
       return true;
   return false;
 }
 
 void MultiParentFrame::RecomputeSize(int rec_width, int rec_height) {
   int new_width = 0, new_height = 0;
-  for (LightSetId id = children_.GetFirstId(); id != 0; id = children_.GetNextId(id)) {
-    children_[id]->UpdateSize(rec_width, rec_height);
-    new_width = max(new_width, children_[id]->GetWidth());
-    new_height = max(new_height, children_[id]->GetHeight());
+  for (List<GlopFrame*>::iterator it = children_.begin(); it != children_.end(); ++it) {
+    (*it)->UpdateSize(rec_width, rec_height);
+    new_width = max(new_width, (*it)->GetWidth());
+    new_height = max(new_height, (*it)->GetHeight());
   }
   SetSize(new_width, new_height);
 }
 
 void MultiParentFrame::OnFocusChange() {
-  for (LightSetId id = children_.GetFirstId(); id != 0; id = children_.GetNextId(id))
-  if (children_[id]->GetFocusFrame() != children_[id])
-    children_[id]->SetFocusInfo(focus_frame_, is_in_focus_);
+  for (List<GlopFrame*>::iterator it = children_.begin(); it != children_.end(); ++it)
+  if ((*it)->GetFocusFrame() != *it)
+    (*it)->SetFocusInfo(focus_frame_, is_in_focus_);
 }
 
-LightSetId MultiParentFrame::AddChild(GlopFrame *frame) {
+ListId MultiParentFrame::AddChild(GlopFrame *frame) {
   DirtySize();
-  LightSetId result = children_.InsertItem(frame);
+  ListId result = children_.push_back(frame);
   frame->SetParent(this);
   return result;
 }
 
-LightSetId MultiParentFrame::RemoveChild(LightSetId id) {
+ListId MultiParentFrame::RemoveChild(ListId id) {
   delete children_[id];
-  return children_.RemoveItem(id);
+  return children_.erase(id);
 }
 
-GlopFrame *MultiParentFrame::RemoveChildNoDelete(LightSetId id) {
+GlopFrame *MultiParentFrame::RemoveChildNoDelete(ListId id) {
   GlopFrame *old_child = children_[id];
-  children_.RemoveItem(id);
+  children_.erase(id);
   old_child->SetParent(0);
   return old_child;
 }
 
 void MultiParentFrame::ClearChildren() {
-  for (LightSetId id = children_.GetFirstId(); id != 0; id = children_.GetNextId(id))
-    id = RemoveChild(id);
+  for (List<GlopFrame*>::iterator it = children_.begin(); it != children_.end(); ++it)
+    delete *it;
+  children_.clear();
 }
 
 void MultiParentFrame::OnWindowResize(int width, int height) {
   DirtySize();
-  for (LightSetId id = children_.GetFirstId(); id != 0; id = children_.GetNextId(id))
-    children_[id]->OnWindowResize(width, height);
+  for (List<GlopFrame*>::iterator it = children_.begin(); it != children_.end(); ++it)
+    (*it)->OnWindowResize(width, height);
 }
 
 string MultiParentFrame::GetContextStringHelper(bool extend_down, bool extend_up,
                                                 const string &prefix) const {
   string result = GlopFrame::GetContextStringHelper(extend_down, extend_up, prefix);
   if (extend_down)
-  for (LightSetId id = children_.GetFirstId(); id != 0; id = children_.GetNextId(id))
-    result += children_[id]->GetContextStringHelper(
-      true, false, prefix + (children_.GetNextId(id) == 0? " " : "|"));
+  for (List<GlopFrame*>::const_iterator it = children_.begin(); it != children_.end(); ++it)
+    result += (*it)->GetContextStringHelper(
+      true, false, prefix + (it == children_.next_to_end()? " " : "|"));
   return result;
 }
 
@@ -397,9 +397,9 @@ void TableauFrame::Render() const {
 
 // Adds a child at the given position. We use the fact that the id obtained by inserting into
 // MultiParentFrame and into child_pos_ will be identical.
-LightSetId TableauFrame::AddChild(GlopFrame *frame, float rel_x, float rel_y,
+ListId TableauFrame::AddChild(GlopFrame *frame, float rel_x, float rel_y,
                                   float horz_justify, float vert_justify, int depth) {
-  LightSetId result = MultiParentFrame::AddChild(frame);
+  ListId result = MultiParentFrame::AddChild(frame);
   ChildPosition pos;
   pos.rel_x = rel_x;
   pos.rel_y = rel_y;
@@ -409,11 +409,11 @@ LightSetId TableauFrame::AddChild(GlopFrame *frame, float rel_x, float rel_y,
   pos.order_pos = (int)ordered_children_.size();
   ordered_children_.push_back(result);
   order_dirty_ = true;
-  ASSERT(child_pos_.InsertItem(pos) == result);
+  ASSERT(ListId(child_pos_.push_back(pos)) == result);
   return result;
 }
 
-void TableauFrame::MoveChild(LightSetId id, int depth) {
+void TableauFrame::MoveChild(ListId id, int depth) {
   ordered_children_[child_pos_[id].order_pos] = 0;
   child_pos_[id].depth = depth;
   child_pos_[id].order_pos = (int)ordered_children_.size();
@@ -421,62 +421,61 @@ void TableauFrame::MoveChild(LightSetId id, int depth) {
   order_dirty_ = true;
 }
 
-void TableauFrame::MoveChild(LightSetId id, float rel_x, float rel_y) {
+void TableauFrame::MoveChild(ListId id, float rel_x, float rel_y) {
   ChildPosition *pos = &child_pos_[id];
   pos->rel_x = rel_x;
   pos->rel_y = rel_y;
   GetChild(id)->DirtySize();
 }
 
-void TableauFrame::SetChildJustify(LightSetId id, float horz_justify, float vert_justify) {
+void TableauFrame::SetChildJustify(ListId id, float horz_justify, float vert_justify) {
   ChildPosition *pos = &child_pos_[id];
   pos->horz_justify = horz_justify;
   pos->vert_justify = vert_justify;
   GetChild(id)->DirtySize();
 }
 
-GlopFrame *TableauFrame::RemoveChildNoDelete(LightSetId id) {
+GlopFrame *TableauFrame::RemoveChildNoDelete(ListId id) {
   ordered_children_[child_pos_[id].order_pos] = 0;
   order_dirty_ = true;
-  child_pos_.RemoveItem(id);
+  child_pos_.erase(id);
   return MultiParentFrame::RemoveChildNoDelete(id);
 }
 
-void TableauFrame::RemoveChild(LightSetId id) {
+void TableauFrame::RemoveChild(ListId id) {
   ordered_children_[child_pos_[id].order_pos] = 0;
   order_dirty_ = true;
-  child_pos_.RemoveItem(id);
+  child_pos_.erase(id);
   MultiParentFrame::RemoveChild(id);
 }
 
 void TableauFrame::ClearChildren() {
   while (GetNumChildren())
-    RemoveChild(GetFirstChildId());
+    RemoveChild(children_begin());
 }
 
 void TableauFrame::SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2) {
   GlopFrame::SetPosition(screen_x, screen_y, cx1, cy1, cx2, cy2);
-  for (LightSetId id = GetFirstChildId(); id != 0; id = GetNextChildId(id)) {
-    const ChildPosition &pos = child_pos_[id];
-    GlopFrame *child = GetChild(id);
-    child->SetPosition(
-        GetX() + int(pos.rel_x * GetWidth() - child->GetWidth() * pos.horz_justify),
-        GetY() + int(pos.rel_y * GetHeight() - child->GetHeight() * pos.vert_justify),
+  for (List<GlopFrame*>::const_iterator it = children_begin(); it != children_end(); ++it) {
+    const ChildPosition &pos = child_pos_[it];
+    (*it)->SetPosition(
+        GetX() + int(pos.rel_x * GetWidth() - (*it)->GetWidth() * pos.horz_justify),
+        GetY() + int(pos.rel_y * GetHeight() - (*it)->GetHeight() * pos.vert_justify),
         cx1, cy1, cx2, cy2);
   }
 }
 
 void TableauFrame::RecomputeSize(int rec_width, int rec_height) {
   SetSize(rec_width, rec_height);
-  for (LightSetId id = GetFirstChildId(); id != 0; id = GetNextChildId(id)) {
-    const ChildPosition &pos = child_pos_[id];
+  for (List<GlopFrame*>::const_iterator it = children_begin(); it != children_end(); ++it) {
+    const ChildPosition &pos = child_pos_[it];
     float x_frac = (pos.horz_justify == kJustifyLeft? 1 - pos.rel_x :
                     pos.horz_justify == kJustifyRight? pos.rel_x :
                     min(pos.rel_x / pos.horz_justify, (1 - pos.rel_x) / (1 - pos.horz_justify)));
     float y_frac = (pos.vert_justify == kJustifyTop? 1 - pos.rel_y :
                     pos.vert_justify == kJustifyBottom? pos.rel_y :
                     min(pos.rel_y / pos.vert_justify, (1 - pos.rel_y) / (1 - pos.vert_justify)));
-    GetChild(id)->UpdateSize(int(rec_width*x_frac), int(rec_height*y_frac));
+    (*it)->UpdateSize(int(rec_width*x_frac), int(rec_height*y_frac));
   }
 }
 
@@ -630,7 +629,7 @@ void TableFrame::SetPosition(int screen_x, int screen_y, int cx1, int cy1, int c
   for (int i = 0; i < num_rows_; i++)
     for (int j = 0; j < num_cols_; j++) {
       const CellInfo &info = cell_info_[i*num_cols_ + j];
-      LightSetId child_id = info.child_id;
+      ListId child_id = info.child_id;
       if (child_id != 0) {
         GetChild(child_id)->SetPosition(
           GetX() + col_info_[j].pos +
@@ -753,7 +752,7 @@ void TableFrame::RecomputeSize(int rec_width, int rec_height) {
         }
 
         // Resize the cell and its row, column
-        LightSetId child_id = cell_info_[index].child_id;
+        ListId child_id = cell_info_[index].child_id;
         GetChild(child_id)->UpdateSize(w, h);
         row_info_[y].size = max(row_info_[y].size, GetChild(child_id)->GetHeight());
         col_info_[x].size = max(col_info_[x].size, GetChild(child_id)->GetWidth());
@@ -1133,7 +1132,7 @@ class UnfocusableScrollingFrame: public MultiParentFrame {
   GlopFrame *inner_frame_;
   ClippedFrame *clipped_inner_frame_;
   SliderFrame *horz_slider_, *vert_slider_;
-  LightSetId horz_slider_id_, vert_slider_id_;
+  ListId horz_slider_id_, vert_slider_id_;
   int inner_view_width_, inner_view_height_;
   const SliderViewFactory *view_factory_;
   DISALLOW_EVIL_CONSTRUCTORS(UnfocusableScrollingFrame);

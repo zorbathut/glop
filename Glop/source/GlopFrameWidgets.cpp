@@ -9,12 +9,14 @@
 
 // HotKeyTracker
 // =============
-KeyEvent::Type HotKeyTracker::RemoveHotKey(LightSetId id) {
-  for (LightSetId tmp = down_hot_keys_.GetFirstId(); tmp != 0; tmp = down_hot_keys_.GetNextId(id))
-  if (down_hot_keys_[tmp] == hot_keys_[id])
-    tmp = down_hot_keys_.RemoveItem(tmp);
-  hot_keys_.RemoveItem(id);
-  return tracker_.SetIsDown(down_hot_keys_.GetSize() > 0);
+KeyEvent::Type HotKeyTracker::RemoveHotKey(ListId id) {
+  for (List<GlopKey>::iterator it = down_hot_keys_.begin(); it != down_hot_keys_.end(); ++it)
+  if (*it == hot_keys_[id]) {
+    down_hot_keys_.erase(it);
+    break;
+  }
+  hot_keys_.erase(id);
+  return tracker_.SetIsDown(down_hot_keys_.size() > 0);
 }
 
 bool HotKeyTracker::OnKeyEvent(const KeyEvent &event, int dt, KeyEvent::Type *result) {
@@ -25,33 +27,35 @@ bool HotKeyTracker::OnKeyEvent(const KeyEvent &event, int dt, KeyEvent::Type *re
 
   bool key_used = false;
   if (event.IsPress()) {
-    for (LightSetId id = hot_keys_.GetFirstId(); id != 0; id = hot_keys_.GetNextId(id))
-    if (IsMatchingKey(hot_keys_[id], event.key)) {
+    for (List<GlopKey>::iterator it = hot_keys_.begin(); it != hot_keys_.end(); ++it)
+    if (IsMatchingKey(*it, event.key)) {
       key_used = true;
-      if (event.IsNonRepeatPress()) {
-        down_hot_keys_.InsertItem(hot_keys_[id]);
-      }
+      if (event.IsNonRepeatPress())
+        down_hot_keys_.push_back(*it);
     }
   } else if (event.IsRelease()) {
-    for (LightSetId id = down_hot_keys_.GetFirstId(); id != 0; id = down_hot_keys_.GetNextId(id))
-    if (IsMatchingKey(down_hot_keys_[id], event.key)) {
-      key_used = true;
-      id = down_hot_keys_.RemoveItem(id);
+    for (List<GlopKey>::iterator it = down_hot_keys_.begin(); it != down_hot_keys_.end();) {
+      if (IsMatchingKey(*it, event.key)) {
+        key_used = true;
+        it = down_hot_keys_.erase(it);
+      } else {
+        ++it;
+      }
     }
   }
 
-  *result = tracker_.SetIsDown(down_hot_keys_.GetSize() > 0);
+  *result = tracker_.SetIsDown(down_hot_keys_.size() > 0);
   return key_used;
 }
 
 KeyEvent::Type HotKeyTracker::Clear() {
-  down_hot_keys_.Clear();
+  down_hot_keys_.clear();
   return tracker_.SetIsDown(false);
 }
 
 bool HotKeyTracker::IsFocusMagnet(const KeyEvent &event) const {
-  for (LightSetId id = hot_keys_.GetFirstId(); id != 0; id = hot_keys_.GetNextId(id))
-  if (IsMatchingKey(hot_keys_[id], event.key))
+  for (List<GlopKey>::const_iterator it = hot_keys_.begin(); it != hot_keys_.end(); ++it)
+  if (IsMatchingKey(*it, event.key))
     return true;
   return false;
 }
@@ -1432,8 +1436,8 @@ void DummyMenuFrame::RecomputeSize(int rec_width, int rec_height) {
 
 // Globals
 bool DialogWidget::is_initialized_ = false;
-LightSet<GlopKey> DialogWidget::yes_keys_, DialogWidget::no_keys_, DialogWidget::okay_keys_,
-                  DialogWidget::cancel_keys_;
+List<GlopKey> DialogWidget::yes_keys_, DialogWidget::no_keys_, DialogWidget::okay_keys_,
+              DialogWidget::cancel_keys_;
 
 // Constructors
 void DialogWidget::TextOkay(const string &title, const string &message,
@@ -1490,10 +1494,10 @@ DialogWidget::Result DialogWidget::IntegerPromptOkayCancel(
 // Utilities
 void DialogWidget::Init() {
   if (!is_initialized_) {
-    yes_keys_.InsertItem('y');
-    no_keys_.InsertItem('n');
-    okay_keys_.InsertItem(kGuiKeyConfirm);
-    cancel_keys_.InsertItem(kGuiKeyCancel);
+    yes_keys_.push_back('y');
+    no_keys_.push_back('n');
+    okay_keys_.push_back(kGuiKeyConfirm);
+    cancel_keys_.push_back(kGuiKeyCancel);
     is_initialized_ = true;
   }
 }
@@ -1512,29 +1516,29 @@ GlopFrame *DialogWidget::Create(
     button_meanings->push_back(Yes);
     buttons->push_back(new ButtonWidget("Yes", factory->GetButtonTextStyle(),
                                         factory->GetButtonViewFactory()));
-    for (LightSetId id = yes_keys_.GetFirstId(); id != 0; id = yes_keys_.GetNextId(id))
-      (*buttons)[buttons->size()-1]->AddHotKey(yes_keys_[id]);
+    for (List<GlopKey>::iterator it = yes_keys_.begin(); it != yes_keys_.end(); ++it)
+      (*buttons)[buttons->size()-1]->AddHotKey(*it);
   }
   if (has_no_button) {
     button_meanings->push_back(No);
     buttons->push_back(new ButtonWidget("No", factory->GetButtonTextStyle(),
                                        factory->GetButtonViewFactory()));
-    for (LightSetId id = no_keys_.GetFirstId(); id != 0; id = no_keys_.GetNextId(id))
-      (*buttons)[buttons->size()-1]->AddHotKey(no_keys_[id]);
+    for (List<GlopKey>::iterator it = no_keys_.begin(); it != no_keys_.end(); ++it)
+      (*buttons)[buttons->size()-1]->AddHotKey(*it);
   }
   if (has_okay_button) {
     button_meanings->push_back(Okay);
     buttons->push_back(new ButtonWidget("Okay", factory->GetButtonTextStyle(),
                                        factory->GetButtonViewFactory()));
-    for (LightSetId id = okay_keys_.GetFirstId(); id != 0; id = okay_keys_.GetNextId(id))
-      (*buttons)[buttons->size()-1]->AddHotKey(okay_keys_[id]);
+    for (List<GlopKey>::iterator it = okay_keys_.begin(); it != okay_keys_.end(); ++it)
+      (*buttons)[buttons->size()-1]->AddHotKey(*it);
   }
   if (has_cancel_button) {
     button_meanings->push_back(Cancel);
     buttons->push_back(new ButtonWidget("Cancel", factory->GetButtonTextStyle(),
                                        factory->GetButtonViewFactory()));
-    for (LightSetId id = cancel_keys_.GetFirstId(); id != 0; id = cancel_keys_.GetNextId(id))
-      (*buttons)[buttons->size()-1]->AddHotKey(cancel_keys_[id]);
+    for (List<GlopKey>::iterator it = cancel_keys_.begin(); it != cancel_keys_.end(); ++it)
+      (*buttons)[buttons->size()-1]->AddHotKey(*it);
   }
   RowFrame *button_row = new RowFrame((int)buttons->size());
   for (int i = 0; i < (int)buttons->size(); i++)
@@ -1581,8 +1585,8 @@ DialogWidget::Result DialogWidget::DoText(
   gWindow->PushFocus();
   GlopFrame *frame = Create(title, message, "", 0, has_yes_button, has_no_button, has_okay_button,
                             has_cancel_button, factory, &buttons, &button_meanings);
-  LightSetId id = gWindow->AddFrame(frame, 0.5f, factory->GetVertJustify(),
-                                    0.5f, factory->GetVertJustify(), 0);
+  ListId id = gWindow->AddFrame(frame, 0.5f, factory->GetVertJustify(),
+                                0.5f, factory->GetVertJustify(), 0);
   Result result = Execute(buttons, button_meanings);
   gWindow->RemoveFrame(id);
   gWindow->PopFocus();
@@ -1602,7 +1606,7 @@ DialogWidget::Result DialogWidget::DoStringPrompt(
   GlopFrame *frame = Create(title, message, prompt + " ", prompt_frame, false, false,
                             has_okay_button, has_cancel_button, factory, &buttons,
                             &button_meanings);
-  LightSetId id = gWindow->AddFrame(frame, 0.5f, factory->GetVertJustify(),
+  ListId id = gWindow->AddFrame(frame, 0.5f, factory->GetVertJustify(),
                                     0.5f, factory->GetVertJustify(), 0);
   Result result = Execute(buttons, button_meanings);
   *prompt_value = prompt_frame->Get();
@@ -1624,7 +1628,7 @@ DialogWidget::Result DialogWidget::DoIntegerPrompt(
   GlopFrame *frame = Create(title, message, prompt + " ", prompt_frame, false, false,
                             has_okay_button, has_cancel_button, factory, &buttons,
                             &button_meanings);
-  LightSetId id = gWindow->AddFrame(frame, 0.5f, factory->GetVertJustify(),
+  ListId id = gWindow->AddFrame(frame, 0.5f, factory->GetVertJustify(),
                                     0.5f, factory->GetVertJustify(), 0);
   Result result = Execute(buttons, button_meanings);
   *prompt_value = prompt_frame->Get();

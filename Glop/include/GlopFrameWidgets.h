@@ -77,8 +77,8 @@ class TextRenderer;
 class HotKeyTracker {
  public:
   HotKeyTracker() {}
-  LightSetId AddHotKey(const GlopKey &key) {return hot_keys_.InsertItem(key);}
-  KeyEvent::Type RemoveHotKey(LightSetId id);
+  ListId AddHotKey(const GlopKey &key) {return hot_keys_.push_back(key);}
+  KeyEvent::Type RemoveHotKey(ListId id);
 
   bool OnKeyEvent(const KeyEvent &event, int dt, KeyEvent::Type *result);
   bool OnKeyEvent(const KeyEvent &event, int dt) {
@@ -98,7 +98,7 @@ class HotKeyTracker {
   bool IsMatchingKey(const GlopKey &hot_key, const GlopKey &key) const;
 
   Input::KeyTracker tracker_;
-  LightSet<GlopKey> hot_keys_, down_hot_keys_;
+  List<GlopKey> hot_keys_, down_hot_keys_;
   DISALLOW_EVIL_CONSTRUCTORS(HotKeyTracker);
 };
 
@@ -341,7 +341,7 @@ class FancyTextFrame: public MultiParentFrame {
   GuiTextStyle text_style_;
   bool add_soft_returns_;
   struct TextBlock {
-    LightSetId child_id;
+    ListId child_id;
     int x, y;
   };
   vector<vector<TextBlock> > text_blocks_;
@@ -577,8 +577,8 @@ class ButtonFrame: public SingleParentFrame {
   string GetType() const {return "ButtonFrame";}
 
   // Hot keys
-  LightSetId AddHotKey(const GlopKey &key) {return hot_key_tracker_.AddHotKey(key);}
-  void RemoveHotKey(LightSetId id) {hot_key_tracker_.RemoveHotKey(id);}
+  ListId AddHotKey(const GlopKey &key) {return hot_key_tracker_.AddHotKey(key);}
+  void RemoveHotKey(ListId id) {hot_key_tracker_.RemoveHotKey(id);}
 
   // Returns whether the button is currently in the down state.
   bool IsDown() const {return button()->IsDown();}
@@ -639,8 +639,8 @@ class ButtonWidget: public FocusFrame {
   string GetType() const {return "ButtonWidget";}
 
   // Utilities
-  LightSetId AddHotKey(const GlopKey &key) {return button()->AddHotKey(key);}
-  void RemoveHotKey(LightSetId id) {button()->RemoveHotKey(id);}
+  ListId AddHotKey(const GlopKey &key) {return button()->AddHotKey(key);}
+  void RemoveHotKey(ListId id) {button()->RemoveHotKey(id);}
   bool IsDown() const {return button()->IsDown();}
   bool WasHeldDown() const {return button()->WasHeldDown();}
   bool WasPressedFully() const {return button()->WasPressedFully();}
@@ -709,14 +709,14 @@ class SliderFrame: public SingleParentFrame {
   SliderFrame(Direction direction, int logical_tab_size, int logical_total_size,
               int logical_tab_position, const SliderViewFactory *factory = gSliderViewFactory);
   string GetType() const {return "SliderFrame";}
-  LightSetId AddDecHotKey(const GlopKey &key) {return GetDecButton()->AddHotKey(key);}
-  void RemoveDecHotKey(LightSetId id) {GetDecButton()->RemoveHotKey(id);}
-  LightSetId AddBigDecHotKey(const GlopKey &key) {return big_dec_tracker_.AddHotKey(key);}
-  void RemoveBigDecHotKey(LightSetId id) {big_dec_tracker_.RemoveHotKey(id);}
-  LightSetId AddIncHotKey(const GlopKey &key) {return GetIncButton()->AddHotKey(key);}
-  void RemoveIncHotKey(LightSetId id) {GetIncButton()->RemoveHotKey(id);}
-  LightSetId AddBigIncHotKey(const GlopKey &key) {return big_inc_tracker_.AddHotKey(key);}
-  void RemoveBigIncHotKey(LightSetId id) {big_inc_tracker_.RemoveHotKey(id);}
+  ListId AddDecHotKey(const GlopKey &key) {return GetDecButton()->AddHotKey(key);}
+  void RemoveDecHotKey(ListId id) {GetDecButton()->RemoveHotKey(id);}
+  ListId AddBigDecHotKey(const GlopKey &key) {return big_dec_tracker_.AddHotKey(key);}
+  void RemoveBigDecHotKey(ListId id) {big_dec_tracker_.RemoveHotKey(id);}
+  ListId AddIncHotKey(const GlopKey &key) {return GetIncButton()->AddHotKey(key);}
+  void RemoveIncHotKey(ListId id) {GetIncButton()->RemoveHotKey(id);}
+  ListId AddBigIncHotKey(const GlopKey &key) {return big_inc_tracker_.AddHotKey(key);}
+  void RemoveBigIncHotKey(ListId id) {big_inc_tracker_.RemoveHotKey(id);}
 
   // State accessors/mutators
   int GetTabPosition() const {return slider()->GetTabPosition();}
@@ -764,14 +764,14 @@ class SliderWidget: public FocusFrame {
   string GetType() const {return "SliderWidget";}
 
   // Utilities
-  LightSetId AddDecHotKey(const GlopKey &key) {return slider()->AddDecHotKey(key);}
-  void RemoveDecHotKey(LightSetId id) {slider()->RemoveDecHotKey(id);}
-  LightSetId AddBigDecHotKey(const GlopKey &key) {return slider()->AddBigDecHotKey(key);}
-  void RemoveBigDecHotKey(LightSetId id) {slider()->RemoveBigDecHotKey(id);}
-  LightSetId AddIncHotKey(const GlopKey &key) {return slider()->AddIncHotKey(key);}
-  void RemoveIncHotKey(LightSetId id) {slider()->RemoveIncHotKey(id);}
-  LightSetId AddBigIncHotKey(const GlopKey &key) {return slider()->AddBigIncHotKey(key);}
-  void RemoveBigIncHotKey(LightSetId id) {slider()->RemoveBigIncHotKey(id);}
+  ListId AddDecHotKey(const GlopKey &key) {return slider()->AddDecHotKey(key);}
+  void RemoveDecHotKey(ListId id) {slider()->RemoveDecHotKey(id);}
+  ListId AddBigDecHotKey(const GlopKey &key) {return slider()->AddBigDecHotKey(key);}
+  void RemoveBigDecHotKey(ListId id) {slider()->RemoveBigDecHotKey(id);}
+  ListId AddIncHotKey(const GlopKey &key) {return slider()->AddIncHotKey(key);}
+  void RemoveIncHotKey(ListId id) {slider()->RemoveIncHotKey(id);}
+  ListId AddBigIncHotKey(const GlopKey &key) {return slider()->AddBigIncHotKey(key);}
+  void RemoveBigIncHotKey(ListId id) {slider()->RemoveBigIncHotKey(id);}
   int GetTabPosition() const {return slider()->GetTabPosition();}
   void SetTabPosition(int position) {slider()->SetTabPosition(position);}
   void SmallDec() {slider()->SmallDec();}
@@ -840,7 +840,7 @@ class DummyMenuFrame: public MultiParentFrame {
     int item_;
     DISALLOW_EVIL_CONSTRUCTORS(ItemPing);
   };
-  vector<LightSetId> item_ids_;
+  vector<ListId> item_ids_;
   int num_cols_, selection_;
   bool is_vertical_;
   float horz_justify_, vert_justify_;
@@ -857,18 +857,18 @@ class DummyMenuFrame: public MultiParentFrame {
 class DialogWidget {
  public:
   // Hot key controls
-  static LightSetId AddYesHotKey(const GlopKey &key) {Init(); return yes_keys_.GetFirstId();}
-  static void RemoveYesHotKey(LightSetId id) {Init(); yes_keys_.RemoveItem(id);}
-  static void ClearYesHotKeys() {Init(); yes_keys_.Clear();}
-  static LightSetId AddNoHotKey(const GlopKey &key) {Init(); return no_keys_.GetFirstId();}
-  static void RemoveNoHotKey(LightSetId id) {Init(); no_keys_.RemoveItem(id);}
-  static void ClearNoHotKeys() {Init(); no_keys_.Clear();}
-  static LightSetId AddOkayHotKey(const GlopKey &key) {Init(); return okay_keys_.GetFirstId();}
-  static void RemoveOkayHotKey(LightSetId id) {Init(); okay_keys_.RemoveItem(id);}
-  static void ClearOkayHotKeys() {Init(); okay_keys_.Clear();}
-  static LightSetId AddCancelHotKey(const GlopKey &key) {Init(); return cancel_keys_.GetFirstId();}
-  static void RemoveCancelHotKey(LightSetId id) {Init(); cancel_keys_.RemoveItem(id);}
-  static void ClearCancelHotKeys() {Init(); cancel_keys_.Clear();}
+  static ListId AddYesHotKey(const GlopKey &key) {Init(); return yes_keys_.push_back(key);}
+  static void RemoveYesHotKey(ListId id) {Init(); yes_keys_.erase(id);}
+  static void ClearYesHotKeys() {Init(); yes_keys_.clear();}
+  static ListId AddNoHotKey(const GlopKey &key) {Init(); return no_keys_.push_back(key);}
+  static void RemoveNoHotKey(ListId id) {Init(); no_keys_.erase(id);}
+  static void ClearNoHotKeys() {Init(); no_keys_.clear();}
+  static ListId AddOkayHotKey(const GlopKey &key) {Init(); return okay_keys_.push_back(key);}
+  static void RemoveOkayHotKey(ListId id) {Init(); okay_keys_.erase(id);}
+  static void ClearOkayHotKeys() {Init(); okay_keys_.clear();}
+  static ListId AddCancelHotKey(const GlopKey &key) {Init(); return cancel_keys_.push_back(key);}
+  static void RemoveCancelHotKey(ListId id) {Init(); cancel_keys_.erase(id);}
+  static void ClearCancelHotKeys() {Init(); cancel_keys_.clear();}
 
   // Text-only dialog boxes.
   enum Result {Yes, No, Okay, Cancel};
@@ -920,7 +920,7 @@ class DialogWidget {
                                 const DialogViewFactory *factory);
  
   static bool is_initialized_;
-  static LightSet<GlopKey> yes_keys_, no_keys_, okay_keys_, cancel_keys_;
+  static List<GlopKey> yes_keys_, no_keys_, okay_keys_, cancel_keys_;
   DISALLOW_EVIL_CONSTRUCTORS(DialogWidget);
 };
 

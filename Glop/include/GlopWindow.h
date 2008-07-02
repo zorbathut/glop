@@ -11,7 +11,7 @@
 // Includes
 #include "Base.h"
 #include "GlopFrameBase.h"
-#include "LightSet.h"
+#include "List.h"
 using namespace std;
 
 // Class declarations
@@ -110,31 +110,31 @@ class GlopWindow {
   //
   // See TableauFrame in GlopFrameBase.h
   string GetFrameContextString() const;
-  const GlopFrame *GetFrame(LightSetId id) const;
-  GlopFrame *GetFrame(LightSetId id);
-  LightSetId GetFirstFrameId() const;
-  LightSetId GetNextFrameId(LightSetId id) const;
-  float GetFrameRelX(LightSetId id) const;
-  float GetFrameRelY(LightSetId id) const;
-  int GetFrameDepth(LightSetId id) const;
-  float GetFrameHorzJustify(LightSetId id) const;
-  float GetFrameVertJustify(LightSetId id) const;
+  const GlopFrame *GetFrame(ListId id) const;
+  GlopFrame *GetFrame(ListId id);
+  List<GlopFrame*>::const_iterator frame_begin() const;
+  List<GlopFrame*>::const_iterator frame_end() const;
+  float GetFrameRelX(ListId id) const;
+  float GetFrameRelY(ListId id) const;
+  int GetFrameDepth(ListId id) const;
+  float GetFrameHorzJustify(ListId id) const;
+  float GetFrameVertJustify(ListId id) const;
     
   // Frame mutators
   // ==============
   //
   // See TableauFrame in GlopFrameBase.h
-  LightSetId AddFrame(GlopFrame *frame, float rel_x, float rel_y,
+  ListId AddFrame(GlopFrame *frame, float rel_x, float rel_y,
                       float horz_justify, float vert_justify, int depth = 0);
-  LightSetId AddFrame(GlopFrame *frame, int depth = 0) {
+  ListId AddFrame(GlopFrame *frame, int depth = 0) {
     return AddFrame(frame, 0.5f, 0.5f, kJustifyCenter, kJustifyCenter, depth);
   }
-  void MoveFrame(LightSetId id, int depth);
-  void MoveFrame(LightSetId id, float rel_x, float rel_y);
-  void MoveFrame(LightSetId id, float rel_x, float rel_y, int depth);
-  void SetFrameJustify(LightSetId id, float horz_justify, float vert_justify);
-  GlopFrame *RemoveFrameNoDelete(LightSetId id);
-  void RemoveFrame(LightSetId id);
+  void MoveFrame(ListId id, int depth);
+  void MoveFrame(ListId id, float rel_x, float rel_y);
+  void MoveFrame(ListId id, float rel_x, float rel_y, int depth);
+  void SetFrameJustify(ListId id, float horz_justify, float vert_justify);
+  GlopFrame *RemoveFrameNoDelete(ListId id);
+  void RemoveFrame(ListId id);
   void ClearFrames();
   
   // See GlopFrameBase.h
@@ -187,7 +187,7 @@ class GlopWindow {
   enum TabDirection {Forward, Backward, None};
   TabDirection tab_direction_;  // Used to prevent too-rapid switching between tab & shift+tab
   bool is_resolving_ping_;
-  LightSet<GlopFrame::Ping*> ping_list_;
+  List<GlopFrame::Ping*> ping_list_;
   vector<FocusFrame*> focus_stack_;
   TableauFrame *frame_;
   Input *input_;

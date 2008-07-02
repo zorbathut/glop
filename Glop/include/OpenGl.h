@@ -25,6 +25,7 @@
 #include "BinaryFileManager.h"
 #include "Color.h"
 #include "Image.h"
+#include "List.h"
 
 // OpenGL data objects. Note that switching into and out of fullscreen mode invalidates textures
 // and display lists. To prevent that from happening, these structures can and should be used
@@ -62,7 +63,7 @@ class Texture {
   const Image *image_;
   bool is_image_owned_;
   int mag_filter_, min_filter_;
-  LightSetId glop_index_;
+  ListId glop_index_;
   DISALLOW_EVIL_CONSTRUCTORS(Texture);
 };
 
@@ -76,7 +77,7 @@ class DisplayList {
   virtual void Render() const = 0;
  private:
   unsigned int gl_id_;
-  LightSetId glop_index_;
+  ListId glop_index_;
   DISALLOW_EVIL_CONSTRUCTORS(DisplayList);
 };
 
@@ -91,7 +92,7 @@ class DisplayLists {
  private:
   int n_;
   unsigned int base_gl_id_;
-  LightSetId glop_index_;
+  ListId glop_index_;
   DISALLOW_EVIL_CONSTRUCTORS(DisplayLists);
 };
 

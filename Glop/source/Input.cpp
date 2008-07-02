@@ -261,12 +261,12 @@ int GlopKey::GetJoystickButtonNumber() const {
 
 void KeyListener::BeginKeyListening() {
   if (listener_id_ == 0)
-    listener_id_ = input()->key_listeners_.InsertItem(this);
+    listener_id_ = input()->key_listeners_.push_back(this);
 }
 
 void KeyListener::StopKeyListening() {
   if (listener_id_ != 0) {
-    input()->key_listeners_.RemoveItem(listener_id_);
+    input()->key_listeners_.erase(listener_id_);
     listener_id_ = 0;
   }
 }
@@ -776,8 +776,8 @@ void Input::OnKeyEvent(const KeyEvent &event, int dt) {
   if (event.IsPress())
     pressed_keys_frame_.push_back(event.key);
   window_->OnKeyEvent(event, dt);
-  for (LightSetId id = key_listeners_.GetFirstId(); id != 0; id = key_listeners_.GetNextId(id))
-    key_listeners_[id]->OnKeyEvent(event, dt);
+  for (List<KeyListener*>::iterator it = key_listeners_.begin(); it != key_listeners_.end(); ++it)
+    (*it)->OnKeyEvent(event, dt);
 }
 
 // Returns a pointer to the KeyTracker corresponding to a given GlopKey.
