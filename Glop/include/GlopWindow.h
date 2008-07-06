@@ -39,8 +39,8 @@ struct GlopWindowSettings {
         min_inverse_aspect_ratio; //  width/height and 1/(width/height).
 };
 
-// Globals
-extern GlopWindow *gWindow;
+// Returns the Glop window. Currently there can only be one window.
+GlopWindow *window();
 
 // GlopWindow class definition
 class GlopWindow {

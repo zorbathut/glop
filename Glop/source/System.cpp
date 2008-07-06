@@ -11,7 +11,8 @@
 #include <algorithm>
 
 // Globals
-System *gSystem = 0;
+static System *gSystem = 0;
+System *system() {return gSystem;}
 
 // Glop initialization
 void System::Init() {
@@ -99,7 +100,7 @@ vector<pair<int, int> > System::GetFullScreenModes(int min_width, int min_height
 // =====
 
 System::System()
-: window_(gWindow = new GlopWindow()),
+: window_(new GlopWindow()),
   frame_count_(0),
   refresh_rate_query_delay_(0),
   refresh_rate_(0),

@@ -3,7 +3,7 @@
 //
 // Input can be tracked in two very different ways, depending on whether you want simplicity or
 // more fine-grained control. The simplest mechanism is to query the Input class after a call
-// to gSystem->Think. This is simple and usually effective. However, this approach does not allow
+// to system()->Think. This is simple and usually effective. However, this approach does not allow
 // you to gain any context information about the input state when a key was pressed. For example,
 // the following tasks are impossible:
 //   - Determining the order in which various keys were pressed.
@@ -516,7 +516,7 @@ class Input {
   const GlopKey &GetKeyPress(bool accept_clicks = true, bool accept_modifiers = false,
                              bool accept_motion = false);
 
-  // Calls gSystem->think until GetKeyPress != kNoKey.
+  // Calls system()->think until GetKeyPress != kNoKey.
   const GlopKey &WaitForKeyPress(bool accept_clicks = true, bool accept_modifiers = false,
                                  bool accept_motion = false);
 

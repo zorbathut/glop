@@ -59,7 +59,7 @@ void CameraFrame::Render() const {
     glGetIntegerv(GL_SCISSOR_BOX, old_scissor_test);
   else
     glEnable(GL_SCISSOR_TEST);
-  glScissor(cx1, gWindow->GetHeight() - 1 - cy2, cx2 - cx1 + 1, cy2 - cy1 + 1);
+  glScissor(cx1, window()->GetHeight() - 1 - cy2, cx2 - cx1 + 1, cy2 - cy1 + 1);
 
   // Draw the background - we can't just draw it in the fog color because, on some machines, the
   // fog will not actually fade things out to precisely the fog color. Instead, we render the
@@ -77,7 +77,7 @@ void CameraFrame::Render() const {
 	glMatrixMode(GL_PROJECTION);
 	glPushMatrix();
 	glLoadIdentity();
-  glViewport(GetX(), gWindow->GetHeight() - GetY() - GetHeight(), GetWidth(), GetHeight());
+  glViewport(GetX(), window()->GetHeight() - GetY() - GetHeight(), GetWidth(), GetHeight());
   float near_height = float(tan(GetCamera().GetFieldOfView() * kPi / 360 ) *
                             GetCamera().GetNearPlane());
 	float near_width = near_height * float(GetWidth()) / GetHeight();
@@ -127,7 +127,7 @@ void CameraFrame::Render() const {
 	glPopMatrix();
 	glDepthMask(false);
 	glDisable(GL_DEPTH_TEST);
-	glViewport(0, 0, gWindow->GetWidth(), gWindow->GetHeight());   
+	glViewport(0, 0, window()->GetWidth(), window()->GetHeight());   
   if (old_clipping_enabled)
     glScissor(old_scissor_test[0], old_scissor_test[1], old_scissor_test[2], old_scissor_test[3]);
   else

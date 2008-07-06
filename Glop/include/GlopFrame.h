@@ -43,8 +43,8 @@
 //
 //   int main() {
 //     System::Init();
-//     gWindow->Create(1024, 768, false);
-//     gWindow->AddFrame(new TestFrame());
+//     window()->Create(1024, 768, false);
+//     window()->AddFrame(new TestFrame());
 //     input()->WaitForKeyPress();
 //     return 0;
 //   }
@@ -80,13 +80,13 @@
 // - TableauFrame: This is what GlopWindow->AddFrame is based on. When you add a frame, you choose
 //    a position and a justification for it. The TableauFrame tries to make the frame as large as
 //    possible without going off the edge of the screen.
-//     Example: gWindow->AddFrame(new FpsFrame(), 1.0f, 1.0f, kJustifyRight, kJustifyBottom);
+//     Example: window()->AddFrame(new FpsFrame(), 1.0f, 1.0f, kJustifyRight, kJustifyBottom);
 //    This will display the FPS on the bottom-right corner of the screen. (Note the FpsFrame
 //    ignores the recommended size, and uses a text size set in GlopFrameStyle.h).
 //
 // - PaddedFrame, ScalingPaddedFrame: These reserve blank space around a frame as padding. As with
 //    all GlopFrames, they update the recommended size intelligently.
-//     Example: gWindow->AddFrame(new ScalingPaddedFrame(new TestFrame(), 0.2f));
+//     Example: window()->AddFrame(new ScalingPaddedFrame(new TestFrame(), 0.2f));
 //    This is similar to our original example, but the TestFrame will now only take up 60% of the
 //    screen size, since it will have 20% padding on each side.
 //
@@ -100,7 +100,7 @@
 //
 // - RecSizeFrame, RecWidthFrame, RecHeightFrame: These are convenience classes that override the
 //    recommended size for children to be a specific fraction of the screen size.
-//     Example: gWindow->AddFrame(new RecSizeFrame(new TestFrame(), 0.6f, 0.6f));
+//     Example: window()->AddFrame(new RecSizeFrame(new TestFrame(), 0.6f, 0.6f));
 //    This has the same effect as the ScalingPaddedFrame example above.
 //
 // - MinSizeFrame, MinWidthFrame, MinHeightFrame: These add padding to a frame until it is at least
@@ -178,7 +178,7 @@
 // user input. Initially this will never happen. To change that, you must wrap your frame in a
 // FocusFrame. Then, it and all of its children will track focus as a single autonomous unit:
 //
-//   gWindow->AddFrame(new FocusFrame(new TestFrame()));
+//   window()->AddFrame(new FocusFrame(new TestFrame()));
 //
 // For the basic GUI controls, we provide wrappers that create the FocusFrame for you. They are
 // called "widgets". For example, use ButtonWidget instead of ButtonFrame. ScrollingFrames also

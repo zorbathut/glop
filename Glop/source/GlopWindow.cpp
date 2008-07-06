@@ -15,7 +15,7 @@
 const char *const kDefaultTitle = "Glop Window";
 
 // Globals
-GlopWindow *gWindow = 0;
+GlopWindow *window() {return system()->window();}
 
 // Window mutators
 // ===============
@@ -269,9 +269,9 @@ int GlopWindow::Think(int dt) {
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
     frame_->Render();
-    int old_time = gSystem->GetTime();
+    int old_time = system()->GetTime();
     Os::SwapBuffers(os_data_);
-    swap_buffer_time = gSystem->GetTime() - old_time;
+    swap_buffer_time = system()->GetTime() - old_time;
   }
   return swap_buffer_time;
 }

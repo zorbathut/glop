@@ -31,7 +31,7 @@ GlopFrame::GlopFrame()
 
 // Destructor. Deletes all pings that have been queued up for this frame.
 GlopFrame::~GlopFrame() {
-  gWindow->UnregisterAllPings(this);
+  window()->UnregisterAllPings(this);
 }
 
 // Marks that this frame needs its size recomputed. The parent must also recompute its size
@@ -83,7 +83,7 @@ void GlopFrame::SetToMaxSize(int width_bound, int height_bound, float aspect_rat
 }
 
 void GlopFrame::AddPing(Ping *ping) {
-  gWindow->RegisterPing(ping);
+  window()->RegisterPing(ping);
 }
 
 string GlopFrame::GetContextStringHelper(bool extend_down, bool extend_up,
@@ -250,7 +250,7 @@ void ClippedFrame::Render() const {
     glGetIntegerv(GL_SCISSOR_BOX, old_scissor_test);
   else
     glEnable(GL_SCISSOR_TEST);
-  glScissor(GetClipX1(), gWindow->GetHeight() - 1 - GetClipY2(), GetClipX2() - GetClipX1() + 1,
+  glScissor(GetClipX1(), window()->GetHeight() - 1 - GetClipY2(), GetClipX2() - GetClipX1() + 1,
             GetClipY2() - GetClipY1() + 1);
 
   // Render the child
@@ -314,7 +314,7 @@ void ScalingPaddedFrame::SetPosition(int screen_x, int screen_y, int cx1, int cy
 
 void ScalingPaddedFrame::RecomputeSize(int rec_width, int rec_height) {
   if (GetChild() != 0) {
-    int base = min(gWindow->GetWidth(), gWindow->GetHeight());
+    int base = min(window()->GetWidth(), window()->GetHeight());
     left_padding_ = int(scaled_left_padding_ * base);
     top_padding_ = int(scaled_top_padding_ * base);
     right_padding_ = int(scaled_right_padding_ * base);
@@ -346,11 +346,11 @@ FocusFrame::FocusFrame(GlopFrame *frame)
 : SingleParentFrame(frame),
   is_gaining_focus_(false) {
   SetFocusInfo(this, false);
-  layer_ = gWindow->RegisterFocusFrame(this);
+  layer_ = window()->RegisterFocusFrame(this);
 }
 
 FocusFrame::~FocusFrame() {
-  gWindow->UnregisterFocusFrame(layer_, this);
+  window()->UnregisterFocusFrame(layer_, this);
 }
 
 bool FocusFrame::IsSubFocusFrame(const FocusFrame *frame) const {
@@ -361,7 +361,7 @@ bool FocusFrame::IsSubFocusFrame(const FocusFrame *frame) const {
 }
 
 void FocusFrame::DemandFocus() {
-  gWindow->DemandFocus(layer_, this, false);
+  window()->DemandFocus(layer_, this, false);
 }
 
 // TableauFrame
@@ -652,8 +652,8 @@ void TableFrame::RecomputeSize(int rec_width, int rec_height) {
   int x, y;
 
   // Calculate the padding sizes
-  int hpad = int(gWindow->GetWidth() * horz_padding_ + 0.5f);
-  int vpad = int(gWindow->GetHeight() * vert_padding_ + 0.5f);
+  int hpad = int(window()->GetWidth() * horz_padding_ + 0.5f);
+  int vpad = int(window()->GetHeight() * vert_padding_ + 0.5f);
   rec_width -= hpad * (GetNumCols() - 1);
   rec_height -= vpad * (GetNumRows() - 1);
 
@@ -778,16 +778,16 @@ void TableFrame::RecomputeSize(int rec_width, int rec_height) {
 // ============
 
 void RecWidthFrame::RecomputeSize(int rec_width, int rec_height) {
-  SingleParentFrame::RecomputeSize(int(gWindow->GetWidth() * rec_width_override_), rec_height);
+  SingleParentFrame::RecomputeSize(int(window()->GetWidth() * rec_width_override_), rec_height);
 }
 
 void RecHeightFrame::RecomputeSize(int rec_width, int rec_height) {
-  SingleParentFrame::RecomputeSize(rec_width, int(gWindow->GetWidth() * rec_height_override_));
+  SingleParentFrame::RecomputeSize(rec_width, int(window()->GetWidth() * rec_height_override_));
 }
 
 void RecSizeFrame::RecomputeSize(int rec_width, int rec_height) {
-  SingleParentFrame::RecomputeSize(int(gWindow->GetWidth() * rec_width_override_),
-                                   int(gWindow->GetHeight() * rec_height_override_));
+  SingleParentFrame::RecomputeSize(int(window()->GetWidth() * rec_width_override_),
+                                   int(window()->GetHeight() * rec_height_override_));
 }
 
 // MinSizeFrame
@@ -806,7 +806,7 @@ void MinWidthFrame::RecomputeSize(int rec_width, int rec_height) {
     w = GetChild()->GetWidth();
     h = GetChild()->GetHeight();
   }
-  int min_w = (min_width_ == kSizeLimitRec? rec_width : int(gWindow->GetWidth() * min_width_));
+  int min_w = (min_width_ == kSizeLimitRec? rec_width : int(window()->GetWidth() * min_width_));
   x_offset_ = int(max(min_w - w, 0) * (horz_justify_));
   SetSize(max(w, min_w), h);
 }
@@ -824,7 +824,7 @@ void MinHeightFrame::RecomputeSize(int rec_width, int rec_height) {
     w = GetChild()->GetWidth();
     h = GetChild()->GetHeight();
   }
-  int min_h = (min_height_ == kSizeLimitRec? rec_height : int(gWindow->GetHeight() * min_height_));
+  int min_h = (min_height_ == kSizeLimitRec? rec_height : int(window()->GetHeight() * min_height_));
   y_offset_ = int(max(min_h - h, 0) * (vert_justify_));
   SetSize(w, max(h, min_h));
 }
@@ -842,9 +842,9 @@ void MinSizeFrame::RecomputeSize(int rec_width, int rec_height) {
     w = GetChild()->GetWidth();
     h = GetChild()->GetHeight();
   }
-  int min_w = (min_width_ == kSizeLimitRec? rec_width : int(gWindow->GetWidth() * min_width_));
+  int min_w = (min_width_ == kSizeLimitRec? rec_width : int(window()->GetWidth() * min_width_));
   x_offset_ = int(max(min_w - w, 0) * (horz_justify_));
-  int min_h = (min_height_ == kSizeLimitRec? rec_height : int(gWindow->GetHeight() * min_height_));
+  int min_h = (min_height_ == kSizeLimitRec? rec_height : int(window()->GetHeight() * min_height_));
   y_offset_ = int(max(min_h - h, 0) * (vert_justify_));
   SetSize(max(w, min_w), max(h, min_h));
 }
@@ -948,10 +948,10 @@ void MaxSizeFrame::RecomputeSize(int rec_width, int rec_height) {
     // Update our size
     int max_w = (max_width_ == kSizeLimitNone? kClipInfinity :
                  max_width_ == kSizeLimitRec? rec_width :
-                 int(gWindow->GetWidth() * max_width_));
+                 int(window()->GetWidth() * max_width_));
     int max_h = (max_height_ == kSizeLimitNone? kClipInfinity :
                  max_height_ == kSizeLimitRec? rec_height :
-                 int(gWindow->GetHeight() * max_height_));
+                 int(window()->GetHeight() * max_height_));
     SetSize(min(GetChild()->GetWidth(), max_w), min(GetChild()->GetHeight(), max_h));
 
     // Position the child within the new size to be approximately where it was before

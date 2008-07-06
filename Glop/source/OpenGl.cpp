@@ -31,7 +31,7 @@ Texture::Texture(const Image *image, int mag_filter, int min_filter)
   gl_id_(0) {
   ASSERT(image != 0);
   glop_index_ = GlDataManager::RegisterTexture(this);
-  if (gWindow->IsCreated())
+  if (window()->IsCreated())
     GlInit();
 }
 

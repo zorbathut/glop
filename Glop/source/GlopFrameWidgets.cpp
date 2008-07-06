@@ -186,7 +186,7 @@ TextFrame::~TextFrame() {
 }
 
 int TextFrame::GetFontPixelHeight(float height) {
-  return int(gWindow->GetHeight() * height);
+  return int(window()->GetHeight() * height);
 }
 
 void TextFrame::Render() const {
@@ -218,7 +218,7 @@ void TextFrame::RecomputeSize(int rec_width, int rec_height) {
 // ========
 
 void FpsFrame::Think(int dt) {
-  text()->SetText(Format("%.2f fps", gSystem->GetFps()));
+  text()->SetText(Format("%.2f fps", system()->GetFps()));
 }
 
 // FancyTextFrame
@@ -1570,7 +1570,7 @@ GlopFrame *DialogWidget::Create(
 DialogWidget::Result DialogWidget::Execute(const vector<ButtonWidget*> &buttons,
                                           const vector<Result> &button_meanings) {
   while (1) {
-    gSystem->Think();
+    system()->Think();
     for (int i = 0; i < (int)buttons.size(); i++)
     if (buttons[i]->WasPressedFully())
       return button_meanings[i];
@@ -1582,14 +1582,14 @@ DialogWidget::Result DialogWidget::DoText(
   bool has_okay_button, bool has_cancel_button, const DialogViewFactory *factory) {
   vector<ButtonWidget*> buttons;
   vector<Result> button_meanings;
-  gWindow->PushFocus();
+  window()->PushFocus();
   GlopFrame *frame = Create(title, message, "", 0, has_yes_button, has_no_button, has_okay_button,
                             has_cancel_button, factory, &buttons, &button_meanings);
-  ListId id = gWindow->AddFrame(frame, 0.5f, factory->GetVertJustify(),
-                                0.5f, factory->GetVertJustify(), 0);
+  ListId id = window()->AddFrame(frame, 0.5f, factory->GetVertJustify(),
+                                 0.5f, factory->GetVertJustify(), 0);
   Result result = Execute(buttons, button_meanings);
-  gWindow->RemoveFrame(id);
-  gWindow->PopFocus();
+  window()->RemoveFrame(id);
+  window()->PopFocus();
   return result;
 }
 
@@ -1599,19 +1599,19 @@ DialogWidget::Result DialogWidget::DoStringPrompt(
   const DialogViewFactory *factory) {
   vector<ButtonWidget*> buttons;
   vector<Result> button_meanings;
-  gWindow->PushFocus();
+  window()->PushFocus();
   StringPromptWidget *prompt_frame = new StringPromptWidget(
     start_value, value_length_limit, kSizeLimitRec, factory->GetTextPromptViewFactory(),
     factory->GetInputBoxViewFactory());
   GlopFrame *frame = Create(title, message, prompt + " ", prompt_frame, false, false,
                             has_okay_button, has_cancel_button, factory, &buttons,
                             &button_meanings);
-  ListId id = gWindow->AddFrame(frame, 0.5f, factory->GetVertJustify(),
-                                    0.5f, factory->GetVertJustify(), 0);
+  ListId id = window()->AddFrame(frame, 0.5f, factory->GetVertJustify(),
+                                 0.5f, factory->GetVertJustify(), 0);
   Result result = Execute(buttons, button_meanings);
   *prompt_value = prompt_frame->Get();
-  gWindow->RemoveFrame(id);
-  gWindow->PopFocus();
+  window()->RemoveFrame(id);
+  window()->PopFocus();
   return result;
 }
 
@@ -1621,18 +1621,18 @@ DialogWidget::Result DialogWidget::DoIntegerPrompt(
   const DialogViewFactory *factory) {
   vector<ButtonWidget*> buttons;
   vector<Result> button_meanings;
-  gWindow->PushFocus();
+  window()->PushFocus();
   IntegerPromptWidget *prompt_frame = new IntegerPromptWidget(
     start_value, min_value, max_value, kSizeLimitRec, factory->GetTextPromptViewFactory(),
     factory->GetInputBoxViewFactory());
   GlopFrame *frame = Create(title, message, prompt + " ", prompt_frame, false, false,
                             has_okay_button, has_cancel_button, factory, &buttons,
                             &button_meanings);
-  ListId id = gWindow->AddFrame(frame, 0.5f, factory->GetVertJustify(),
-                                    0.5f, factory->GetVertJustify(), 0);
+  ListId id = window()->AddFrame(frame, 0.5f, factory->GetVertJustify(),
+                                 0.5f, factory->GetVertJustify(), 0);
   Result result = Execute(buttons, button_meanings);
   *prompt_value = prompt_frame->Get();
-  gWindow->RemoveFrame(id);
-  gWindow->PopFocus();
+  window()->RemoveFrame(id);
+  window()->PopFocus();
   return result;
 }

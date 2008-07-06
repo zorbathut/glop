@@ -3,7 +3,7 @@
 //
 // A frame can render itself, be positioned and sized, think each tick, and trap input events. The
 // exact pipeline is as follows:
-//  - The Glop client calls gSystem->Think()
+//  - The Glop client calls system()->Think()
 //    - All frames receive OnWindowResize messages if appropriate.
 //    - All frames think.
 //    - All focus is updated from tabs, magnet keys, etc. (see below)

@@ -149,7 +149,7 @@ void DefaultWindowView::Render(int x1, int y1, int x2, int y2,
 void DefaultButtonView::OnResize(int rec_width, int rec_height, bool is_down,
                                  int *lp, int *tp, int *rp, int *bp) const {
   float border_size = factory_->GetBorderSize();
-  int padding = 2 + int(min(gWindow->GetWidth(), gWindow->GetHeight()) * border_size);
+  int padding = 2 + int(min(window()->GetWidth(), window()->GetHeight()) * border_size);
   int offset = (is_down? 1 : 0);
   *lp = *tp = padding + offset - 1;
   *rp = *bp = padding - offset;
@@ -263,7 +263,7 @@ const ButtonViewFactory *DefaultSliderView::GetButtonViewFactory() const {
 }
 
 int DefaultSliderView::GetWidthOnResize(int rec_width, int rec_height, bool is_horizontal) const {
-  return max(int(min(gWindow->GetWidth(), gWindow->GetHeight()) * factory_->GetWidth()), 2);
+  return max(int(min(window()->GetWidth(), window()->GetHeight()) * factory_->GetWidth()), 2);
 }
 
 int DefaultSliderView::GetMinTabLengthOnResize(int inner_width, int inner_height,
@@ -298,7 +298,7 @@ void DefaultSliderView::Render(int x1, int y1, int x2, int y2, bool is_horizonta
 
   // Draw the tab - we render it the same way a DefaultButtonStyle renders an unpressed button.
   float tab_border = factory_->GetTabBorderSize();
-  int tab_padding = 2 + int(min(gWindow->GetWidth(), gWindow->GetHeight()) * tab_border);
+  int tab_padding = 2 + int(min(window()->GetWidth(), window()->GetHeight()) * tab_border);
   tab_padding = min(tab_padding, min(tab_x2 - tab_x1 - 2, tab_y2 - tab_y1 - 2)/2);
   GlUtils2d::DrawRectangle(tab_x1, tab_y1, tab_x2, tab_y2, factory_->GetTabBorderColor());
   GlUtils2d::FillRectangle(tab_x1 + 1, tab_y1 + 1, tab_x2 - 1, tab_y2 - 1,

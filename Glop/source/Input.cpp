@@ -122,7 +122,7 @@ vector<vector<Input::DerivedKeyBinding> > Input::derived_key_bindings_;
 
 // Static accessor convenience method
 Input *input() {
-  return gSystem->window()->input();
+  return system()->window()->input();
 }
 
 // GlopKey
@@ -410,7 +410,7 @@ const GlopKey &Input::GetKeyPress(bool accept_clicks, bool accept_modifiers, boo
 const GlopKey &Input::WaitForKeyPress(bool accept_clicks, bool accept_modifiers,
                                       bool accept_motion) {
   while (1) {
-    gSystem->Think();
+    system()->Think();
     const GlopKey &key = GetKeyPress(accept_clicks, accept_modifiers, accept_motion);
     if (key != kNoKey)
       return key;

@@ -13,12 +13,12 @@ class Image;
 class System;
 
 // Globals
-extern System *gSystem;
+System *system();
 
 // System class definition
 class System {
  public:
-  // Startup. Creates gSystem and does all setup we want. ShutDown is done automatically.
+  // Startup. Creates system() and does all setup we want. ShutDown is done automatically.
   static void Init();
 
   // Internal logic - Think must be called exactly once per frame. It returns the number of
@@ -54,13 +54,13 @@ class System {
   // set to restrict the list to only contain resolutions with at least a certain size.
   vector<pair<int, int> > GetFullScreenModes(int min_width = 640, int min_height = 480);
 
-  // Returns the main window for this Glop program. This can also be gotten via the gWindow global
-  // variable (see GlopWindow.h).
+  // Returns the main window for this Glop program. This can also be gotten via the window() global
+  // function (see GlopWindow.h).
   GlopWindow *window() {return window_;}
   
  private:
   System();
-  static void ShutDown() {delete gSystem;}
+  static void ShutDown() {delete system();}
   ~System();
   
   // General data

@@ -14,7 +14,7 @@
 //  - Think more about rendering order, perhaps add movetofront to multiparentframe
 //  - Allow DummyMenuFrames to render even when empty
 //  - Investigate derived keys and focus changing
-//  - Standardize gWindow, input(), etc.
+//  - Standardize window(), input(), etc.
 
 // Includes
 #include "../Glop/include/Base.h"
@@ -37,9 +37,9 @@ void IntroScreen() {
   GlopFrame *info = new FancyTextFrame("\1BUCff8080\1Glop Test Program\1Cffffff/B/U\1\n\n"
                                        "Select tests to verify that Glop performs as expected.");
   GlopFrame *img = new HollowBoxFrame(new ImageFrame("glop.jpg"), kWhite);
-  gWindow->AddFrame(new ColFrame(info, new RecHeightFrame(new EmptyFrame(), 0.1f), img));
+  window()->AddFrame(new ColFrame(info, new RecHeightFrame(new EmptyFrame(), 0.1f), img));
   input()->WaitForKeyPress();
-  gWindow->ClearFrames();
+  window()->ClearFrames();
 }
 
 class GlUtils2dTestFrame: public GlopFrame {
@@ -55,43 +55,43 @@ class GlUtils2dTestFrame: public GlopFrame {
 };
 
 void GlUtils2dTest() {
-  gWindow->AddFrame(new PaddedFrame(new GlUtils2dTestFrame(), 1));
+  window()->AddFrame(new PaddedFrame(new GlUtils2dTestFrame(), 1));
   GlopFrame *info = new FancyTextFrame(
     "You should see a yellow filled box surrounded by a black box, surrounded "
     "by a yellow box. There should be red diagonals in the box (not overlapping "
     "the black part.)\n\n"
     "\1C0000ff\1Press any key to continue", kBlack);
-  gWindow->AddFrame(new RecWidthFrame(info, 0.6f), 0.5f, 0.4f, 0.5f, 0.4f);
+  window()->AddFrame(new RecWidthFrame(info, 0.6f), 0.5f, 0.4f, 0.5f, 0.4f);
   input()->WaitForKeyPress();
 }
 
 void DisplayMessageTest() {
-  vector<pair<int, int> > modes = gSystem->GetFullScreenModes();
+  vector<pair<int, int> > modes = system()->GetFullScreenModes();
   string message = "Video modes (in lexicographical order):\n\n";
   for (int i = 0; i < (int)modes.size(); i++)
     message += Format("%d by %d\n", modes[i].first, modes[i].second);
   DisplayMessage("Video modes", message);
-  gWindow->AddFrame(new TextFrame("The legal full-screen video modes should have been displayed.",
+  window()->AddFrame(new TextFrame("The legal full-screen video modes should have been displayed.",
                                    kWhite), 0.5f, 0.4f, kJustifyCenter, 0.4f);
-  gWindow->AddFrame(new TextFrame("Press any key to continue...", kYellow),
+  window()->AddFrame(new TextFrame("Press any key to continue...", kYellow),
                      0.5f, 1.0f, kJustifyCenter, kJustifyBottom);
   input()->WaitForKeyPress();
 }
 
 void IconTitleTest() {
-  gWindow->SetIcon(0);
-  gWindow->SetTitle("Icon and Title Test - Part 1");
+  window()->SetIcon(0);
+  window()->SetTitle("Icon and Title Test - Part 1");
   TextFrame *text1 = new TextFrame("Part 1: The title should be \"Icon and Title Test - Part 1\",",
                                    kWhite);
   TextFrame *text2 = new TextFrame("and the icon should be the default.",
                                    kWhite);
   ColFrame *col = new ColFrame(text1, text2);
-  ListId id = gWindow->AddFrame(col, 0.5f, 0.4f, kJustifyCenter, 0.4f);
-  gWindow->AddFrame(new TextFrame("Press any key to continue...", kYellow),
+  ListId id = window()->AddFrame(col, 0.5f, 0.4f, kJustifyCenter, 0.4f);
+  window()->AddFrame(new TextFrame("Press any key to continue...", kYellow),
                      0.5f, 1.0f, kJustifyCenter, kJustifyBottom);
   input()->WaitForKeyPress();
-  gWindow->SetIcon(gIcon);
-  gWindow->SetTitle("Icon and Title Test - Part 2");
+  window()->SetIcon(gIcon);
+  window()->SetTitle("Icon and Title Test - Part 2");
   text1->SetText("Part 2: The title should be \"Icon and Title Test - Part 2\",");
   text2->SetText("and the icon should be a custom icon with a transparent background.");
   input()->WaitForKeyPress();
@@ -100,13 +100,13 @@ void IconTitleTest() {
 void TimeTest() {
   TextFrame *prompt = new TextFrame("Trying to run at max speed:", kWhite);
   ColFrame *col = new ColFrame(prompt, new FpsFrame(kCyan));
-  gWindow->AddFrame(col, 0.5f, 0.4f, kJustifyCenter, 0.4f);
-  gWindow->AddFrame(new TextFrame("Press any key to continue...", kYellow),
+  window()->AddFrame(col, 0.5f, 0.4f, kJustifyCenter, 0.4f);
+  window()->AddFrame(new TextFrame("Press any key to continue...", kYellow),
                      0.5f, 1.0f, kJustifyCenter, kJustifyBottom);
 
-  gWindow->SetVSync(false);
+  window()->SetVSync(false);
   input()->WaitForKeyPress();
-  gWindow->SetVSync(true);
+  window()->SetVSync(true);
   prompt->SetText("Trying to run synced with vertical refresh:");
   input()->WaitForKeyPress();
 }
@@ -168,9 +168,9 @@ void InputTest() {
   main_col->SetCell(2, tracker);
   main_col->SetCell(3, tableau);
 
-  gWindow->AddFrame(main_col, 0, 0, 0, 0);
+  window()->AddFrame(main_col, 0, 0, 0, 0);
   while (!input()->WasKeyPressed(kKeyEscape)) {
-    int dt = gSystem->Think();
+    int dt = system()->Think();
 
     // Update the mouse position
     mouse_pos_value->SetText(Format("(%d, %d)", input()->GetMouseX(), input()->GetMouseY()));
@@ -249,10 +249,10 @@ void ThreadTest() {
   }
 
   string info = "Test " + string(value == kNumThreads * kRepeat? "passed!" : "failed!");
-  gWindow->AddFrame(new TextFrame(info, kWhite), 0.5f, 0.4f, kJustifyCenter, 0.4f);
-  gWindow->AddFrame(new TextFrame("Press any key to continue...", kYellow),
+  window()->AddFrame(new TextFrame(info, kWhite), 0.5f, 0.4f, kJustifyCenter, 0.4f);
+  window()->AddFrame(new TextFrame("Press any key to continue...", kYellow),
                      0.5f, 1.0f, kJustifyCenter, kJustifyBottom);
-  gSystem->Sleep(1000);
+  system()->Sleep(1000);
   input()->WaitForKeyPress();
 }
 
@@ -310,9 +310,9 @@ void CameraTest() {
   GlopFrame *content = new ColFrame(
     new PaddedFrame(cube, 10), CellSize::Default(),
     CellSize::Max(), info, CellSize::Default(), CellSize::Default());
-  gWindow->AddFrame(content);
+  window()->AddFrame(content);
   while (!input()->WasKeyPressed(kKeyEscape))
-    gSystem->Think();
+    system()->Think();
 }
 
 void GuiTest() {
@@ -352,7 +352,7 @@ void GuiTest() {
 }
 
 void BuildMainMenu() {
-  gWindow->SetTitle("Tests menu");
+  window()->SetTitle("Tests menu");
   ColFrame *column = new ColFrame(9, kJustifyLeft);
   column->SetCell(0, new TextFrame("1. 2d rendering test", kWhite));
   column->SetCell(1, new TextFrame("2. DisplayMessage and full-screen modes", kWhite));
@@ -363,8 +363,8 @@ void BuildMainMenu() {
   column->SetCell(6, new TextFrame("7. Camera frame", kWhite));
   column->SetCell(7, new TextFrame("8. GUI", kWhite));
   column->SetCell(8, new TextFrame("9. Quit", kWhite));
-  gWindow->AddFrame(column, 0.5f, 0.4f, 0.5f, 0.4f);
-  gSystem->Think();
+  window()->AddFrame(column, 0.5f, 0.4f, 0.5f, 0.4f);
+  system()->Think();
 }
 
 int main(int argc, char **argv) {
@@ -377,9 +377,9 @@ int main(int argc, char **argv) {
   ASSERT((gIcon = Image::Load("Icon.bmp", kRed, 1)) != 0);
   InitDefaultFrameStyle(font);
 
-  gWindow->SetVSync(true);
-  gWindow->SetIcon(gIcon);
-  ASSERT(gWindow->Create(1024, 768, false));
+  window()->SetVSync(true);
+  window()->SetIcon(gIcon);
+  ASSERT(window()->Create(1024, 768, false));
   IntroScreen();
 
   BuildMainMenu();
@@ -395,7 +395,7 @@ int main(int argc, char **argv) {
     if (input()->WasKeyPressed('8')) selection = 8;
     if (input()->WasKeyPressed('9')) selection = 9;
     if (selection > 0) {
-      gWindow->ClearFrames();
+      window()->ClearFrames();
       if (selection == 1)
         GlUtils2dTest();
       else if (selection == 2)
@@ -414,10 +414,10 @@ int main(int argc, char **argv) {
         GuiTest();
       else if (selection == 9)
         break;
-      gWindow->ClearFrames();
+      window()->ClearFrames();
       BuildMainMenu();
     }
-    gSystem->Think();
+    system()->Think();
   }
   return 0;
 }

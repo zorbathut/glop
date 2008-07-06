@@ -17,7 +17,7 @@ void Thread::Start() {
 
 void Thread::Join() {
   while (is_running_)
-    gSystem->Sleep();
+    system()->Sleep();
 }
 
 void Thread::StaticExecutor(void *thread_ptr) {
@@ -52,7 +52,7 @@ void PCQueue::PushData(const void *data, int size) {
   // which means GetSize() can only go down, and hence the safety condition can never
   // asynchronously become false if it is ever true.
   while (GetSize() + size > GetCapacity())
-    gSystem->Sleep();
+    system()->Sleep();
 
   // Copy the data, watching out for data that spills beyond the queue end. We update push_pos_ at
   // the end so the data is not popped prematurely.
@@ -69,7 +69,7 @@ void PCQueue::PushData(const void *data, int size) {
 void PCQueue::PopData(void *data, int size) {
   // See PushData
   while (GetSize() < size)
-    gSystem->Sleep();
+    system()->Sleep();
   if (pop_pos_ + size > queue_length_) {
     int size1 = queue_length_ - pop_pos_;
     memcpy(data, (char*)data_ + pop_pos_, size1);
