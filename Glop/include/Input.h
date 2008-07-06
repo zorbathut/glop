@@ -526,14 +526,14 @@ class Input {
   static void ConfigureGuiKeys(bool keyboard_bindings, bool mouse_bindings, bool joystick_bindings);
   static GlopKey AllocateDerivedKey(const string &key_name);
   static void UnbindDerivedKey(const GlopKey &derived_key);
-  static void BindDerivedKey(const GlopKey &derived_key, const GlopKey &binding, bool down = true);
-  static void BindDerivedKey(const GlopKey &derived_key, const GlopKey &binding1,
-                             const GlopKey &binding2, bool down1 = true, bool down2 = true);
-  static void BindDerivedKey(const GlopKey &derived_key, const GlopKey &binding1,
-                             const GlopKey &binding2, const GlopKey &binding3, bool down1 = true,
-                             bool down2 = true, bool down3 = true);
-  static void BindDerivedKey(const GlopKey &derived_key, const vector<GlopKey> &binding,
-                             const vector<bool> &down = vector<bool>(0));
+  static void BindDerivedKey(const GlopKey &derived_key, const GlopKey &key);
+  static void BindDerivedKey(const GlopKey &derived_key, const GlopKey &key,
+                             const GlopKey &modifier, bool down = true);
+  static void BindDerivedKey(const GlopKey &derived_key, const GlopKey &key,
+                             const GlopKey &modifier1, const GlopKey &modifier2, bool down1 = true,
+                             bool down2 = true);
+  static void BindDerivedKey(const GlopKey &derived_key, const GlopKey &key,
+                             const vector<GlopKey> &modifiers, const vector<bool> &down);
   static void ClearDerivedKeys();
 
  private:
@@ -577,9 +577,16 @@ class Input {
 
   // Derived key configuration
   friend struct GlopKey;
+  struct DerivedKeyBinding {
+    DerivedKeyBinding(const GlopKey &_key = GlopKey()): key(_key) {}
+    DerivedKeyBinding(const GlopKey &_key, const vector<GlopKey> &_modifiers,
+      const vector<bool> &_down): key(_key), modifiers(_modifiers), down(_down) {}
+    GlopKey key;
+    vector<GlopKey> modifiers;
+    vector<bool> down;
+  };
   static vector<string> derived_key_names_;
-  static vector<vector<vector<GlopKey> > > derived_key_bindings_;
-  static vector<vector<vector<bool> > > derived_key_bindings_down_;
+  static vector<vector<DerivedKeyBinding> > derived_key_bindings_;
 
   // Utility functions
   void OnOsKeyEvent(const GlopKey &key, float press_amount);

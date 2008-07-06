@@ -209,13 +209,18 @@ class Os {
   // Returns the number of milliseconds that have elapsed since some unspecified basepoint.
   static int GetTime();
 
+  // Returns the refresh rate for the primary display.
+  static int GetRefreshRate();
+
+  // Turns on or off video sync for the current window. See GlopWindow.
+  static void EnableVSync(bool is_enabled);
+
   // Switches Open Gl buffers so that all rendering to the back buffer now appears on the screen.
-  // TODO(jwills): Should this just be done in the Think() method?
   static void SwapBuffers(OsWindowData *window);
 
-  // Sets the window as the current OpenGL context.  All rendering done after this call will be
-  // applied to this window
-  // TODO(jwills): SetCurrentContext isn't implemented yet on Win32Glop
+  // Sets the window as the current OpenGL context. All rendering done after this call will be
+  // applied to this window. This is not used currently but it will be important if Glop switches
+  // to support of multiple windows. Not yet implemented on Win32.
   static void SetCurrentContext(OsWindowData* window);
 };
 

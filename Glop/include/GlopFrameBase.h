@@ -222,7 +222,8 @@ class GlopFrame {
   // window size.
   virtual void OnWindowResize(int width, int height) {DirtySize();}
 
-  // See GetContextString above.
+  // See GetContextString above. Returns a description of this function, optionally its ancestors,
+  // and optionally its descendants. prefix is outputted at the beginning of each line.
   virtual string GetContextStringHelper(bool extend_down, bool extend_up,
                                         const string &prefix) const;
  private:

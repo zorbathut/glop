@@ -72,6 +72,16 @@ class GlopWindow {
   // should not be deleted while it remains set as the window icon.
   void SetIcon(const Image *icon);
 
+  // Sets whether rendering to this window should wait for video refresh before rendering. This
+  // caps the max frame rate at the video refresh rate, but it should eliminate on-screen tearing.
+  // This is off by default.
+  void SetVSync(bool is_enabled) {
+    if (is_enabled != is_vsync_requested_) {
+      is_vsync_requested_ = is_enabled;
+      is_vsync_setting_current_ = false;
+    }
+  }
+
   // Window accessors
   // ================
   //
@@ -97,6 +107,9 @@ class GlopWindow {
   // Returns whether the window is currently minimized (invisible except for being on the taskbar
   // or operating system equivalent).
   bool IsMinimized() const {return is_minimized_;}
+
+  // Returns whether vsync is enabled. See SetVSync.
+  bool IsVSynced() const {return is_vsync_requested_;}
 
   // Returns the current title of the window.
   const string &GetTitle() const {return title_;}
@@ -146,7 +159,7 @@ class GlopWindow {
   friend class System;
   GlopWindow();
   ~GlopWindow();
-  void Think(int dt);
+  int Think(int dt);
  
   // Interface to GlopFrame
   friend class GlopFrame;
@@ -175,6 +188,7 @@ class GlopWindow {
   GlopWindowSettings settings_;
   string title_;
   const Image *icon_;
+  bool is_vsync_requested_, is_vsync_setting_current_;
 
   // Additional tracked data
   bool is_in_focus_, is_minimized_; // See window accessors above

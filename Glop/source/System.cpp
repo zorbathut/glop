@@ -26,16 +26,28 @@ void System::Init() {
 int System::Think() {
   const int kFpsRecordingDelay = 50; // Number of milliseconds between fps updates
 
+  // Update the refresh rate. We do this at regular intervals in case the display setting changes,
+  // either by a window switching into or out of full-screen mode or by the user changing the
+  // computer system configuration.
+  if (refresh_rate_query_delay_ <= 0 && window_->IsVSynced()) {
+    refresh_rate_ = Os::GetRefreshRate();
+    refresh_rate_query_delay_ = 1000;
+  }
+
   // Calculate the current time, and sleep until we have spent an appropriate amount of time
   // since the last call to Think.
-  int ticks = Os::GetTime(), ticks_target = old_time_ + (max_fps_ == 0? 0 : 1000 / max_fps_);
-  while (ticks < ticks_target) {
-    Os::Sleep(ticks_target - ticks);
-    ticks = Os::GetTime();
+  int ticks = Os::GetTime();
+  if (window_->IsVSynced()) {
+    int ticks_target = old_time_ + (refresh_rate_ == 0? 0 : 1000 / refresh_rate_) + vsync_time_;
+    while (ticks < ticks_target) {
+      Os::Sleep(ticks_target - ticks);
+      ticks = Os::GetTime();
+    }
   }
   int dt = ticks - old_time_;
+  refresh_rate_query_delay_ -= dt;
   old_time_ = ticks;
-
+  
   // Calculate the current frame rate
   int last_fps_index = (fps_array_index_ + kFpsHistorySize - 1) % kFpsHistorySize;
   if ((fps_array_index_ == 0 && !fps_history_filled_) ||
@@ -54,7 +66,7 @@ int System::Think() {
 
   // Perform all Os and window logic
   Os::Think();
-  window_->Think(dt);
+  vsync_time_ = window_->Think(dt);
 
   // Update our frame and time counts
   frame_count_++;
@@ -88,8 +100,10 @@ vector<pair<int, int> > System::GetFullScreenModes(int min_width, int min_height
 
 System::System()
 : window_(gWindow = new GlopWindow()),
-  max_fps_(100),
   frame_count_(0),
+  refresh_rate_query_delay_(0),
+  refresh_rate_(0),
+  vsync_time_(0),
   start_time_(Os::GetTime()),
   free_type_library_(0),      // The FreeType library is only initialized when needed
   fps_(0),

@@ -32,7 +32,7 @@ const char *const kKeyNames[] = {
   0, 0, 0, 0, 0,
   0, "[", "\\", "]", 0,
   0, "`", "A", "B", "C",
-  "D", "E", "F", "G", "H",                                                            // 100
+  "D", "E", "F", "G", "H",                                                  // 100
   "I", "J", "K", "L", "M",
   "N", "O", "P", "Q", "R",
   "S", "T", "U", "V", "W",
@@ -118,8 +118,7 @@ const unsigned char kShiftedAsciiValues[] = {
 
 // Globals
 vector<string> Input::derived_key_names_;
-vector<vector<vector<GlopKey> > > Input::derived_key_bindings_;
-vector<vector<vector<bool> > > Input::derived_key_bindings_down_;
+vector<vector<Input::DerivedKeyBinding> > Input::derived_key_bindings_;
 
 // Static accessor convenience method
 Input *input() {
@@ -431,8 +430,8 @@ void Input::ConfigureGuiKeys(bool keyboard_bindings, bool mouse_bindings, bool j
     BindDerivedKey(kGuiKeyConfirm, kKeyEnter);
     BindDerivedKey(kGuiKeyConfirm, kKeyPadEnter);
     BindDerivedKey(kGuiKeyCancel, kKeyEscape);
-    BindDerivedKey(kGuiKeySelectPrev, kKeyTab, kKeyEitherShift, kKeyEitherAlt, true, true, false);
-    BindDerivedKey(kGuiKeySelectNext, kKeyTab, kKeyEitherShift, kKeyEitherAlt, true, false, false);
+    BindDerivedKey(kGuiKeySelectPrev, kKeyTab, kKeyEitherShift, kKeyEitherAlt, true, false);
+    BindDerivedKey(kGuiKeySelectNext, kKeyTab, kKeyEitherShift, kKeyEitherAlt, false, false);
   }
   if (mouse_bindings) {
     BindDerivedKey(kGuiKeyScrollUp, kMouseWheelUp);
@@ -459,8 +458,7 @@ void Input::ConfigureGuiKeys(bool keyboard_bindings, bool mouse_bindings, bool j
 
 GlopKey Input::AllocateDerivedKey(const string &key_name) {
   derived_key_names_.push_back(key_name);
-  derived_key_bindings_.push_back(vector<vector<GlopKey> >(0));
-  derived_key_bindings_down_.push_back(vector<vector<bool> >(0));
+  derived_key_bindings_.push_back(vector<DerivedKeyBinding>(0));
   return GlopKey(GetNumDerivedKeys() - 1, kDeviceDerived);
 }
 
@@ -469,54 +467,42 @@ void Input::UnbindDerivedKey(const GlopKey &derived_key) {
   ASSERT(derived_key.device == kDeviceDerived);
   ASSERT(index >= kNumFixedDerivedKeys && index < GetNumDerivedKeys());
   derived_key_bindings_[index].clear();
-  derived_key_bindings_down_[index].clear();
 }
 
-void Input::BindDerivedKey(const GlopKey &derived_key, const GlopKey &binding, bool down) {
-  Input::BindDerivedKey(derived_key, vector<GlopKey>(1, binding), vector<bool>(1, down));
+void Input::BindDerivedKey(const GlopKey &derived_key, const GlopKey &key) {
+  Input::BindDerivedKey(derived_key, key, vector<GlopKey>(0), vector<bool>(0));
 }
 
-void Input::BindDerivedKey(const GlopKey &derived_key, const GlopKey &binding1,
-                           const GlopKey &binding2, bool down1, bool down2) {
-  vector<GlopKey> binding;
-  binding.push_back(binding1);
-  binding.push_back(binding2);
+void Input::BindDerivedKey(const GlopKey &derived_key, const GlopKey &key,
+                           const GlopKey &modifier, bool down) {
+  BindDerivedKey(derived_key, key, vector<GlopKey>(1, modifier), vector<bool>(1, down));
+}
+
+void Input::BindDerivedKey(const GlopKey &derived_key, const GlopKey &key, const GlopKey &modifier1,
+                           const GlopKey &modifier2, bool down1, bool down2) {
+  vector<GlopKey> modifiers;
+  modifiers.push_back(modifier1);
+  modifiers.push_back(modifier2);
   vector<bool> down;
   down.push_back(down1);
   down.push_back(down2);
-  BindDerivedKey(derived_key, binding, down);
+  BindDerivedKey(derived_key, key, modifiers, down);
 }
 
-void Input::BindDerivedKey(const GlopKey &derived_key, const GlopKey &binding1,
-                           const GlopKey &binding2, const GlopKey &binding3, bool down1, bool down2,
-                           bool down3) {
-  vector<GlopKey> binding;
-  binding.push_back(binding1);
-  binding.push_back(binding2);
-  binding.push_back(binding3);
-  vector<bool> down;
-  down.push_back(down1);
-  down.push_back(down2);
-  down.push_back(down3);
-  BindDerivedKey(derived_key, binding, down);
-}
-
-void Input::BindDerivedKey(const GlopKey &derived_key, const vector<GlopKey> &binding,
-                           const vector<bool> &down) {
+void Input::BindDerivedKey(const GlopKey &derived_key, const GlopKey &key,
+                           const vector<GlopKey> &modifiers, const vector<bool> &down) {
   int index = derived_key.index;
   ASSERT(derived_key.device == kDeviceDerived);
   ASSERT(index >= kNumFixedDerivedKeys && index < GetNumDerivedKeys());
-  ASSERT(binding.size() == down.size());
-  for (int i = 0; i < (int)binding.size(); i++)
-    ASSERT(binding[i].device != kDeviceDerived || binding[i].index < index);
-  derived_key_bindings_[index].push_back(binding);
-  derived_key_bindings_down_[index].push_back(down);
+  ASSERT(modifiers.size() == down.size());
+  for (int i = 0; i < (int)modifiers.size(); i++)
+    ASSERT(modifiers[i].device != kDeviceDerived || modifiers[i].index < index);
+  derived_key_bindings_[index].push_back(DerivedKeyBinding(key, modifiers, down));
 }
 
 void Input::ClearDerivedKeys() {
   derived_key_names_.resize(kNumBasicDerivedKeys);
   derived_key_bindings_.resize(kNumBasicDerivedKeys);
-  derived_key_bindings_down_.resize(kNumBasicDerivedKeys);
 }
 
 void Input::InitDerivedKeys() {
@@ -545,18 +531,12 @@ void Input::InitDerivedKeys() {
   ASSERT(kGuiKeySelectPrev.index == kNumBasicDerivedKeys - 1);
 
   // Bind the derived keys
-  derived_key_bindings_[kKeyEitherShift.index].push_back(vector<GlopKey>(1, kKeyLeftShift));
-  derived_key_bindings_[kKeyEitherShift.index].push_back(vector<GlopKey>(1, kKeyRightShift));
-  derived_key_bindings_[kKeyEitherControl.index].push_back(vector<GlopKey>(1, kKeyLeftControl));
-  derived_key_bindings_[kKeyEitherControl.index].push_back(vector<GlopKey>(1, kKeyRightControl));
-  derived_key_bindings_[kKeyEitherAlt.index].push_back(vector<GlopKey>(1, kKeyLeftAlt));
-  derived_key_bindings_[kKeyEitherAlt.index].push_back(vector<GlopKey>(1, kKeyRightAlt));
-  derived_key_bindings_down_[kKeyEitherShift.index] =
-    vector<vector<bool> >(2, vector<bool>(1, true));
-  derived_key_bindings_down_[kKeyEitherControl.index] =
-    vector<vector<bool> >(2, vector<bool>(1, true));
-  derived_key_bindings_down_[kKeyEitherAlt.index] =
-    vector<vector<bool> >(2, vector<bool>(1, true));
+  derived_key_bindings_[kKeyEitherShift.index].push_back(DerivedKeyBinding(kKeyLeftShift));
+  derived_key_bindings_[kKeyEitherShift.index].push_back(DerivedKeyBinding(kKeyRightShift));
+  derived_key_bindings_[kKeyEitherControl.index].push_back(DerivedKeyBinding(kKeyLeftControl));
+  derived_key_bindings_[kKeyEitherControl.index].push_back(DerivedKeyBinding(kKeyRightControl));
+  derived_key_bindings_[kKeyEitherAlt.index].push_back(DerivedKeyBinding(kKeyLeftAlt));
+  derived_key_bindings_[kKeyEitherAlt.index].push_back(DerivedKeyBinding(kKeyRightAlt));
   ConfigureGuiKeys(true, true, false);
 }
 
@@ -738,14 +718,12 @@ void Input::UpdateDerivedKey(const GlopKey &key) {
   if (key.device == kDeviceDerived) {
     for (int i = 0; i < (int)derived_key_bindings_[key.index].size(); i++) {
       bool is_binding_down = true;
-      for (int j = 0; j < (int)derived_key_bindings_[key.index][i].size(); j++)
-      if (IsKeyDownNow(derived_key_bindings_[key.index][i][j]) !=
-          derived_key_bindings_down_[key.index][i][j])
+      for (int j = 0; j < (int)derived_key_bindings_[key.index][i].modifiers.size(); j++)
+      if (IsKeyDownNow(derived_key_bindings_[key.index][i].modifiers[j]) !=
+          derived_key_bindings_[key.index][i].down[j])
         is_binding_down = false;
-      if (is_binding_down) {
-        amount = 1.0f;
-        break;
-      }
+      if (is_binding_down)
+        amount = max(amount, GetKeyPressAmountNow(derived_key_bindings_[key.index][i].key));
     }
   }
   

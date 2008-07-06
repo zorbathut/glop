@@ -61,11 +61,17 @@ void CameraFrame::Render() const {
     glEnable(GL_SCISSOR_TEST);
   glScissor(cx1, gWindow->GetHeight() - 1 - cy2, cx2 - cx1 + 1, cy2 - cy1 + 1);
 
-  // Draw a fog background
+  // Draw the background - we can't just draw it in the fog color because, on some machines, the
+  // fog will not actually fade things out to precisely the fog color. Instead, we render the
+  // background in any color, but far into the fog.
   if (is_fog_enabled_) {
-    GlUtils2d::FillRectangle(GetX(), GetY(), GetX2(), GetY2(), fog_color_);
-    GlUtils::SetColor(kWhite);
+    glEnable(GL_FOG);
+    glFogfv(GL_FOG_COLOR, fog_color_.GetData());
+		glFogf(GL_FOG_START, -1);
+		glFogf(GL_FOG_END, 0);
+		glFogi(GL_FOG_MODE, GL_LINEAR);
   }
+  GlUtils2d::FillRectangle(GetX(), GetY(), GetX2(), GetY2(), kBlack);
 
   // Activate the camera
 	glMatrixMode(GL_PROJECTION);
@@ -101,17 +107,18 @@ void CameraFrame::Render() const {
 	glEnable(GL_DEPTH_TEST);
 	glClear(GL_DEPTH_BUFFER_BIT);
 
-  // Activate fog if that is enabled
+  // Activate fog if it is enabled. Note some of this was done above while drawing the background.
 	if (is_fog_enabled_) {
-    glFogfv(GL_FOG_COLOR, fog_color_.GetData());
 		glFogf(GL_FOG_START, fog_start_);
 		glFogf(GL_FOG_END, fog_end_);
-		glFogi(GL_FOG_MODE, GL_LINEAR);
-		glEnable(GL_FOG);
 	}
 
   // Render the scene
   Render3d();
+
+  // Deactivate fog
+  if (is_fog_enabled_)
+    glDisable(GL_FOG);
 
   // Reset everything
 	glMatrixMode(GL_PROJECTION);

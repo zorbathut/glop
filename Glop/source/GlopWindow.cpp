@@ -157,6 +157,7 @@ GlopWindow::GlopWindow()
 : os_data_(0), is_created_(false),
   width_(0), height_(0), is_full_screen_(false), settings_(),
   title_(kDefaultTitle), icon_(0),
+  is_vsync_requested_(false), is_vsync_setting_current_(false),
   is_in_focus_(false), is_minimized_(false), recreated_this_frame_(false),
   windowed_x_(-1), windowed_y_(-1),
   tab_direction_(None), is_resolving_ping_(false),
@@ -188,13 +189,22 @@ void GlopWindow::PopFocus() {
     focus_stack_[focus_stack_.size() - 1]->SetIsInFocus(true);
 }
 
-// Handle all logic for this window for a single frame.
-void GlopWindow::Think(int dt) {
+// Handle all logic for this window for a single frame. Returns the number of ticks spent on calls
+// to SwapBuffers. This allows us to track the time between SwapBuffer calls and thus sleep through
+// most of a vertical refresh instead of blocking on a SwapBuffer call when vertical syncing is
+// enabled. This allows the program to take less than 100% cpu time. According to some
+// documentation, SwapBuffers should do this sleeping automatically, but it certainly does not in
+// all cases.
+int GlopWindow::Think(int dt) {
   // If the window is not created, there is nothing to do.
   if (!is_created_)
-    return;
+    return 0;
 
   // Allow the Os to update its internal data, and then poll it
+  if (!is_vsync_setting_current_) {
+    Os::EnableVSync(is_vsync_requested_);
+    is_vsync_setting_current_ = true;
+  }
   Os::WindowThink(os_data_);
   int width, height;
   Os::GetWindowSize(os_data_, &width, &height);
@@ -243,6 +253,7 @@ void GlopWindow::Think(int dt) {
   frame_->SetPosition(0, 0, 0, 0, width_-1, height_-1);
 
   // Render
+  int swap_buffer_time = 0;
   if (!is_minimized_) {
     // Clear the old image
     int clear_mode = GL_COLOR_BUFFER_BIT;
@@ -258,8 +269,11 @@ void GlopWindow::Think(int dt) {
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
     frame_->Render();
+    int old_time = gSystem->GetTime();
     Os::SwapBuffers(os_data_);
+    swap_buffer_time = gSystem->GetTime() - old_time;
   }
+  return swap_buffer_time;
 }
 
 // Given a requested window size, this sets our width and height to try to match that size, but

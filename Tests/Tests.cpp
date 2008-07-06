@@ -5,18 +5,16 @@
 //  - Clean up this file
 //  - Onquit
 //  - Rework file stuff
-//  - Why is object slightly visible even when deep in the fog?
-//  - Look at FrameStyle
+//  - Look at FrameStyle. For example, merge Views and Factories?
 //  - Add KeyPromptFrame?
-//  - Vsync
 //  - Cease tab grab in some way on slider motion
-//  - Vector usage?
 //  - Make character ping part of dummytextpromptframe
 //  - Think about pinging, (e.g. menu adjusted, or typing, etc.)
 //  - Further prune calls to UpdateDerivedKey?
 //  - Think more about rendering order, perhaps add movetofront to multiparentframe
 //  - Allow DummyMenuFrames to render even when empty
-//  - Comment GetContextStringHelper
+//  - Investigate derived keys and focus changing
+//  - Standardize gWindow, input(), etc.
 
 // Includes
 #include "../Glop/include/Base.h"
@@ -106,10 +104,10 @@ void TimeTest() {
   gWindow->AddFrame(new TextFrame("Press any key to continue...", kYellow),
                      0.5f, 1.0f, kJustifyCenter, kJustifyBottom);
 
-  gSystem->SetMaxFps(0);
+  gWindow->SetVSync(false);
   input()->WaitForKeyPress();
-  gSystem->SetMaxFps(100);
-  prompt->SetText("Trying to run at 100 fps:");
+  gWindow->SetVSync(true);
+  prompt->SetText("Trying to run synced with vertical refresh:");
   input()->WaitForKeyPress();
 }
 
@@ -379,6 +377,7 @@ int main(int argc, char **argv) {
   ASSERT((gIcon = Image::Load("Icon.bmp", kRed, 1)) != 0);
   InitDefaultFrameStyle(font);
 
+  gWindow->SetVSync(true);
   gWindow->SetIcon(gIcon);
   ASSERT(gWindow->Create(1024, 768, false));
   IntroScreen();
