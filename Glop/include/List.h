@@ -183,10 +183,10 @@ template <class T> class List {
   // Basic accessors
   bool empty() const {return size_ == 0;}
   int size() const {return size_;}
-  const T &back() const {return end_node_.prev->value;}
-  T &back() {return end_node_.prev->value;}
-  const T &front() const {return end_node_.next->value;}
-  T &front() {return end_node_.next->value;}
+  const T &back() const {return nodes_[nodes_[0].prev].value;}
+  T &back() {return nodes_[nodes_[0].prev].value;}
+  const T &front() const {return nodes_[nodes_[0].next].value;}
+  T &front() {return nodes_[nodes_[0].next].value;}
   const T &operator[](ListId id) const {return nodes_[id.value()].value;}
   T &operator[](ListId id) {return nodes_[id.value()].value;}
 
@@ -244,7 +244,7 @@ template <class T> class List {
   }
   iterator erase(ListId first, ListId last) {
     iterator result;
-    for (InputIterator it = first; it != last; ++it)
+    for (iterator it = first; it != last; ++it)
       result = erase(it);
     return result;
   }

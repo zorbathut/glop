@@ -92,7 +92,6 @@ void FatalError(const string &error) {
 // Handles a failed assertion. It returns an integer so that the ASSERT macro can be done with a ?:
 // operator and thus require a semi-colon.
 int __AssertionFailure(const char *filename, int line, const char *expression) {
-
   FatalError(Format("Assertion failed on line #%d of file %s:\n\n%s.",
                     line, filename, expression));
   return 1;

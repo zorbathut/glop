@@ -59,7 +59,6 @@ FontBitmap *FontOutline::AddRef(int size, unsigned int flags) {
       x2[kNumFontCharacters], y2[kNumFontCharacters];
   int dx[kNumFontCharacters];
   unsigned char *bitmaps[kNumFontCharacters];
-  bool error = false;
   FT_Face face = (FT_Face)face_;
 
   // Set the size for this FreeType font. Note that we need to scale by dpi.
