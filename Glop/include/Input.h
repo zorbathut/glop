@@ -321,24 +321,26 @@ const int kNumBasicDerivedKeys = kNumFixedDerivedKeys + 18;
 // See comment at the top of the file.
 struct KeyEvent {
   enum Type {Nothing, Release, Press, RepeatPress, DoublePress};
-  KeyEvent(const GlopKey &_key, Type type): key(_key), type_(type) {}
+  KeyEvent(): key(kNoKey), type(Nothing) {}
+  KeyEvent(const GlopKey &_key, Type _type): key(_key), type(_type) {}
 
+  // Data
   GlopKey key;
-  bool IsNothing() const {return type_ == Nothing;}
-  bool IsRelease() const {return type_ == Release;}
-  bool IsPress() const {return type_ != Release && type_ != Nothing;}
-  bool IsNonRepeatPress() const {return type_ == Press || type_ == DoublePress;}
-  bool IsRepeatPress() const {return type_ == RepeatPress;}
-  bool IsDoublePress() const {return type_ == DoublePress;}
+  Type type;
 
- private:
-  Type type_;
+  // Type queries
+  bool IsNothing() const {return type == Nothing;}
+  bool IsRelease() const {return type == Release;}
+  bool IsPress() const {return type != Release && type != Nothing;}
+  bool IsNonRepeatPress() const {return type == Press || type == DoublePress;}
+  bool IsRepeatPress() const {return type == RepeatPress;}
+  bool IsDoublePress() const {return type == DoublePress;}
 };
 
 // KeyListener
 // ===========
 //
-// See comment at the top of the file. Allows a class to receive key events.
+// See comment at the top of the file. Extend this to receive and handle key events.
 class KeyListener {
  public:
   KeyListener(bool begin_listening = true): listener_id_(0) {
@@ -347,8 +349,16 @@ class KeyListener {
   ~KeyListener() {StopKeyListening();}
 
  protected:
-  // Overload this to take action on a KeyEvent.
-  virtual void OnKeyEvent(const KeyEvent &event, int dt) = 0;
+  // Overload one of these functions to take action on a KeyEvent. OnKeyEvents will receive events
+  // for derived keys in the same function call as the triggering non-derived key. If being aware
+  // of this connection is not important, OnKeyEvent can be used instead.
+  virtual void OnKeyEvents(const vector<KeyEvent> &events, int dt) {
+    for (int i = 0; i < (int)events.size(); i++)
+      OnKeyEvent(events[i], dt);
+    if (events.size() == 0 && dt > 0)
+      OnKeyEvent(KeyEvent(kNoKey, KeyEvent::Nothing), dt);
+  }
+  virtual void OnKeyEvent(const KeyEvent &event, int dt) {}
 
   // Utility functions that start and stop KeyEvent messages from being sent here. These are called
   // automatically on creation and deletion, but are provided as a convenience at all times.
@@ -368,43 +378,36 @@ Input *input();
 
 class Input {
  public:
-  int GetMaxDevice() const {return GetNumJoysticks() - 1;}
-
-  // KeyTracker
-  // ==========
+  // KeyState
+  // ========
   //
-  // A KeyTracker simulates the logic that generates key events based on whether a given key is up
-  // or down (e.g. repeat events and double-clicks). This is used internally by Input, but it is
-  // also provided publicly.
-  class KeyTracker {
-  public:
-    // Creates a new key - release_delay is an optional artifical delay that ensures the key is
-    // registered as down for a little while even after it is marked as up. This is useful for very
-    // choppy "keys", such as mouse motion.
-    KeyTracker(int release_delay = 0);
-    void SetReleaseDelay(int delay, bool keep_press_amount) {
-      release_delay_ = delay;
-      keep_press_amount_on_release_delay_ = keep_press_amount;
-    }
+  // Helper class that stores all information on a key's state and performs some basic logic that
+  // is common to all keys, both normal and derived. It is also provided publicly so that the logic
+  // can be duplicated elsewhere - e.g. GUI button tracking.
+  class KeyState {
+   public:
+    KeyState();
 
-    // Marks the key as up, ignoring the release_delay. Useful, for example, when focus is lost.
-    // Returns any event caused by this: None or Release.
-    KeyEvent::Type Clear();
-    
-    // Sets the current key press amount.
-    // Returns any event caused by this: None, Press, Release (if release_delay == 0) or DoublePress.
-    KeyEvent::Type SetPressAmount(float amount);
-    KeyEvent::Type SetIsDown(bool is_down) {return SetPressAmount(is_down? 1.0f : 0.0f);}
+    // Mark this key as up or down, returning what event if anything is caused by this.
+    // Options: Nothing, Press, Release, DoublePress.
+    KeyEvent::Type SetIsDown(bool is_down);
 
-    // Registers that a certain time has passed.
-    // Returns any event caused by this: None, RepeatPress, or Release (if release_delay > 0).
-    KeyEvent::Type OnKeyEventDt(int dt);
+    // Updates how far down the key is pressed. This is independent here of whether the key is down.
+    void SetPressAmount(float amount) {press_amount_now_ = amount;}
 
-    // Registers the start of a new frame.
+    // Registers that a repeat-press event was generated for this key. This is reflected only in the
+    // WasPressed function.
+    void OnKeyEventRepeatPress() {was_pressed_ = true;}
+
+    // Registers that time has passed. Repeat events are not generated automatically, but this is
+    // used to track frame press amount and double presses.
+    void OnKeyEventDt(int dt);
+
+    // Registers that a new frame has begun.
     void Think();
 
     // Instantaneous status - see top of the file and Input class below.
-    float GetPressAmountNow() const {return press_amount_virtual_;}
+    float GetPressAmountNow() const {return press_amount_now_;}
     bool IsDownNow() const {return is_down_now_;}
 
     // Frame status - see top of the file and Input class below.
@@ -414,24 +417,21 @@ class Input {
       return count_repeats? was_pressed_ : was_pressed_no_repeats_;
     }
     bool WasReleased() const {return was_released_;}
-    
-  private:
+
+   private:
     float press_amount_now_,      // Instantaneous press_amount for the key
-          press_amount_frame_,    // Total press_amount for the key this frame
-          press_amount_virtual_;  // What we claim our press amount is
+          press_amount_frame_;    // Total press_amount for the key this frame
     bool is_down_now_,            // Is the key down now - not quite the same as cur_press_amount>0
          is_down_frame_;          // Was the key down at any point this frame (See IsKeyDown)
     int total_frame_time_;        // Total time spent during this frame
-    int release_delay_left_,      // Minimum time until cur_is_down can be reverted to false
-        release_delay_;           // The max value for release_delay_left_
-    bool keep_press_amount_on_release_delay_; // If we artifically keeping the pressed down, do we
-                                              // hold it's press amount, or claim it is 0?       
     int double_press_time_left_;  // Used for tracking double presses
-    int repeat_delay_left_;       // Time remaining until we generate a repeat event
     bool was_pressed_,            // Was a key press event generated for this key this frame
          was_pressed_no_repeats_, // Was a key press (no repeat) event generated this frame
          was_released_;           // Was a key release event generated for this key this frame
   };
+
+  // Key iteration. See also kMinDevice and the non-member function GetNumKeys(int device).
+  int GetMaxDevice() const {return GetNumJoysticks() - 1;}
 
   // Gets/sets a sensitivity which is used to scale kMouseLeft, kMouseTop, etc. every frame. This
   // has no effect on mouse cursor position.
@@ -462,17 +462,17 @@ class Input {
   // Queries whether a particular key is down, or how far down it is. See comment at the top of
   // the file.
   float GetKeyPressAmountNow(const GlopKey &key) const {
-    const KeyTracker *info = GetKeyTracker(key);
+    const KeyState *info = GetKeyState(key);
     return (info == 0? 0.0f : info->GetPressAmountNow());
   }
   bool IsKeyDownNow(const GlopKey &key) const {
-    const KeyTracker *info = GetKeyTracker(key);
+    const KeyState *info = GetKeyState(key);
     return (info == 0? false : info->IsDownNow());
   }
 
   // Gets/sets mouse position. All coordinates are relative to the top-left corner of the window
   // owning the Input class. Note that GetMouseX and GetMouseY are provided mainly for GUI support.
-  // Features such as mouse look are implemented better using key tracking with kMouseUp, etc.
+  // Features such as mouse-look are implemented better using key tracking with kMouseUp, etc.
   void SetMousePosition(int x, int y);
   int GetMouseX() const {return mouse_x_;}
   int GetMouseY() const {return mouse_y_;}
@@ -488,11 +488,11 @@ class Input {
   // Queries whether a particular key was down this frame, or how far down it was. See comment at
   // the top of the file.
   float GetKeyPressAmountFrame(const GlopKey &key) const {
-    const KeyTracker *info = GetKeyTracker(key);
+    const KeyState *info = GetKeyState(key);
     return (info == 0? 0.0f : info->GetPressAmountFrame());
   }
   bool IsKeyDownFrame(const GlopKey &key) const {
-    const KeyTracker *info = GetKeyTracker(key);
+    const KeyState *info = GetKeyState(key);
     return (info == 0? false : info->IsDownFrame());
   }
   const vector<GlopKey> &GetDownKeysFrame() const {return down_keys_frame_;}
@@ -500,19 +500,19 @@ class Input {
   // Was a key event generated for this key during this frame? WasKeyPressed counts repeat events
   // only if count_repeats == true.
   bool WasKeyPressed(const GlopKey &key, bool count_repeats = true) const {
-    const KeyTracker *info = GetKeyTracker(key);
+    const KeyState *info = GetKeyState(key);
     return (info == 0? false : info->WasPressed(count_repeats));
   }
   bool WasKeyReleased(const GlopKey &key) const {
-    const KeyTracker *info = GetKeyTracker(key);
+    const KeyState *info = GetKeyState(key);
     return (info == 0? false : info->WasReleased());
   }
 
   // Returns a single key that has been pressed this frame (including repeat events). If no key
   // has been pressed, kNoKey is returned. Derived keys will never be returned - a corresponding
   // normal key will be returned instead.
-  // accept_clicks can be used to filter out mouse clicks, accept_modifiers and accept_motion
-  // filter out modifier and motion keys respectively.
+  // accept_clicks, accept_modifiers and accept_motion can be used to filter out mouse clicks, and
+  // modifier and mouse/joystick motion keys respectively.
   const GlopKey &GetKeyPress(bool accept_clicks = true, bool accept_modifiers = false,
                              bool accept_motion = false);
 
@@ -522,6 +522,26 @@ class Input {
 
   // Derived Keys
   // ============
+  //
+  // There are two kinds of derived keys - kAnyJoystick derived keys, which aggregate data for all
+  // joysticks, and others. The others are essentially user-configurable. Each has a name, and each
+  // is defined as a set of "bindings". Each binding consists of a primary key, a number of modifier
+  // keys, and a number of modifier states. The binding is considered down if the primary key is
+  // down, and each modifier key's state matches the specified states. The derived key is considered
+  // down if any binding is down.
+  //
+  // For example, kEitherShift is defined with two bindings with main keys kLeftShift and
+  // kRightShift, and with no modifiers. kGuiSelectNext could be defined with one binding with main
+  // key kTab and with modifiers kEitherShift (NOT down) and kEitherAlt (NOT down).
+  //
+  // These functions allow the binding and unbinding of these derived keys. A few basic ones (e.g.
+  // kEitherShift) cannot be edited at all, some (e.g. kGuiSelectNext) can be edited but not
+  // deleted, and the rest can be added or deleted at will. Default bindings can be set for the GUI
+  // keys by calling ConfigureGuiKeys with information on which devices the GUI should respond to.
+  // Initially, this is set up to respond to keyboard and mouse but not joysticks.
+  //
+  // A derived key generates events whenever any of its main keys generate events (in the same call
+  // to OnKeyEvents). It's press amount is the sum of the press amounts of its active main keys.
   static int GetNumDerivedKeys() {return (int)derived_key_names_.size();}
   static void ConfigureGuiKeys(bool keyboard_bindings, bool mouse_bindings, bool joystick_bindings);
   static GlopKey AllocateDerivedKey(const string &key_name);
@@ -537,6 +557,46 @@ class Input {
   static void ClearDerivedKeys();
 
  private:
+  // KeyTracker
+  // ==========
+  //
+  // A helper class, built upon KeyState, that performs all logic for non-derived keys.
+  class KeyTracker {
+   public:
+    // Construction
+    KeyTracker();
+    void SetReleaseDelay(int delay, bool mouse_wheel_hack) {
+      release_delay_ = delay;
+      mouse_wheel_hack_ = mouse_wheel_hack;
+    }
+    const KeyState &GetState() const {return state_;}
+
+    // Modifiers
+    KeyEvent::Type Clear();
+    KeyEvent::Type SetPressAmount(float amount);
+    KeyEvent::Type SetIsDown(bool is_down) {return SetPressAmount(is_down? 1.0f : 0.0f);}
+    KeyEvent::Type OnKeyEventDt(int dt);
+    void Think() {state_.Think();}
+
+    // Instantaneous status
+    float GetPressAmountNow() const {return state_.GetPressAmountNow();}
+    bool IsDownNow() const {return state_.IsDownNow();}
+
+    // Frame status
+    float GetPressAmountFrame() const {return state_.GetPressAmountFrame();}
+    bool IsDownFrame() const {return state_.IsDownFrame();}
+    bool WasPressed(bool count_repeats = true) const {return state_.WasPressed(count_repeats);}
+    bool WasReleased() const {return state_.WasReleased();}
+    
+   private:
+    KeyState state_;
+    float requested_press_amount_;
+    int release_delay_left_,
+        release_delay_;
+    bool mouse_wheel_hack_;
+    int repeat_delay_left_;
+  };
+
   // Interface to System
   friend class System;
   static void InitDerivedKeys();
@@ -572,8 +632,8 @@ class Input {
   vector<GlopKey> down_keys_frame_, pressed_keys_frame_;
   KeyTracker keyboard_key_trackers_[kNumKeyboardKeys];
   vector<vector<KeyTracker> > joystick_key_trackers_;
-  KeyTracker any_joystick_key_trackers_[kNumJoystickKeys];
-  vector<KeyTracker> derived_key_trackers_;
+  KeyState any_joystick_key_states_[kNumJoystickKeys];
+  vector<KeyState> derived_key_states_;
 
   // Derived key configuration
   friend struct GlopKey;
@@ -589,13 +649,15 @@ class Input {
   static vector<vector<DerivedKeyBinding> > derived_key_bindings_;
 
   // Utility functions
-  void OnOsKeyEvent(const GlopKey &key, float press_amount);
-  void UpdateDerivedKey(const GlopKey &key);
-  void OnKeyEvent(const KeyEvent &event, int dt);
-  const KeyTracker *GetKeyTracker(const GlopKey &key) const;
-  KeyTracker *GetKeyTracker(const GlopKey &key) {
-    const Input *const_this = (const Input *)this;
-    return (KeyTracker*)const_this->GetKeyTracker(key);
+  void SetNonDerivedKeyPressAmount(const GlopKey &key, float press_amount);
+  void UpdateDerivedKeyStatesAndProcessEvents(const GlopKey &key, const vector<KeyEvent> &events_so_far);
+  void UpdateDerivedKeyState(const GlopKey &key, vector<KeyEvent> *key_events);
+  bool IsDerivedKeyBindingActive(const GlopKey &key, const GlopKey &binding);
+  void OnKeyEvents(const vector<KeyEvent> &events, int dt);
+  KeyTracker *GetNonDerivedKeyTracker(const GlopKey &key);
+  const KeyState *GetKeyState(const GlopKey &key) const;
+  KeyState *GetKeyState(const GlopKey &key) {
+    return (KeyState*)(((const Input *)this)->GetKeyState(key));
   }
   void UpdateOsCursorVisibility();
   friend class KeyListener;

@@ -79,7 +79,7 @@
 //
 // - TableauFrame: This is what GlopWindow->AddFrame is based on. When you add a frame, you choose
 //    a position and a justification for it. The TableauFrame tries to make the frame as large as
-//    possible without going off the edge of the screen.
+//    possible without going off the edge of the tableau.
 //     Example: window()->AddFrame(new FpsFrame(), 1.0f, 1.0f, kJustifyRight, kJustifyBottom);
 //    This will display the FPS on the bottom-right corner of the screen. (Note the FpsFrame
 //    ignores the recommended size, and uses a text size set in GlopFrameStyle.h).
@@ -121,7 +121,7 @@
 //    MinSizeFrame and MaxSizeFrame.
 //
 // - ScrollingFrame: Similar to a MaxSizeFrame, except scroll bars are added automatically if the
-//    frame does not complete fit within the recommended size. You can programmatically alter what
+//    frame does not completely fit within the recommended size. You can programmatically alter what
 //    is being scrolling to with "pings". A ping specifies that a certain region of a certain frame
 //    should be made visible to the user. ScrollingFrames and MaxSizeFrames are then scrolled so as
 //    to make this happen.
@@ -146,11 +146,6 @@
 // ratio, and without exceeding the given width and height. In general, it is ALWAYS better to be
 // under the recommended size than it is to be over.
 //
-// While important to understand, this is not fundamental to actually layout out frames on the
-// screen. By and large, that is done with various built-in helper classes located in GlopFrameBase.
-// These helper classes will end up setting rec_width and rec_height, and then afterwards, setting
-// the frame position themselves.
-//
 //
 // Getting started: Responding to events
 // =====================================
@@ -167,7 +162,7 @@
 //
 //   void Think(int dt) {
 //     total_dt_ += dt;
-//     brightness_ = (0.75f + 0.25f*cos(dt));
+//     brightness_ = (0.75f + 0.25f*cos(total_dt));
 //   }
 //
 // and then rendering the lines with the given brightness.

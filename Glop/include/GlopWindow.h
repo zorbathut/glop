@@ -149,8 +149,17 @@ class GlopWindow {
   GlopFrame *RemoveFrameNoDelete(ListId id);
   void RemoveFrame(ListId id);
   void ClearFrames();
-  
+
+  // Changes the tab order of a FocusFrame. By default, the tab order is given by the order in which
+  // FocusFrames are added to the GlopWindow. This is deterministic but potentially hard to control
+  // when a GlopFrame and all its descendants are added together. These functions can be used to
+  // correct any undesirable orderings caused from this.
+  void SetFocusPredecessor(FocusFrame *base, FocusFrame *successor);
+  void SetFocusSuccessor(FocusFrame *base, FocusFrame *successor);
+
   // See GlopFrameBase.h
+  const FocusFrame *GetFocusFrame() const {return focus_stack_[focus_stack_.size()-1];}
+  FocusFrame *GetFocusFrame() {return focus_stack_[focus_stack_.size()-1];}
   void PushFocus();
   void PopFocus();
 
@@ -163,25 +172,34 @@ class GlopWindow {
  
   // Interface to GlopFrame
   friend class GlopFrame;
-  void UnregisterAllPings(GlopFrame *frame);
-  void RegisterPing(GlopFrame::Ping *ping);
-  void PropogatePing(GlopFrame::Ping *ping);
+  static void UnregisterAllPings(GlopFrame *frame);
+  static void RegisterPing(GlopFrame::Ping *ping);
+  static void PropogatePing(GlopFrame::Ping *ping);
 
   // Interface to Input
   friend class Input;
-  void OnKeyEvent(const KeyEvent &event, int dt);
+  void OnKeyEvents(const vector<KeyEvent> &events, int dt);
 
   // Resizing
   void ChooseValidSize(int width, int height, int *new_width, int *new_height);
 
-  // Focus utilities - see GlopFrameBase.h
+  // Focus utilities to be used by FocusFrame - see GlopFrameBase.h
   friend class FocusFrame;
   int RegisterFocusFrame(FocusFrame *frame);
-  void UnregisterFocusFrame(int layer, FocusFrame *frame);
-  void DemandFocus(int layer, FocusFrame *frame, bool update_is_gaining_focus);
+  void UnregisterFocusFrame(FocusFrame *frame);
+  void DemandFocus(FocusFrame *frame, bool ping);
+
+  // Focus internal utilities
+  void UpdateFramesInFocus();
+  void UpdateFramesInFocus(FocusFrame *old_frame, FocusFrame *frame, bool ping);
+  FocusFrame *ChooseFocus(FocusFrame *old_focus, const vector<FocusFrame*> &options);
+  FocusFrame *GetNextPossibleFocusFrame(FocusFrame *frame);
+  FocusFrame *GetPrevPossibleFocusFrame(FocusFrame *frame);
+  bool SendKeyEventsToFrame(FocusFrame *frame, const vector<KeyEvent> &events, int dt,
+                            bool gained_focus);
   
   // Configuration data
-  OsWindowData *os_data_;        // OS handle on this window - needed for all OS calls
+  OsWindowData *os_data_;           // OS handle on this window - needed for all OS calls
   bool is_created_;
   int width_, height_;
   bool is_full_screen_;
@@ -198,10 +216,8 @@ class GlopWindow {
                                     //  Values of -1 indicate no value has ever been recorded.
 
   // Content data
-  enum TabDirection {Forward, Backward, None};
-  TabDirection tab_direction_;  // Used to prevent too-rapid switching between tab & shift+tab
   bool is_resolving_ping_;
-  List<GlopFrame::Ping*> ping_list_;
+  static List<GlopFrame::Ping*> ping_list_;
   vector<FocusFrame*> focus_stack_;
   TableauFrame *frame_;
   Input *input_;

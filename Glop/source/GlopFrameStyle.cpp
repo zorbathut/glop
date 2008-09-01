@@ -32,17 +32,13 @@ void DefaultInputBoxView::OnResize(int rec_width, int rec_height,
 
 void DefaultInputBoxView::Render(int x1, int y1, int x2, int y2,
                                  const PaddedFrame *padded_frame) const {
-  GlUtils2d::DrawRectangle(x1, y1, x2, y2, factory_->GetBorderColor());
-  GlUtils2d::FillRectangle(x1+1, y1+1, x2-1, y2-1, factory_->GetBackgroundColor());
+  GlUtils2d::DrawRectangle(x1, y1, x2, y2, border_color_);
+  GlUtils2d::FillRectangle(x1+1, y1+1, x2-1, y2-1, background_color_);
   padded_frame->Render();
 }
 
 // TextPromptView
 // ==============
-
-const GuiTextStyle DefaultTextPromptView::GetTextStyle() const  {
-  return factory_->GetTextStyle();
-}
 
 void DefaultTextPromptView::OnResize(int rec_width, int rec_height, const TextFrame *text_frame,
                                      int *lp, int *tp, int *rp, int *bp) const {
@@ -68,7 +64,7 @@ void DefaultTextPromptView::Render(int x1, int y1, int x2, int y2, int cursor_po
 
   // Animate the cursor
   *cursor_time %= kCursorCycleTime;
-  Color cursor_color = factory_->GetCursorColor();
+  Color cursor_color = cursor_color_;
   int delim[] = {kCursorCycleTime / 2 - kCursorFadeTime, kCursorCycleTime / 2,
                  kCursorCycleTime - kCursorFadeTime, kCursorCycleTime};
   if (*cursor_time <= delim[0])
@@ -82,7 +78,7 @@ void DefaultTextPromptView::Render(int x1, int y1, int x2, int y2, int cursor_po
 
   // Render
   if (selection_start != selection_end)
-    GlUtils2d::FillRectangle(sel_x1, y1, sel_x2-1, y2, factory_->GetHighlightColor());
+    GlUtils2d::FillRectangle(sel_x1, y1, sel_x2-1, y2, highlight_color_);
   text_frame->Render();
   if (is_in_focus)
     text_frame->GetRenderer()->Print(cursor_x, y1, "|", cursor_color);
@@ -91,9 +87,6 @@ void DefaultTextPromptView::Render(int x1, int y1, int x2, int y2, int cursor_po
 // WindowView
 // ==========
 
-const GuiTextStyle DefaultWindowView::GetTitleStyle() const {
-  return factory_->GetTitleStyle();
-}
 void DefaultWindowView::OnResize(int rec_width, int rec_height, bool has_title,
                                  int *title_l, int *title_t, int *title_r, int *title_b,
                                  int *inner_l, int *inner_t, int *inner_r, int *inner_b) const {
@@ -101,6 +94,7 @@ void DefaultWindowView::OnResize(int rec_width, int rec_height, bool has_title,
   *title_r = *title_b = 0;
   *inner_l = *inner_t = *inner_r = *inner_b = 3;
 }
+
 void DefaultWindowView::Render(int x1, int y1, int x2, int y2,
                                const PaddedFrame *padded_title_frame,
                                const PaddedFrame *padded_inner_frame) const {
@@ -109,35 +103,34 @@ void DefaultWindowView::Render(int x1, int y1, int x2, int y2,
     title_height = 0;
   else
     title_height = padded_title_frame->GetHeight();
-  int ym = y1 + title_height - 1;
+  int ym = y1 + title_height;
 
   // Draw the fancy title bar
   if (padded_title_frame != 0) {
     glBegin(GL_QUADS);
-    GlUtils::SetColor(factory_->GetBorderHighlightColor());
+    GlUtils::SetColor(border_highlight_color_);
     glVertex2i(x1 + 1, y1 + 1);
     glVertex2i(x2, y1 + 1);
-    GlUtils::SetColor(factory_->GetBorderLowlightColor());
+    GlUtils::SetColor(border_lowlight_color_);
     glVertex2i(x2, y1 + title_height/4);
     glVertex2i(x1 + 1, y1 + title_height/4);
     glVertex2i(x1 + 1, y1 + title_height/4);
     glVertex2i(x2, y1 + title_height/4);
-    GlUtils::SetColor(factory_->GetBorderHighlightColor());
+    GlUtils::SetColor(border_highlight_color_);
     glVertex2i(x2, y1 + title_height + 1);
     glVertex2i(x1, y1 + title_height + 1);
     glEnd();
   }
 
   // Draw the window border
-  GlUtils2d::DrawRectangle(x1, y1, x2, y2, factory_->GetBorderLowlightColor());
-  GlUtils2d::DrawRectangle(x1 + 1, ym + 1, x2 - 1, y2 - 1, factory_->GetBorderHighlightColor());
-  GlUtils2d::DrawRectangle(x1 + 2, ym + 2, x2 - 2, y2 - 2, factory_->GetBorderLowlightColor());
+  GlUtils2d::DrawRectangle(x1, y1, x2, y2, border_lowlight_color_);
+  GlUtils2d::DrawRectangle(x1 + 1, ym + 1, x2 - 1, y2 - 1, border_highlight_color_);
+  GlUtils2d::DrawRectangle(x1 + 2, ym + 2, x2 - 2, y2 - 2, border_lowlight_color_);
 
   // Draw the window interior    
-  GlUtils2d::FillRectangle(x1 + 3, ym + 3, x2 - 3, y2 - 3, factory_->GetInnerColor());
+  GlUtils2d::FillRectangle(x1 + 3, ym + 3, x2 - 3, y2 - 3, inner_color_);
 
   // Delegate to the inner frames
-  GlUtils::SetColor(kWhite);
   if (padded_title_frame != 0)
     padded_title_frame->Render();
   padded_inner_frame->Render();
@@ -148,8 +141,7 @@ void DefaultWindowView::Render(int x1, int y1, int x2, int y2,
 
 void DefaultButtonView::OnResize(int rec_width, int rec_height, bool is_down,
                                  int *lp, int *tp, int *rp, int *bp) const {
-  float border_size = factory_->GetBorderSize();
-  int padding = 2 + int(min(window()->GetWidth(), window()->GetHeight()) * border_size);
+  int padding = 2 + int(min(window()->GetWidth(), window()->GetHeight()) * border_size_);
   int offset = (is_down? 1 : 0);
   *lp = *tp = padding + offset - 1;
   *rp = *bp = padding - offset;
@@ -163,14 +155,13 @@ void DefaultButtonView::Render(int x1, int y1, int x2, int y2, bool is_down, boo
   // Handle up buttons
   if (!is_down) {
     // Draw the border
-    GlUtils2d::DrawRectangle(x1, y1, x2, y2, factory_->GetBorderColor());
+    GlUtils2d::DrawRectangle(x1, y1, x2, y2, border_color_);
 
     // Draw the highlight
-    GlUtils2d::FillRectangle(x1 + 1, y1 + 1, x2 - 1, y2 - 1, factory_->GetHighlightColor());
+    GlUtils2d::FillRectangle(x1 + 1, y1 + 1, x2 - 1, y2 - 1, highlight_color_);
 
     // Draw the lowlight
-    GlUtils2d::FillRectangle(x1 + lpadding, y2 - rpadding + 1, x2 - 1, y2 - 1,
-                             factory_->GetLowlightColor());
+    GlUtils2d::FillRectangle(x1 + lpadding, y2 - rpadding + 1, x2 - 1, y2 - 1, lowlight_color_);
     glBegin(GL_TRIANGLES);
     glVertex2i(x1 + 1, y2);
     glVertex2i(x1 + lpadding, y2 - rpadding + 1);
@@ -185,29 +176,27 @@ void DefaultButtonView::Render(int x1, int y1, int x2, int y2, bool is_down, boo
 
     // Draw the button interior
     GlUtils2d::FillRectangle(x1 + lpadding, y1 + lpadding, x2 - rpadding, y2 - rpadding,
-                             factory_->GetUnpressedInnerColor());
+                             unpressed_inner_color_);
   } else {
     // Draw a pressed button
-    GlUtils2d::DrawRectangle(x1, y1, x2, y2, factory_->GetBorderColor());
-    GlUtils2d::FillRectangle(x1 + 1, y1 + 1, x2 - 1, y2 - 1, factory_->GetLowlightColor());
+    GlUtils2d::DrawRectangle(x1, y1, x2, y2, border_color_);
+    GlUtils2d::FillRectangle(x1 + 1, y1 + 1, x2 - 1, y2 - 1, lowlight_color_);
     GlUtils2d::FillRectangle(x1 + lpadding, y1 + lpadding, x2 - rpadding, y2 - rpadding,
-                             factory_->GetPressedInnercolor());
+                             pressed_inner_color_);
   }
 
   // Draw the inner frame
-  GlUtils::SetColor(kWhite);
   padded_inner_frame->Render();
 
   // Draw the focus display
   if (is_primary_focus) {
-    GlUtils2d::DrawRectangle(x1, y1, x2, y2, factory_->GetSelectionColor());
+    GlUtils2d::DrawRectangle(x1, y1, x2, y2, selection_color_);
     glEnable(GL_LINE_STIPPLE);
     glLineStipple(1, 0x5555);
     GlUtils2d::DrawRectangle(x1 + lpadding - 1, y1 + lpadding - 1, x2 - rpadding + 1,
                             y2 - rpadding + 1);
     glLineStipple(1, 0xffff);
     glDisable(GL_LINE_STIPPLE);
-    GlUtils::SetColor(kWhite);
   }
 }
 
@@ -223,7 +212,7 @@ void DefaultArrowView::Render(int x1, int y1, int x2, int y2, Direction directio
   int x = 1 + x1 + (x2-x1)/2, y = 1 + y1 + (y2-y1)/2;
   int d = int((x2-x1+1) * 0.35f + 0.5f);
 
-  GlUtils::SetColor(factory_->GetColor());
+  GlUtils::SetColor(color_);
   glBegin(GL_TRIANGLES);
   switch(direction) {
     case Up:
@@ -248,26 +237,17 @@ void DefaultArrowView::Render(int x1, int y1, int x2, int y2, Direction directio
       break;
   }
   glEnd();
-  GlUtils::SetColor(kWhite);
 }
 
 // SliderView
 // ==========
 
-const ArrowViewFactory *DefaultSliderView::GetArrowViewFactory() const {
-  return factory_->GetArrowViewFactory();
-}
-
-const ButtonViewFactory *DefaultSliderView::GetButtonViewFactory() const {
-  return factory_->GetButtonViewFactory();
-}
-
 int DefaultSliderView::GetWidthOnResize(int rec_width, int rec_height, bool is_horizontal) const {
-  return max(int(min(window()->GetWidth(), window()->GetHeight()) * factory_->GetWidth()), 2);
+  return max(int(min(window()->GetWidth(), window()->GetHeight()) * width_), 2);
 }
 
 int DefaultSliderView::GetMinTabLengthOnResize(int inner_width, int inner_height,
-                                               bool is_horizontal) {
+                                               bool is_horizontal) const {
   return min(6, is_horizontal? inner_width: inner_height);
 }
 
@@ -293,18 +273,16 @@ void DefaultSliderView::Render(int x1, int y1, int x2, int y2, bool is_horizonta
   }
 
   // Draw the background
-  GlUtils2d::FillRectangle(x1, y1, x2, y2, factory_->GetBackgroundColor());
-  GlUtils::SetColor(kWhite);
+  GlUtils2d::FillRectangle(x1, y1, x2, y2, background_color_);
 
   // Draw the tab - we render it the same way a DefaultButtonStyle renders an unpressed button.
-  float tab_border = factory_->GetTabBorderSize();
-  int tab_padding = 2 + int(min(window()->GetWidth(), window()->GetHeight()) * tab_border);
+  int tab_padding = 2 + int(min(window()->GetWidth(), window()->GetHeight()) * tab_border_size_);
   tab_padding = min(tab_padding, min(tab_x2 - tab_x1 - 2, tab_y2 - tab_y1 - 2)/2);
-  GlUtils2d::DrawRectangle(tab_x1, tab_y1, tab_x2, tab_y2, factory_->GetTabBorderColor());
+  GlUtils2d::DrawRectangle(tab_x1, tab_y1, tab_x2, tab_y2, tab_border_color_);
   GlUtils2d::FillRectangle(tab_x1 + 1, tab_y1 + 1, tab_x2 - 1, tab_y2 - 1,
-                           factory_->GetTabHighlightColor());
+                           tab_highlight_color_);
   GlUtils2d::FillRectangle(tab_x1 + tab_padding, tab_y2 - tab_padding + 1, tab_x2 - 1, tab_y2 - 1,
-                           factory_->GetTabLowlightColor());
+                           tab_lowlight_color_);
   glBegin(GL_TRIANGLES);
   glVertex2i(tab_x1 + 1, tab_y2);
   glVertex2i(tab_x1 + tab_padding, tab_y2 - tab_padding + 1);
@@ -317,10 +295,10 @@ void DefaultSliderView::Render(int x1, int y1, int x2, int y2, bool is_horizonta
   glVertex2i(tab_x2, tab_y1 + tab_padding);
   glEnd();
   GlUtils2d::FillRectangle(tab_x1 + tab_padding, tab_y1 + tab_padding, tab_x2 - tab_padding,
-                           tab_y2 - tab_padding, factory_->GetTabInnerColor());
+                           tab_y2 - tab_padding, tab_inner_color_);
 
   // Draw the border
-  GlUtils::SetColor(factory_->GetBorderColor());
+  GlUtils::SetColor(border_color_);
   if (is_horizontal) {
     GlUtils2d::DrawLine(x1, y1, x2, y1);
     GlUtils2d::DrawLine(x1, y2, x2, y2);
@@ -328,7 +306,6 @@ void DefaultSliderView::Render(int x1, int y1, int x2, int y2, bool is_horizonta
     GlUtils2d::DrawLine(x1, y1, x1, y2);
     GlUtils2d::DrawLine(x2, y1, x2, y2);
   }
-  GlUtils::SetColor(kWhite);
 }
 
 // MenuView
@@ -340,24 +317,24 @@ void DefaultMenuView::OnResize(int rec_width, int rec_height, int *item_lp, int 
 }
 
 void DefaultMenuView::Render(int x1, int y1, int x2, int y2, int sel_x1, int sel_y1, int sel_x2,
-                             int sel_y2, bool is_in_focus, const GlopFrame *items) const {
-  Color color = (is_in_focus? factory_->GetSelectionColor() : factory_->GetSelectionColorNoFocus());
+                             int sel_y2, bool is_in_focus, const List<GlopFrame *> &items) const {
+  Color color = (is_in_focus? selection_color_ : selection_color_no_focus_);
   GlUtils2d::FillRectangle(sel_x1, sel_y1, sel_x2, sel_y2, color);
-  GlUtils::SetColor(kWhite);
-  items->Render();
+  for (List<GlopFrame*>::const_iterator it = items.begin(); it != items.end(); ++it)
+    (*it)->Render();
 }
 
 // Globals
 // =======
 GuiTextStyle *gGuiTextStyle = 0;
-InputBoxViewFactory *gInputBoxViewFactory = 0;
-TextPromptViewFactory *gTextPromptViewFactory = 0;
-ArrowViewFactory *gArrowViewFactory = 0;
-ButtonViewFactory *gButtonViewFactory = 0;
-SliderViewFactory *gSliderViewFactory = 0;
-WindowViewFactory *gWindowViewFactory = 0;
-MenuViewFactory *gMenuViewFactory = 0;
-DialogViewFactory *gDialogViewFactory = 0;
+InputBoxView *gInputBoxView = 0;
+TextPromptView *gTextPromptView = 0;
+ArrowView *gArrowView = 0;
+ButtonView *gButtonView = 0;
+SliderView *gSliderView = 0;
+WindowView *gWindowView = 0;
+MenuView *gMenuView = 0;
+DialogView *gDialogView = 0;
 
 template<class T> static void SafeDelete(T *& data) {
   if (data != 0) {
@@ -368,27 +345,26 @@ template<class T> static void SafeDelete(T *& data) {
 
 void ClearFrameStyle() {
   SafeDelete(gGuiTextStyle);
-  SafeDelete(gInputBoxViewFactory);
-  SafeDelete(gTextPromptViewFactory);
-  SafeDelete(gArrowViewFactory);
-  SafeDelete(gButtonViewFactory);
-  SafeDelete(gSliderViewFactory);
-  SafeDelete(gWindowViewFactory);
-  SafeDelete(gMenuViewFactory);
-  SafeDelete(gDialogViewFactory);
+  SafeDelete(gInputBoxView);
+  SafeDelete(gTextPromptView);
+  SafeDelete(gArrowView);
+  SafeDelete(gButtonView);
+  SafeDelete(gSliderView);
+  SafeDelete(gWindowView);
+  SafeDelete(gMenuView);
+  SafeDelete(gDialogView);
 }
 
 void InitDefaultFrameStyle(Font *font) {
   ClearFrameStyle();
   gGuiTextStyle = new GuiTextStyle(kDefaultTextColor, kDefaultTextHeight, font, 0);
-  gInputBoxViewFactory = new DefaultInputBoxViewFactory();
-  gTextPromptViewFactory = new DefaultTextPromptViewFactory(font);
-  gArrowViewFactory = new DefaultArrowViewFactory();
-  gButtonViewFactory = new DefaultButtonViewFactory();
-  gSliderViewFactory = new DefaultSliderViewFactory(gArrowViewFactory, gButtonViewFactory);
-  gWindowViewFactory = new DefaultWindowViewFactory(font);
-  gMenuViewFactory = new DefaultMenuViewFactory();
-  gDialogViewFactory = new DefaultDialogViewFactory(gInputBoxViewFactory, gTextPromptViewFactory,
-                                                    gWindowViewFactory, gButtonViewFactory,
-                                                    gSliderViewFactory, font);
+  gInputBoxView = new DefaultInputBoxView();
+  gTextPromptView = new DefaultTextPromptView(font);
+  gArrowView = new DefaultArrowView();
+  gButtonView = new DefaultButtonView();
+  gSliderView = new DefaultSliderView(gArrowView, gButtonView);
+  gWindowView = new DefaultWindowView(font);
+  gMenuView = new DefaultMenuView(font);
+  gDialogView = new DefaultDialogView(gInputBoxView, gTextPromptView, gWindowView, gButtonView,
+                                      gSliderView, font);
 }

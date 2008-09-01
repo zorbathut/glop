@@ -16,6 +16,7 @@ const int kClipMinusInfinity = -kClipInfinity;
 // Constructor. Does nothing.
 GlopFrame::GlopFrame()
 : parent_(0),
+  window_(0),
   width_(0),
   height_(0),
   screen_x_(0),
@@ -24,14 +25,13 @@ GlopFrame::GlopFrame()
   clip_y1_(kClipMinusInfinity),
   clip_x2_(kClipInfinity),
   clip_y2_(kClipInfinity),
-  is_in_focus_(false),
   focus_frame_(0) {
   DirtySize();
 }
 
-// Destructor. Deletes all pings that have been queued up for this frame.
 GlopFrame::~GlopFrame() {
-  window()->UnregisterAllPings(this);
+  ASSERT(GetParent() == 0);
+  GlopWindow::UnregisterAllPings(this);
 }
 
 // Marks that this frame needs its size recomputed. The parent must also recompute its size
@@ -52,6 +52,10 @@ void GlopFrame::UpdateSize(int rec_width, int rec_height) {
   old_rec_height_ = rec_height;
 }
 
+bool GlopFrame::IsInFocus() const {
+  return focus_frame_ != 0 && focus_frame_->IsInFocus();
+}
+
 void GlopFrame::SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2) {
   screen_x_ = screen_x;
   screen_y_ = screen_y;
@@ -62,15 +66,22 @@ void GlopFrame::SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx
 }
 
 bool GlopFrame::IsPrimaryFocus() const {
-  return is_in_focus_ && screen_x_ == GetFocusFrame()->GetX() &&
-    screen_y_ == GetFocusFrame()->GetY() && width_ == GetFocusFrame()->GetWidth() &&
-    height_ == GetFocusFrame()->GetHeight();
+  return IsInFocus() && focus_frame_->CanBePrimaryFocus() &&
+    screen_x_ == GetFocusFrame()->GetX() && screen_y_ == GetFocusFrame()->GetY() &&
+    width_ == GetFocusFrame()->GetWidth() && height_ == GetFocusFrame()->GetHeight();
 }
 
 bool GlopFrame::IsPointVisible(int screen_x, int screen_y) const {
   int x1 = max(screen_x_, clip_x1_), y1 = max(screen_y_, clip_y1_),
       x2 = min(screen_x_+width_-1, clip_x2_), y2 = min(screen_y_+height_-1, clip_y2_);
   return (screen_x >= x1 && screen_y >= y1 && screen_x <= x2 && screen_y <= y2);
+}
+
+bool GlopFrame::IsPointVisibleInFocusFrame(int screen_x, int screen_y) const {
+  if (focus_frame_ != 0)
+    return focus_frame_->IsPointVisible(screen_x, screen_y);
+  else
+    return IsPointVisible(screen_x, screen_y);
 }
 
 void GlopFrame::SetToMaxSize(int width_bound, int height_bound, float aspect_ratio) {
@@ -82,8 +93,10 @@ void GlopFrame::SetToMaxSize(int width_bound, int height_bound, float aspect_rat
   }
 }
 
+// It is convenient to be able to register pings even before a window is assigned to this frame.
+// Towards that end, we use a static GlopWindow::RegisterPing.
 void GlopFrame::AddPing(Ping *ping) {
-  window()->RegisterPing(ping);
+  GlopWindow::RegisterPing(ping);
 }
 
 string GlopFrame::GetContextStringHelper(bool extend_down, bool extend_up,
@@ -98,14 +111,22 @@ string GlopFrame::GetContextStringHelper(bool extend_down, bool extend_up,
   return result;
 }
 
+// Adds this frame into a tree of frames by setting its parent. This requires updating both the
+// direct parent link and the focus frame link. Focus frame ancestry depends on the layers within
+// the GlopWindow so that is handled within SetWindow.
 void GlopFrame::SetParent(GlopFrame *parent) {
-  if (parent == 0) {
-    if (!IsFocusFrame()) SetFocusInfo(0, false);
-    parent_ = 0;
-  } else {
-    parent_ = parent;
-    if (!IsFocusFrame()) SetFocusInfo(parent->focus_frame_, parent->is_in_focus_);
-  }
+  bool was_in_focus = IsInFocus();
+  if (window_ != 0)
+    UnregisterFocusFrames();
+  SetFocusFrame(parent != 0? parent->focus_frame_ : 0);
+  GlopWindow *w = (parent != 0? parent->window_ : 0);
+  if (w != window_)
+    SetWindow(w);
+  parent_ = parent;
+  if (window_ != 0)
+    RegisterFocusFrames();
+  if (IsInFocus() != was_in_focus)
+    NotifyFocusChange();
 }
 
 // SingleParentFrame
@@ -121,7 +142,10 @@ GlopFrame *SingleParentFrame::RemoveChildNoDelete() {
 
 void SingleParentFrame::SetChild(GlopFrame *frame) {
   DirtySize();
-  if (child_ != 0) delete child_;
+  if (child_ != 0) {
+    child_->SetParent(0);
+    delete child_;
+  }
   child_ = frame;
   if (child_ != 0) child_->SetParent(this);
 }
@@ -147,11 +171,11 @@ void MultiParentFrame::Render() const {
   }
 }
 
-bool MultiParentFrame::OnKeyEvent(const KeyEvent &event, int dt) {
+bool MultiParentFrame::OnKeyEvent(const KeyEvent &event, int dt, bool gained_focus) {
   bool result = false;
   for (List<GlopFrame*>::iterator it = children_.begin(); it != children_.end(); ++it)
   if (!(*it)->IsFocusFrame())
-    result |= (*it)->OnKeyEvent(event, dt);
+    result |= (*it)->OnKeyEvent(event, dt, gained_focus);
   return result;
 }
 
@@ -184,12 +208,6 @@ void MultiParentFrame::RecomputeSize(int rec_width, int rec_height) {
   SetSize(new_width, new_height);
 }
 
-void MultiParentFrame::OnFocusChange() {
-  for (List<GlopFrame*>::iterator it = children_.begin(); it != children_.end(); ++it)
-  if ((*it)->GetFocusFrame() != *it)
-    (*it)->SetFocusInfo(focus_frame_, is_in_focus_);
-}
-
 ListId MultiParentFrame::AddChild(GlopFrame *frame) {
   DirtySize();
   ListId result = children_.push_back(frame);
@@ -198,6 +216,7 @@ ListId MultiParentFrame::AddChild(GlopFrame *frame) {
 }
 
 ListId MultiParentFrame::RemoveChild(ListId id) {
+  children_[id]->SetParent(0);
   delete children_[id];
   return children_.erase(id);
 }
@@ -210,8 +229,10 @@ GlopFrame *MultiParentFrame::RemoveChildNoDelete(ListId id) {
 }
 
 void MultiParentFrame::ClearChildren() {
-  for (List<GlopFrame*>::iterator it = children_.begin(); it != children_.end(); ++it)
+  for (List<GlopFrame*>::iterator it = children_.begin(); it != children_.end(); ++it) {
+    (*it)->SetParent(0);
     delete *it;
+  }
   children_.clear();
 }
 
@@ -229,6 +250,35 @@ string MultiParentFrame::GetContextStringHelper(bool extend_down, bool extend_up
     result += (*it)->GetContextStringHelper(
       true, false, prefix + (it == children_.next_to_end()? " " : "|"));
   return result;
+}
+
+void MultiParentFrame::SetFocusFrame(FocusFrame *focus_frame) {
+  GlopFrame::SetFocusFrame(focus_frame);
+  for (List<GlopFrame*>::iterator it = children_.begin(); it != children_.end(); ++it)
+    (*it)->SetFocusFrame(focus_frame);
+}
+
+void MultiParentFrame::NotifyFocusChange() {
+  GlopFrame::NotifyFocusChange();
+  for (List<GlopFrame*>::iterator it = children_.begin(); it != children_.end(); ++it)
+    (*it)->NotifyFocusChange();
+}
+
+void MultiParentFrame::RegisterFocusFrames() {
+  for (List<GlopFrame*>::iterator it = children_.begin(); it != children_.end(); ++it)
+    (*it)->RegisterFocusFrames();
+}
+
+void MultiParentFrame::UnregisterFocusFrames() {
+  for (List<GlopFrame*>::iterator it = children_.begin(); it != children_.end(); ++it)
+    (*it)->UnregisterFocusFrames();
+}
+
+void MultiParentFrame::SetWindow(GlopWindow *window) {
+  GlopFrame::SetWindow(window);
+  for (List<GlopFrame*>::iterator it = children_.begin(); it != children_.end(); ++it)
+  if ((*it)->GetWindow() != window)
+    (*it)->SetWindow(window);
 }
 
 // ClippedFrame
@@ -250,7 +300,7 @@ void ClippedFrame::Render() const {
     glGetIntegerv(GL_SCISSOR_BOX, old_scissor_test);
   else
     glEnable(GL_SCISSOR_TEST);
-  glScissor(GetClipX1(), window()->GetHeight() - 1 - GetClipY2(), GetClipX2() - GetClipX1() + 1,
+  glScissor(GetClipX1(), GetWindow()->GetHeight() - 1 - GetClipY2(), GetClipX2() - GetClipX1() + 1,
             GetClipY2() - GetClipY1() + 1);
 
   // Render the child
@@ -314,7 +364,7 @@ void ScalingPaddedFrame::SetPosition(int screen_x, int screen_y, int cx1, int cy
 
 void ScalingPaddedFrame::RecomputeSize(int rec_width, int rec_height) {
   if (GetChild() != 0) {
-    int base = min(window()->GetWidth(), window()->GetHeight());
+    int base = min(GetWindow()->GetWidth(), GetWindow()->GetHeight());
     left_padding_ = int(scaled_left_padding_ * base);
     top_padding_ = int(scaled_top_padding_ * base);
     right_padding_ = int(scaled_right_padding_ * base);
@@ -342,26 +392,53 @@ void ScalingPaddedFrame::SetPadding(float left_padding, float top_padding, float
 //
 // A FocusFrame does little logic on its own - it just passes requests onto the GlopWindow.
 
+// We cannot set the child until our focus frame information is correct.
 FocusFrame::FocusFrame(GlopFrame *frame)
-: SingleParentFrame(frame),
-  is_gaining_focus_(false) {
-  SetFocusInfo(this, false);
-  layer_ = window()->RegisterFocusFrame(this);
-}
-
-FocusFrame::~FocusFrame() {
-  window()->UnregisterFocusFrame(layer_, this);
+: SingleParentFrame(0),
+  registered_child_focuses_(0),
+  is_in_focus_(false) {
+  focus_frame_ = this;
+  SetChild(frame);
 }
 
 bool FocusFrame::IsSubFocusFrame(const FocusFrame *frame) const {
+  if (frame->layer_ != layer_ || frame->registered_child_focuses_ == 0)
+    return false;
   for (const FocusFrame *temp = this; temp != 0; temp = temp->GetParent()->GetFocusFrame())
   if (temp == frame)
     return true;
   return false;
 }
 
-void FocusFrame::DemandFocus() {
-  window()->DemandFocus(layer_, this, false);
+void FocusFrame::DemandFocus(bool ping) {
+  ASSERT(window_ != 0);
+  window_->DemandFocus(this, false);
+}
+
+void FocusFrame::RegisterFocusFrames() {
+  layer_ = window_->RegisterFocusFrame(this);
+  FocusFrame *parent = GetParent()->GetFocusFrame();
+  if (parent != 0 && layer_ == parent->layer_)
+    parent->registered_child_focuses_++;
+  if (window_->GetFocusFrame() == parent)
+    window_->DemandFocus(this, false);
+  SingleParentFrame::RegisterFocusFrames();
+}
+
+void FocusFrame::UnregisterFocusFrames() {
+  FocusFrame *parent = GetParent()->GetFocusFrame();
+  if (parent != 0 && layer_ == parent->layer_)
+    parent->registered_child_focuses_--;
+  window_->UnregisterFocusFrame(this);
+  SingleParentFrame::UnregisterFocusFrames();
+}
+
+// Helper function to set whether we are in focus.
+void FocusFrame::SetIsInFocus(bool is_in_focus) {
+  if (is_in_focus_ != is_in_focus) {
+    is_in_focus_ = is_in_focus;
+    SingleParentFrame::NotifyFocusChange();
+  }
 }
 
 // TableauFrame
@@ -652,8 +729,8 @@ void TableFrame::RecomputeSize(int rec_width, int rec_height) {
   int x, y;
 
   // Calculate the padding sizes
-  int hpad = int(window()->GetWidth() * horz_padding_ + 0.5f);
-  int vpad = int(window()->GetHeight() * vert_padding_ + 0.5f);
+  int hpad = int(GetWindow()->GetWidth() * horz_padding_ + 0.5f);
+  int vpad = int(GetWindow()->GetHeight() * vert_padding_ + 0.5f);
   rec_width -= hpad * (GetNumCols() - 1);
   rec_height -= vpad * (GetNumRows() - 1);
 
@@ -778,16 +855,16 @@ void TableFrame::RecomputeSize(int rec_width, int rec_height) {
 // ============
 
 void RecWidthFrame::RecomputeSize(int rec_width, int rec_height) {
-  SingleParentFrame::RecomputeSize(int(window()->GetWidth() * rec_width_override_), rec_height);
+  SingleParentFrame::RecomputeSize(int(GetWindow()->GetWidth() * rec_width_override_), rec_height);
 }
 
 void RecHeightFrame::RecomputeSize(int rec_width, int rec_height) {
-  SingleParentFrame::RecomputeSize(rec_width, int(window()->GetWidth() * rec_height_override_));
+  SingleParentFrame::RecomputeSize(rec_width, int(GetWindow()->GetWidth() * rec_height_override_));
 }
 
 void RecSizeFrame::RecomputeSize(int rec_width, int rec_height) {
-  SingleParentFrame::RecomputeSize(int(window()->GetWidth() * rec_width_override_),
-                                   int(window()->GetHeight() * rec_height_override_));
+  SingleParentFrame::RecomputeSize(int(GetWindow()->GetWidth() * rec_width_override_),
+                                   int(GetWindow()->GetHeight() * rec_height_override_));
 }
 
 // MinSizeFrame
@@ -806,7 +883,7 @@ void MinWidthFrame::RecomputeSize(int rec_width, int rec_height) {
     w = GetChild()->GetWidth();
     h = GetChild()->GetHeight();
   }
-  int min_w = (min_width_ == kSizeLimitRec? rec_width : int(window()->GetWidth() * min_width_));
+  int min_w = (min_width_ == kSizeLimitRec? rec_width : int(GetWindow()->GetWidth() * min_width_));
   x_offset_ = int(max(min_w - w, 0) * (horz_justify_));
   SetSize(max(w, min_w), h);
 }
@@ -824,7 +901,8 @@ void MinHeightFrame::RecomputeSize(int rec_width, int rec_height) {
     w = GetChild()->GetWidth();
     h = GetChild()->GetHeight();
   }
-  int min_h = (min_height_ == kSizeLimitRec? rec_height : int(window()->GetHeight() * min_height_));
+  int min_h = (min_height_ == kSizeLimitRec? rec_height :
+                                             int(GetWindow()->GetHeight() * min_height_));
   y_offset_ = int(max(min_h - h, 0) * (vert_justify_));
   SetSize(w, max(h, min_h));
 }
@@ -842,9 +920,10 @@ void MinSizeFrame::RecomputeSize(int rec_width, int rec_height) {
     w = GetChild()->GetWidth();
     h = GetChild()->GetHeight();
   }
-  int min_w = (min_width_ == kSizeLimitRec? rec_width : int(window()->GetWidth() * min_width_));
+  int min_w = (min_width_ == kSizeLimitRec? rec_width : int(GetWindow()->GetWidth() * min_width_));
   x_offset_ = int(max(min_w - w, 0) * (horz_justify_));
-  int min_h = (min_height_ == kSizeLimitRec? rec_height : int(window()->GetHeight() * min_height_));
+  int min_h = (min_height_ == kSizeLimitRec? rec_height :
+                                             int(GetWindow()->GetHeight() * min_height_));
   y_offset_ = int(max(min_h - h, 0) * (vert_justify_));
   SetSize(max(w, min_w), max(h, min_h));
 }
@@ -854,73 +933,80 @@ void MinSizeFrame::RecomputeSize(int rec_width, int rec_height) {
 
 // A helper function used by MaxSizeFrame and ScrollingFrame. This indicates where we should
 // scroll to on a ping.
-static void ScrollToPing(int scroll_x, int scroll_y, int view_w, int view_h, int total_w,
-                         int total_h, int x1, int y1, int x2, int y2, bool center,
-                         int *new_scroll_x, int *new_scroll_y, bool ignore_ub) {
-  // Handle the special case where the pinged region is larger than the total view area (in that
-  // case, look at the top-left part of the region).
-  if (!center && x2 >= x1 + view_w)
-    x2 = x1 + view_w - 1;
-  if (!center && y2 >= y1 + view_h)
-    y2 = y1 + view_h - 1;
-
-  // Handle horizontal movement
-  if (total_w > view_w) {
+static int ScrollToPing(int scroll_pos, int view_size, int total_size, int ping_pos1, int ping_pos2,
+                        bool center) {
+  if (total_size > view_size) {
     if (center) {
-      *new_scroll_x = (x1 + x2 - view_w) / 2;
-    } else if (x1 < scroll_x) {
-      *new_scroll_x = x1;
-    } else if (x2 >= scroll_x + view_w) {
-      *new_scroll_x = (x2 - view_w + 1);
+      return (ping_pos1 + ping_pos2 - view_size) / 2;
+    } else if (ping_pos2 >= ping_pos1 + view_size) {
+      if (ping_pos2 < scroll_pos + view_size)
+        return (ping_pos2 - view_size + 1);
+      else if (ping_pos1 > scroll_pos)
+        return ping_pos1;
+      else
+        return scroll_pos;
     } else {
-      *new_scroll_x = scroll_x;
+      if (ping_pos1 < scroll_pos)
+        return ping_pos1;
+      else if (ping_pos2 >= scroll_pos + view_size)
+        return (ping_pos2 - view_size + 1);
+      else
+        return scroll_pos;
     }
   } else {
-    *new_scroll_x = 0;
+    return 0;
   }
-  if (*new_scroll_x < 0)
-    *new_scroll_x = 0;
-  if (*new_scroll_x > total_w - view_w && !ignore_ub)
-    *new_scroll_x = total_w - view_w;
+}
 
-  // Handle vertical movement
-  if (total_h > view_h) {
-    if (center) {
-      *new_scroll_y = (y1 + y2 - view_h) / 2;
-    } else if (y1 < scroll_y) {
-      *new_scroll_y = y1;
-    } else if (y2 >= scroll_y + view_h) {
-      *new_scroll_y = (y2 - view_h + 1);
-    } else {
-      *new_scroll_y = scroll_y;
-    }
-  } else {
-    *new_scroll_y = 0;
-  }
-  if (*new_scroll_y < 0)
-    *new_scroll_y = 0;
-  if (*new_scroll_y > total_h - view_h && !ignore_ub)
-    *new_scroll_y = total_h - view_h;
+// A helper function used by MaxSizeFrame and ScrollingFrame. This indicates where we should
+// scroll to if everything resizes to maintain the same relative position.
+static int ScrollOnResize(int old_scroll_pos, int old_view_size, int old_total_size,
+                          int new_view_size, int new_total_size) {
+  // We only change the ping if the view size has changed. Otherwise, the change could simply be
+  // due to the inner frame changing (e.g. text added to a text box), in which case we do not want
+  // to move. Also avoid division by 0 anomalies.
+  if (old_view_size == new_view_size)
+    return old_scroll_pos;
+  if (old_view_size >= old_total_size)
+    return 0;
+
+  double start_frac = double(old_scroll_pos) / old_total_size;
+  double end_frac = double(old_total_size - old_scroll_pos - old_view_size) / old_total_size;
+  return int(((new_total_size - new_view_size) * start_frac) / (start_frac + end_frac));
 }
 
 const float kSizeLimitNone = -1e10f;
-MaxWidthFrame::MaxWidthFrame(GlopFrame *frame, float max_width, float horz_justify)
-: SingleParentFrame(new MaxSizeFrame(frame, max_width, kSizeLimitNone, horz_justify,
-                                     kJustifyTop)) {}
+MaxWidthFrame::MaxWidthFrame(GlopFrame *frame, float max_width)
+: SingleParentFrame(new MaxSizeFrame(frame, max_width, kSizeLimitNone)) {}
 
-MaxHeightFrame::MaxHeightFrame(GlopFrame *frame, float max_height, float vert_justify)
-: SingleParentFrame(new MaxSizeFrame(frame, kSizeLimitNone, max_height, kJustifyLeft,
-                                     vert_justify)) {}
-
-MaxSizeFrame::MaxSizeFrame(GlopFrame *frame, float max_width, float max_height, float horz_justify,
-                           float vert_justify)
-: SingleParentFrame(new ClippedFrame(frame)), must_recenter_(false),
-  x_offset_(0), y_offset_(0),
-  max_width_(max_width), max_height_(max_height) {
-  GetChild()->NewRelativePing(horz_justify, vert_justify, true);
+void MaxWidthFrame::AbsoluteMakeVisible(int x1, int x2, bool center) {
+  ((MaxSizeFrame*)GetChild())->AbsoluteMakeVisible(x1, 0, x2, 0, center);
 }
 
+void MaxWidthFrame::RelativeMakeVisible(float x1, float x2, bool center) {
+  ((MaxSizeFrame*)GetChild())->RelativeMakeVisible(x1, 6, x2, 6, center);
+}
+
+MaxHeightFrame::MaxHeightFrame(GlopFrame *frame, float max_height)
+: SingleParentFrame(new MaxSizeFrame(frame, kSizeLimitNone, max_height)) {}
+
+void MaxHeightFrame::AbsoluteMakeVisible(int y1, int y2, bool center) {
+  ((MaxSizeFrame*)GetChild())->AbsoluteMakeVisible(0, y1, 0, y2, center);
+}
+
+void MaxHeightFrame::RelativeMakeVisible(float y1, float y2, bool center) {
+  ((MaxSizeFrame*)GetChild())->RelativeMakeVisible(0, y1, 0, y2, center);
+}
+
+MaxSizeFrame::MaxSizeFrame(GlopFrame *frame, float max_width, float max_height)
+: SingleParentFrame(new ClippedFrame(frame)), x_offset_(0), y_offset_(0),
+  max_width_(max_width), max_height_(max_height) {}
+
 void MaxSizeFrame::SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2) {
+  vector<MakeVisible> temp = make_visibles_;
+  make_visibles_.clear();
+
+  // Handle the position setting
   GlopFrame::SetPosition(screen_x, screen_y, cx1, cy1, cx2, cy2);
   ClippedFrame *clipped_frame = (ClippedFrame*)(GetChild());
   if (clipped_frame != 0) {
@@ -932,15 +1018,21 @@ void MaxSizeFrame::SetPosition(int screen_x, int screen_y, int cx1, int cy1, int
       clipped_frame->SetClipping(cx1, GetY(), cx2, GetY2());
     clipped_frame->SetPosition(GetX() + x_offset_, GetY() + y_offset_, cx1, cy1, cx2, cy2);
   }
+
+  // Handle make-visibles. Note we already cleared make_visibles_ to avoid an infinite loop.
+  for (int i = 0; i < (int)temp.size(); i++) {
+    int w = GetChild()->GetWidth(), h = GetChild()->GetHeight();
+    AbsoluteMakeVisible(int(temp[i].x1 * w + 0.5f), int(temp[i].y1 * h + 0.5f),
+                        int(temp[i].x2 * w + 0.5f), int(temp[i].y2 * h + 0.5f),
+                        temp[i].center);
+  }
 }
 
 void MaxSizeFrame::RecomputeSize(int rec_width, int rec_height) {
   if (GetChild() != 0) {
-    // Track the old scrolling position
-    double old_x = (GetChild()->GetWidth() == 0? 0 :
-      (GetX() + GetWidth()*0.5 - GetChild()->GetX()) / GetChild()->GetWidth());
-    double old_y = (GetChild()->GetHeight() == 0? 0 :
-      (GetY() + GetHeight()*0.5 - GetChild()->GetY()) / GetChild()->GetHeight());
+    // Store our old size
+    int old_view_width = GetWidth(), old_view_height = GetHeight();
+    int old_total_width = GetChild()->GetWidth(), old_total_height = GetChild()->GetHeight();
 
     // Update the child size
     GetChild()->UpdateSize(rec_width, rec_height);
@@ -948,42 +1040,41 @@ void MaxSizeFrame::RecomputeSize(int rec_width, int rec_height) {
     // Update our size
     int max_w = (max_width_ == kSizeLimitNone? kClipInfinity :
                  max_width_ == kSizeLimitRec? rec_width :
-                 int(window()->GetWidth() * max_width_));
+                 int(GetWindow()->GetWidth() * max_width_));
     int max_h = (max_height_ == kSizeLimitNone? kClipInfinity :
                  max_height_ == kSizeLimitRec? rec_height :
-                 int(window()->GetHeight() * max_height_));
+                 int(GetWindow()->GetHeight() * max_height_));
     SetSize(min(GetChild()->GetWidth(), max_w), min(GetChild()->GetHeight(), max_h));
 
-    // Position the child within the new size to be approximately where it was before
-    if (must_recenter_) {
-      int px = int(old_x * GetChild()->GetWidth());
-      int py = int(old_y * GetChild()->GetHeight());
-      ScrollToChildPing(px, py, px, py, true);
-      must_recenter_ = false;
-    }
+    // Reposition the child
+    x_offset_ = -ScrollOnResize(-x_offset_, old_view_width, old_total_width,
+                                GetWidth(), GetChild()->GetWidth());
+    y_offset_ = -ScrollOnResize(-y_offset_, old_view_height, old_total_height,
+                                GetHeight(), GetChild()->GetHeight());
   } else {
     SetSize(0, 0);
   }
 }
 
 void MaxSizeFrame::OnChildPing(GlopFrame *child, int x1, int y1, int x2, int y2, bool center) {
-  // Do the scrolling for a ping
   int old_x = child->GetX(), old_y = child->GetY();
-  ScrollToChildPing(x1 - x_offset_, y1 - y_offset_, x2 - x_offset_, y2 - y_offset_, center);
-
-  // Propogate the ping upwards
+  AbsoluteMakeVisible(x1 - x_offset_, y1 - y_offset_, x2 - x_offset_, y2 - y_offset_, center);
   int dx = child->GetX() - old_x, dy = child->GetY() - old_y;
   NewAbsolutePing(x1 + dx, y1 + dy, x2 + dx, y2 + dy, center);
 }
 
-void MaxSizeFrame::ScrollToChildPing(int x1, int y1, int x2, int y2, bool center) {
-  int new_scroll_x, new_scroll_y;
-  ::ScrollToPing(-x_offset_, -y_offset_, GetWidth(), GetHeight(), GetChild()->GetWidth(),
-                 GetChild()->GetHeight(), x1, y1, x2, y2, center, &new_scroll_x, &new_scroll_y,
-                 true);
-  x_offset_ = -new_scroll_x;
-  y_offset_ = -new_scroll_y;
+// Note that we must set our position immediately after pinging. This ensures that when the ping
+// is sent up to our parent, we are correctly positioned, and it can correctly interpret the child
+// ping. Also note that even if the ping is bad in a direction we have no size limit for, it will
+// be ignored because our total size will be no more than our view size.
+void MaxSizeFrame::AbsoluteMakeVisible(int x1, int y1, int x2, int y2, bool center) {
+  x_offset_ = -ScrollToPing(-x_offset_, GetWidth(), GetChild()->GetWidth(), x1, x2, center);
+  y_offset_ = -ScrollToPing(-y_offset_, GetHeight(), GetChild()->GetHeight(), y1, y2, center);
   SetPosition(GetX(), GetY(), GetClipX1(), GetClipY1(), GetClipX2(), GetClipY2());
+}
+
+void MaxSizeFrame::RelativeMakeVisible(float x1, float y1, float x2, float y2, bool center) {
+  make_visibles_.push_back(MakeVisible(x1, y1, x2, y2, center));
 }
 
 // ScrollingFrame
@@ -994,16 +1085,29 @@ void MaxSizeFrame::ScrollToChildPing(int x1, int y1, int x2, int y2, bool center
 // ScrollingFrame should be changed?
 class UnfocusableScrollingFrame: public MultiParentFrame {
  public:
-  UnfocusableScrollingFrame(GlopFrame *frame, const SliderViewFactory *factory)
+  UnfocusableScrollingFrame(GlopFrame *frame, const SliderView *view)
   : MultiParentFrame(),
     horz_slider_(0), vert_slider_(0),
-    view_factory_(factory) {
+    view_(view) {
     clipped_inner_frame_ = new ClippedFrame(inner_frame_ = frame);
     AddChild(clipped_inner_frame_);
   }
   string GetType() const {return "UnfocusableScrollingFrame";}
-  
+
+  void ScrollUp() {if (vert_slider_) vert_slider_->SmallDec();}
+  void ScrollRight() {if (vert_slider_) horz_slider_->SmallInc();}
+  void ScrollDown() {if (vert_slider_) vert_slider_->SmallInc();}
+  void ScrollLeft() {if (vert_slider_) horz_slider_->SmallDec();}
+  void PageUp() {if (vert_slider_) vert_slider_->BigDec();}
+  void PageRight() {if (horz_slider_) horz_slider_->BigInc();}
+  void PageDown() {if (vert_slider_) vert_slider_->BigInc();}
+  void PageLeft() {if (horz_slider_) horz_slider_->BigDec();}
+
   void SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2) {
+    vector<MakeVisible> temp = make_visibles_;
+    make_visibles_.clear();
+
+    // Handle the position setting
     GlopFrame::SetPosition(screen_x, screen_y, cx1, cy1, cx2, cy2);
     clipped_inner_frame_->SetClipping(GetX(), GetY(), GetX() + max(inner_view_width_ - 1, 0),
                                       GetY() + max(inner_view_height_ - 1, 0));
@@ -1014,18 +1118,43 @@ class UnfocusableScrollingFrame: public MultiParentFrame {
       horz_slider_->SetPosition(screen_x, screen_y + inner_view_height_, cx1, cy1, cx2, cy2);
     if (vert_slider_)
       vert_slider_->SetPosition(screen_x + inner_view_width_, screen_y, cx1, cy1, cx2, cy2);
+
+    // Handle make-visibles. Note we already cleared make_visibles_ to avoid an infinite loop.
+    for (int i = 0; i < (int)temp.size(); i++) {
+      int w = clipped_inner_frame_->GetWidth(), h = clipped_inner_frame_->GetHeight();
+      AbsoluteMakeVisible(int(temp[i].x1 * w + 0.5f), int(temp[i].y1 * h + 0.5f),
+                          int(temp[i].x2 * w + 0.5f), int(temp[i].y2 * h + 0.5f),
+                          temp[i].center);
+    }
   }
 
+  void AbsoluteMakeVisible(int x1, int y1, int x2, int y2, bool center) {
+    int scroll_x = (horz_slider_? horz_slider_->GetTabPosition() : 0);
+    int scroll_y = (vert_slider_? vert_slider_->GetTabPosition() : 0);
+    if (horz_slider_ != 0) {
+      horz_slider_->SetTabPosition(
+        ScrollToPing(scroll_x, inner_view_width_, clipped_inner_frame_->GetWidth(),
+                     x1, x2, center));
+    }
+    if (vert_slider_ != 0) {
+      vert_slider_->SetTabPosition(
+        ScrollToPing(scroll_y, inner_view_height_, clipped_inner_frame_->GetHeight(),
+                     y1, y2, center));
+    }
+    SetPosition(GetX(), GetY(), GetClipX1(), GetClipY1(), GetClipX2(), GetClipY2());
+  }
+
+  void RelativeMakeVisible(float x1, float y1, float x2, float y2, bool center) {
+    make_visibles_.push_back(MakeVisible(x1, y1, x2, y2, center));
+  }
  protected:   
   void RecomputeSize(int rec_width, int rec_height) {
     // Compute our old horizontal and vertical scroll positions
     int old_inner_view_width = inner_view_width_, old_inner_view_height = inner_view_height_;
     int old_inner_total_width = inner_frame_->GetWidth(), 
         old_inner_total_height = inner_frame_->GetHeight();
-    double old_horz_position = (horz_slider_? 
-      (horz_slider_->GetTabPosition() + 0.5*inner_view_width_) / old_inner_total_width : 0);
-    double old_vert_position = (vert_slider_? 
-      (vert_slider_->GetTabPosition() + 0.5*inner_view_height_) / old_inner_total_height : 0);
+    int old_horz_position = (horz_slider_? horz_slider_->GetTabPosition() : 0);
+    int old_vert_position = (vert_slider_? vert_slider_->GetTabPosition() : 0);
 
     // Figure out which sliders need to exist, and create place-holders
     inner_view_width_ = rec_width;
@@ -1038,7 +1167,7 @@ class UnfocusableScrollingFrame: public MultiParentFrame {
       if (clipped_inner_frame_->GetWidth() > inner_view_width_ && horz_slider_ == 0) {
         horz_slider_ = old_horz_slider;
         if (horz_slider_ == 0) {
-          horz_slider_ = new SliderFrame(SliderFrame::Horizontal, 0, 0, 0, view_factory_);
+          horz_slider_ = new SliderFrame(SliderFrame::Horizontal, 0, 0, 0, view_);
           horz_slider_->AddDecHotKey(kGuiKeyScrollLeft);
           horz_slider_->AddBigDecHotKey(kGuiKeyPageLeft);
           horz_slider_->AddIncHotKey(kGuiKeyScrollRight);
@@ -1052,7 +1181,7 @@ class UnfocusableScrollingFrame: public MultiParentFrame {
       if (clipped_inner_frame_->GetHeight() > inner_view_height_ && vert_slider_ == 0) {
         vert_slider_ = old_vert_slider;
         if (vert_slider_ == 0) {
-          vert_slider_ = new SliderFrame(SliderFrame::Vertical, 0, 0, 0, view_factory_);
+          vert_slider_ = new SliderFrame(SliderFrame::Vertical, 0, 0, 0, view_);
           vert_slider_->AddDecHotKey(kGuiKeyScrollUp);
           vert_slider_->AddBigDecHotKey(kGuiKeyPageUp);
           vert_slider_->AddIncHotKey(kGuiKeyScrollDown);
@@ -1065,6 +1194,12 @@ class UnfocusableScrollingFrame: public MultiParentFrame {
       }
       if (!made_change)
         break;
+    }
+
+    // Update the slider sizes
+    if (horz_slider_ != 0 && vert_slider_ != 0) {
+      horz_slider_->UpdateSize(inner_view_width_, rec_height);
+      vert_slider_->UpdateSize(rec_width, inner_view_height_);
     }
 
     // Set our width and height
@@ -1093,14 +1228,14 @@ class UnfocusableScrollingFrame: public MultiParentFrame {
     if (horz_slider_) {
       horz_slider_->SetTabSize(inner_view_width_);
       horz_slider_->SetTotalSize(clipped_inner_frame_->GetWidth());
-      horz_slider_->SetTabPosition(int(
-        old_horz_position*clipped_inner_frame_->GetWidth() - 0.5*inner_view_width_ + 0.5));
+      horz_slider_->SetTabPosition(ScrollOnResize(old_horz_position, old_inner_view_width,
+        old_inner_total_width, inner_view_width_, clipped_inner_frame_->GetWidth()));
     }
     if (vert_slider_) {
       vert_slider_->SetTabSize(inner_view_height_);
       vert_slider_->SetTotalSize(clipped_inner_frame_->GetHeight());
-      vert_slider_->SetTabPosition(int(
-        old_vert_position*clipped_inner_frame_->GetHeight() - 0.5*inner_view_height_ + 0.5));
+      vert_slider_->SetTabPosition(ScrollOnResize(old_vert_position, old_inner_view_height,
+        old_inner_total_height, inner_view_height_, clipped_inner_frame_->GetHeight()));
     }
   }
 
@@ -1111,32 +1246,45 @@ class UnfocusableScrollingFrame: public MultiParentFrame {
       return;
     }
 
-    // Do the scrolling for a ping
+    // Handle real pings
     int old_x = clipped_inner_frame_->GetX(), old_y = clipped_inner_frame_->GetY();
     int scroll_x = (horz_slider_? horz_slider_->GetTabPosition() : 0);
     int scroll_y = (vert_slider_? vert_slider_->GetTabPosition() : 0);
-    int new_scroll_x, new_scroll_y;
-    ScrollToPing(scroll_x, scroll_y, inner_view_width_, inner_view_height_,
-                 clipped_inner_frame_->GetWidth(), clipped_inner_frame_->GetHeight(),
-                 x1 + scroll_x, y1 + scroll_y, x2 + scroll_x, y2 + scroll_y, center,
-                 &new_scroll_x, &new_scroll_y, false);
-    if (horz_slider_ != 0) horz_slider_->SetTabPosition(new_scroll_x);
-    if (vert_slider_ != 0) vert_slider_->SetTabPosition(new_scroll_y);
-    SetPosition(GetX(), GetY(), GetClipX1(), GetClipY1(), GetClipX2(), GetClipY2());
-
-    // Propogate the ping upwards
+    AbsoluteMakeVisible(x1 + scroll_x, y1 + scroll_y, x2 + scroll_x, y2 + scroll_y, center);
     int dx = clipped_inner_frame_->GetX() - old_x, dy = clipped_inner_frame_->GetY() - old_y;
     NewAbsolutePing(x1 + dx, y1 + dy, x2 + dx, y2 + dy, center);
   }
 
+ private:
+  struct MakeVisible {
+    MakeVisible(float _x1, float _y1, float _x2, float _y2, bool _center)
+    : x1(_x1), y1(_y1), x2(_x2), y2(_y2), center(_center) {}
+    float x1, y1, x2, y2;
+    bool center;
+  };
+  vector<MakeVisible> make_visibles_;
   GlopFrame *inner_frame_;
   ClippedFrame *clipped_inner_frame_;
   SliderFrame *horz_slider_, *vert_slider_;
   ListId horz_slider_id_, vert_slider_id_;
   int inner_view_width_, inner_view_height_;
-  const SliderViewFactory *view_factory_;
+  const SliderView *view_;
   DISALLOW_EVIL_CONSTRUCTORS(UnfocusableScrollingFrame);
 };
 
-ScrollingFrame::ScrollingFrame(GlopFrame *frame, const SliderViewFactory *factory)
-: FocusFrame(new UnfocusableScrollingFrame(frame, factory)) {}
+ScrollingFrame::ScrollingFrame(GlopFrame *frame, const SliderView *view)
+: FocusFrame(scroller_ = new UnfocusableScrollingFrame(frame, view)) {}
+void ScrollingFrame::AbsoluteMakeVisible(int x1, int y1, int x2, int y2, bool center) {
+  Scroller()->AbsoluteMakeVisible(x1, y1, x2, y2, center);
+}
+void ScrollingFrame::RelativeMakeVisible(float x1, float y1, float x2, float y2, bool center) {
+  Scroller()->RelativeMakeVisible(x1, y1, x2, y2, center);
+}
+void ScrollingFrame::ScrollUp() {Scroller()->ScrollUp();}
+void ScrollingFrame::ScrollRight() {Scroller()->ScrollRight();}
+void ScrollingFrame::ScrollDown() {Scroller()->ScrollDown();}
+void ScrollingFrame::ScrollLeft() {Scroller()->ScrollLeft();}
+void ScrollingFrame::PageUp() {Scroller()->PageUp();}
+void ScrollingFrame::PageRight() {Scroller()->PageRight();}
+void ScrollingFrame::PageDown() {Scroller()->PageDown();}
+void ScrollingFrame::PageLeft() {Scroller()->PageLeft();}
