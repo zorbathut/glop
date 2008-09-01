@@ -219,17 +219,18 @@ const GlopKey kKeyPageUp(194);
 const GlopKey kKeyPageDown(195);
 
 // Key constants - mouse
-const GlopKey kMouseUp(291);
-const GlopKey kMouseRight(292);
-const GlopKey kMouseDown(293);
-const GlopKey kMouseLeft(294);
-const GlopKey kMouseWheelUp(295);
-const GlopKey kMouseWheelDown(296);
-const GlopKey kMouseLButton(297);
-const GlopKey kMouseMButton(298);
-const GlopKey kMouseRButton(299);
-const int kFirstMouseKeyIndex = 291;
-const int kNumKeyboardKeys = 300;
+const int kFirstMouseKeyIndex = 300, kNumMouseButtons = 8;
+const GlopKey kMouseUp(kFirstMouseKeyIndex);
+const GlopKey kMouseRight(kFirstMouseKeyIndex + 1);
+const GlopKey kMouseDown(kFirstMouseKeyIndex + 2);
+const GlopKey kMouseLeft(kFirstMouseKeyIndex + 3);
+const GlopKey kMouseWheelUp(kFirstMouseKeyIndex + 4);
+const GlopKey kMouseWheelDown(kFirstMouseKeyIndex + 5);
+const GlopKey kMouseLButton(kFirstMouseKeyIndex + 6);
+const GlopKey kMouseRButton(kFirstMouseKeyIndex + 7);
+const GlopKey kMouseMButton(kFirstMouseKeyIndex + 8);
+inline GlopKey GetMouseButton(int button) {return GlopKey(kFirstMouseKeyIndex + 6 + button);}
+const int kNumKeyboardKeys = kFirstMouseKeyIndex + 6 + kNumMouseButtons;
 
 // Key constants - joystick
 const int kJoystickAxisStart = 0;
@@ -239,18 +240,18 @@ const int kJoystickAxisRight = kJoystickAxisStart + 0;
 const int kJoystickAxisLeft = kJoystickAxisStart + 1;
 const int kJoystickAxisUp = kJoystickAxisStart + 2;
 const int kJoystickAxisDown = kJoystickAxisStart + 3;
-const int kJoystickNumAxes = 6;
-const int kJoystickAxisEnd = kJoystickAxisStart + 2 * kJoystickNumAxes;
+const int kNumJoystickAxes = 6;
+const int kJoystickAxisEnd = kJoystickAxisStart + 2 * kNumJoystickAxes;
 const int kJoystickHatStart = kJoystickAxisEnd;
 const int kJoystickHatUp = kJoystickHatStart + 0;
 const int kJoystickHatRight = kJoystickHatStart + 1;
 const int kJoystickHatDown = kJoystickHatStart + 2;
 const int kJoystickHatLeft = kJoystickHatStart + 3;
-const int kJoystickNumHats = 4;
-const int kJoystickHatEnd = kJoystickHatStart + 4 * kJoystickHatStart;
+const int kNumJoystickHats = 4;
+const int kJoystickHatEnd = kJoystickHatStart + 4 * kNumJoystickHats;
 const int kJoystickButtonStart = kJoystickHatEnd;
-const int kJoystickNumButtons = 32;
-const int kJoystickButtonEnd = kJoystickButtonStart + kJoystickNumButtons;
+const int kNumJoystickButtons = 32;
+const int kJoystickButtonEnd = kJoystickButtonStart + kNumJoystickButtons;
 const int kNumJoystickKeys = kJoystickButtonEnd;
 
 // Joystick key creators

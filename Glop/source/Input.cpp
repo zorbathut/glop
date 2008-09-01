@@ -32,7 +32,7 @@ const char *const kKeyNames[] = {
   0, 0, 0, 0, 0,
   0, "[", "\\", "]", 0,
   0, "`", "A", "B", "C",
-  "D", "E", "F", "G", "H",                                                  // 100
+  "D", "E", "F", "G", "H",                                                            // 100
   "I", "J", "K", "L", "M",
   "N", "O", "P", "Q", "R",
   "S", "T", "U", "V", "W",
@@ -70,9 +70,12 @@ const char *const kKeyNames[] = {
   0, 0, 0, 0, 0,
   0, 0, 0, 0, 0,
   0, 0, 0, 0, 0,
-  0, "Mouse up", "Mouse right", "Mouse down", "Mouse left",
-  "Mouse wheel up", "Mouse wheel down", "Left mouse button",
-  "Middle mouse button", "Right mouse button"};
+  0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0,
+  "Mouse up", "Mouse right", "Mouse down", "Mouse left", "Mouse wheel up",  // 300
+  "Mouse wheel down", "Left mouse button", "Right mouse button",
+  "Middle mouse button", "Mouse button #4",
+  "Mouse button #5", "Mouse button #6", "Mouse button #7", "Mouse button #8"};
 const unsigned char kAsciiValues[] = {
   0, 0, 0, 0, 0, 0, 0, 0, 8, 9, 0, 0, 0, 13, 0, 
   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 27, 0, 0, 
@@ -93,7 +96,8 @@ const unsigned char kAsciiValues[] = {
   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
-  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 const unsigned char kShiftedAsciiValues[] = {
   0, 0, 0, 0, 0, 0, 0, 0, 8, 9, 0, 0, 0, 13, 0, 
   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 27, 0, 0, 
@@ -114,7 +118,8 @@ const unsigned char kShiftedAsciiValues[] = {
   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
-  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
 // Globals
 vector<string> Input::derived_key_names_;

@@ -5,7 +5,7 @@
 #include "../include/Image.h"
 #include "../include/System.h"
 #include "../include/Thread.h"
-#define DIRECTINPUT_VERSION 0x0500	// We do not need a new version
+#define DIRECTINPUT_VERSION 0x0700
 #include <dinput.h>
 #include <process.h>
 #include <map>
@@ -178,7 +178,7 @@ class InputPollingThread: public Thread {
       }
 
       // Read the mouse state
-      DIMOUSESTATE mouse_state;
+      DIMOUSESTATE2 mouse_state;
       hr = window_->mouse_device->GetDeviceState(sizeof(mouse_state), &mouse_state);
       if (hr == DIERR_INPUTLOST || hr == DIERR_NOTACQUIRED) {
         window_->mouse_device->Acquire(); 
@@ -191,15 +191,12 @@ class InputPollingThread: public Thread {
                                      cursor_pos.y, is_num_lock_set, is_caps_lock_set));
         data_.push_back(Os::KeyEvent(kMouseWheelUp, mouse_state.lZ > 0, timestamp, cursor_pos.x,
                                      cursor_pos.y, is_num_lock_set, is_caps_lock_set));
-        data_.push_back(Os::KeyEvent(kMouseLButton, (mouse_state.rgbButtons[0] & 0x80) > 0,
-                                     timestamp, cursor_pos.x, cursor_pos.y, is_num_lock_set,
-                                     is_caps_lock_set));
-        data_.push_back(Os::KeyEvent(kMouseRButton, (mouse_state.rgbButtons[1] & 0x80) > 0,
-                                     timestamp, cursor_pos.x, cursor_pos.y, is_num_lock_set,
-                                     is_caps_lock_set));
-        data_.push_back(Os::KeyEvent(kMouseMButton, (mouse_state.rgbButtons[2] & 0x80) > 0,
-                                     timestamp, cursor_pos.x, cursor_pos.y, is_num_lock_set,
-                                     is_caps_lock_set));
+        ASSERT(kNumMouseButtons == 8);  // Update section if this changes
+        for (int i = 0; i < kNumMouseButtons; i++) {
+          data_.push_back(Os::KeyEvent(GetMouseButton(i), (mouse_state.rgbButtons[i] & 0x80) > 0,
+                                       timestamp, cursor_pos.x, cursor_pos.y, is_num_lock_set,
+                                       is_caps_lock_set));
+        }
       }
 
       // Read the joystick states
@@ -215,7 +212,7 @@ class InputPollingThread: public Thread {
           continue;
 
         // Read axis data
-        ASSERT(kJoystickNumAxes == 6);
+        ASSERT(kNumJoystickAxes == 6);  // Update section if this changes
         data_.push_back(Os::KeyEvent(GetJoystickRight(i), float(joy_state.lX)/kJoystickAxisRange,
                                      timestamp, cursor_pos.x, cursor_pos.y, is_num_lock_set,
                                      is_caps_lock_set));
@@ -262,8 +259,8 @@ class InputPollingThread: public Thread {
                                      is_caps_lock_set));
     
         // Read hat data
-        ASSERT(kJoystickNumHats <= 4);
-        for (int j = 0; j < kJoystickNumHats; j++) {
+        ASSERT(kNumJoystickHats <= 4);  // Update section if this changes
+        for (int j = 0; j < kNumJoystickHats; j++) {
           int angle = joy_state.rgdwPOV[j];
           float hx = 0, hy = 0;
           if (LOWORD(angle) != 0xFFFF) {
@@ -289,8 +286,8 @@ class InputPollingThread: public Thread {
         }
 
         // Read button data
-        ASSERT(kJoystickNumButtons <= 128);
-        for (int j = 0; j < kJoystickNumButtons; j++) {
+        ASSERT(kNumJoystickButtons <= 128);  // Update section if this changes
+        for (int j = 0; j < kNumJoystickButtons; j++) {
           bool is_pressed = ((joy_state.rgbButtons[j] & 0x80) > 0);
           data_.push_back(Os::KeyEvent(GetJoystickButton(j, i), is_pressed, timestamp,
                                         cursor_pos.x, cursor_pos.y, is_num_lock_set,
@@ -627,7 +624,7 @@ OsWindowData *Os::CreateWindow(const string &title, int x, int y,
   result->direct_input->CreateDevice(GUID_SysMouse, &result->mouse_device, NULL);
   result->mouse_device->SetCooperativeLevel(result->window_handle,
                                             DISCL_NONEXCLUSIVE | DISCL_FOREGROUND);
-  result->mouse_device->SetDataFormat(&c_dfDIMouse);
+  result->mouse_device->SetDataFormat(&c_dfDIMouse2);
 
   // Set the DirectInput buffer size - this is the number of events it can store at a single time
   DIPROPDWORD prop_buffer_size;
