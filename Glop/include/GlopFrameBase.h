@@ -10,8 +10,8 @@
 //    - All frames receive OnKeyEvent notifications from Input.
 //    - All other KeyListeners receive OnKeyEvent notifications from Input.
 //    - All frames resize themselves if necessary.
-//    - All pings are resolved.
 //    - All frames reposition themselves and update their clipping rectangle.
+//    - All pings are resolved, and child frames once again reposition themselves.
 //    - All frames render.
 //  - Repeat.
 //
@@ -25,29 +25,29 @@
 //   of its children. One exception to this is if a FocusFrame contains another FocusFrame, they
 //   are considered different. For example, a scrolling window might contain a button, but they are
 //   treated as separate units of focus.
-//   A frame will only ever be given focus if it is wrapped inside a FocusFrame. The GlopWindow
-//   maintains a list of FocusFrames, and controls which one has focus (possibly none of them, if
-//   the entire GlopWindow is out of focus), taking into account the tab key, mouse clicking, etc.
-//   (Some of that behavior can be customized by rebinding the GUI derived keys in Input.) This
-//   focus is then immediately propogated down to descendants of the FocusFrame. Also:
-//     - Whenever a key press occurs, it is sent to the active FocusFrame. If that FocusFrame
+//
+//   At any time, the window will have 0 or 1 primary FocusFrames. This will always be a FocusFrame
+//   with no other FocusFrame descendants. A FocusFrame is said to be "in focus" if it is this
+//   frame or an ancestor of it. A regular frame inherits in-focus information from the FocusFrame
+//   it is wrapped in. In particular, if a frame is NOT wrapped in a FocusFrame, it will never be
+//   in focus. All built-in widgets (see GlopFrameWidgets.h) are pre-wrapped in FocusFrames, as are
+//   ScrollingFrames.
+//     - Whenever a key press occurs, it is sent to the primary FocusFrame. If that FocusFrame
 //       does not handle the event in OnKeyEvent, then any ancestor FocusFrames are given a chance
-//       to respond to the KeyEvent. If they also do not handle the event, ANY FocusFrame is allowed
-//       to trap it. If any FocusFrame (or child of a FocusFrame) declares that event to be a
-//       "magnet" KeyEvent, focus immediately switches to that FocusFrame, and that FocusFrame then
-//       also receives normal notification of the same event.
-//       Note: Only key presses (repeat, single, or double) can be focus magnet events. For example,
-//             a key release cannot be a focus magnet event.
+//       to respond to the KeyEvent. If they also do not handle the event, ANY FocusFrame is
+//       allowed to trap it. If any FocusFrame (or child of a FocusFrame) declares that event to be
+//       a "magnet" KeyEvent, focus immediately switches to that FocusFrame (or a descendant if it
+//       has any), and that FocusFrame then also receives normal notification of the same event.
+//       Note: Only key presses (repeat, single, or double) can be focus magnet events. For
+//             example, a key release cannot be a focus magnet event.
 //     - A GlopFrame is notified via OnFocusChange whenever its focus changed. It can use this
 //       opportunity to react accordingly.
 //     - A GlopWindow may PushFocus. If this happens, all current FocusFrames lose focus, and will
 //       never gain it back again until PopFocus is called. In the meantime, a new circular queue
-//       of FocusFrames is formed.
-//   Note that all input frames should be inside a FocusFrame. An individual frame may find its
-//   encapsulating focus frame. Frames all track what FocusFrame, if any, owns them. The primary use
-//   of this is so they can determine what exactly is in focus. For example, if a button is directly
-//   encapsulated in a focus frame, it responds differently from a button owned by a slider frame,
-//   which is then encapsulated in a focus frame.
+//       of FocusFrames is formed. This is useful, for example, with DialogBoxes. A FocusFrame MAY
+//       be descended from a FocusFrame in another one of these layers, but they are considered
+//       completely separate. They do not interact, and events from one do not propogate to the
+//       other like they would if they are in the same layer.
 //
 // Overview of sizing: A frame's size is limited in two ways: its logical size, and its clipping
 //   rectangle (stored in WINDOW coordinates). The clipping coordinates are propogated via
@@ -95,6 +95,7 @@ using namespace std;
 
 // Class declarations
 class FocusFrame;
+class GlopWindow;
 struct KeyEvent;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -114,15 +115,18 @@ class GlopFrame {
   virtual string GetType() const {return "GlopFrame";}
   string GetContextString() const {return GetContextStringHelper(true, true, "");}
 
-  // All frames except unused frames and the topmost tableau frame have a parent.
+  // All frames except unused frames and the topmost tableau frame have a parent. If added to a
+  // window, that exists as well. Otherwise it is 0.
   const GlopFrame *GetParent() const {return parent_;}
   GlopFrame *GetParent() {return parent_;}
+  const GlopWindow *GetWindow() const {return window_;}
+  GlopWindow *GetWindow() {return window_;}
 
-  // Main GlopFrame functions. OnKeyEvent is the most accurate way to respond to key presses
-  // (see discussion in Input.h). Think will be called after all OnKeyEvent calls, and it is
-  // suitable for all other logic.
+  // Main GlopFrame functions. OnKeyEvent is the most accurate way to respond to key presses (see
+  // discussion in Input.h). Think will be called after all OnKeyEvent calls, and it is suitable for
+  // all other logic. Here, gained_focus is true if this exact event caused the frame to gain focus.
   virtual void Render() const {}
-  virtual bool OnKeyEvent(const KeyEvent &event, int dt) {return false;}
+  virtual bool OnKeyEvent(const KeyEvent &event, int dt, bool gained_focus) {return false;}
   virtual void Think(int dt) {}
   
   // Size and position accessors. All values are in pixels, and x, y are relative to the top-left
@@ -174,20 +178,26 @@ class GlopFrame {
     AddPing(new RelativePing(this, x1, y1, x2, y2, center));
   }
   
-  // Focus tracking. See discussion at the top of the file. PrimaryFocus is used to determine
-  // whether this object is the entire thing in focus (e.g. a regular button) or whether it is
-  // merely inheriting focus from something that owns in it (e.g. a button in a slider).
+  // Focus tracking. See discussion at the top of the file. IsPrimaryFocus is used to determine
+  // whether this object is the "main" thing in focus. Formally, this requires two things: our size
+  // must be the same as the focus frame wrapped around us (for example a solo ButtonFrame could be
+  // a primary focus, but a button inside a SliderFrame could not be), AND our FocusFrame must have
+  // no descendants (for example, a ScrollingFrame containing a ButtonFrame could not be a primary
+  // focus).
   virtual bool IsFocusMagnet(const KeyEvent &event) const {return false;}
-  bool IsInFocus() const {return is_in_focus_;}
+  bool IsInFocus() const;
   bool IsPrimaryFocus() const;
-  bool IsFocusFrame() const {return ((GlopFrame*)GetFocusFrame()) == this;}
+  bool IsFocusFrame() const {return ((GlopFrame*)focus_frame_ == this);}
   const FocusFrame *GetFocusFrame() const {return focus_frame_;}
   FocusFrame *GetFocusFrame() {return focus_frame_;}
   
   // Returns whether a point (given in WINDOW coordinates) is over this frame, accounting for both
   // clipping and logical size. This is useful for focus tracking due to mouse clicks for example.
-  // It can be overridden if the frame's visible extent is not the same as its size.
+  // It can be overridden if the frame's visible extent is not the same as its size. The focus frame
+  // variant does the same thing except it uses the focus frame as a basis instead if the focus
+  // frame exists. Otherwise, it is the same as IsPointVisibel.
   virtual bool IsPointVisible(int screen_x, int screen_y) const;
+  virtual bool IsPointVisibleInFocusFrame(int screen_x, int screen_y) const;
   
  protected:
   // Resizing and repositioning utilities.
@@ -208,6 +218,8 @@ class GlopFrame {
   // Internal pinging functions. AddPing registers a new ping with the GlopWindow who will
   // eventually propogate it up to the parent frame. OnChildPing is called by GlopWindow when
   // resolving child pings. By default, it registers the ping and propogates it further upwards.
+  // The coordinates represent a region in THIS frame's local coordinates that should be made
+  // visible. For example, if x1 = x2 = -10, we want to scroll 10 pixels to the left.
   void AddPing(Ping *ping);
   virtual void OnChildPing(GlopFrame *child, int x1, int y1, int x2, int y2, bool center) {
     NewAbsolutePing(x1, y1, x2, y2, center);
@@ -227,7 +239,7 @@ class GlopFrame {
   virtual string GetContextStringHelper(bool extend_down, bool extend_up,
                                         const string &prefix) const;
  private:
-  // Ping types. See above.
+  // Ping types. See above. All coordinates are set with (0,0) being the top-left of the frame.
   class AbsolutePing: public Ping {
    public:
     AbsolutePing(GlopFrame *frame, int x, int y, bool center)
@@ -262,24 +274,26 @@ class GlopFrame {
   };  
 
   // Changes our current parent frame, and inherits any appropriate settings from our parent.
-  virtual void SetParent(GlopFrame *parent);
+  void SetParent(GlopFrame *parent);
 
-  // Updates our focus setting, and calls OnFocusChange if it changed. It propogates down to
-  // children via OnFocusChange.
-  void SetFocusInfo(FocusFrame *focus_frame, bool is_in_focus) {
-    if (is_in_focus != is_in_focus_ || focus_frame != focus_frame_) {
-      is_in_focus_ = is_in_focus;
-      focus_frame_ = focus_frame;
-      OnFocusChange();
-    }
-  }
+  // Registers/unregisters all child focus frames with the GlopWindow.
+  virtual void RegisterFocusFrames() {}
+  virtual void UnregisterFocusFrames() {}
+
+  // Propogate focus information down to the next focus frame (but not past that).
+  virtual void SetFocusFrame(FocusFrame *focus_frame) {focus_frame_ = focus_frame;}
+  virtual void NotifyFocusChange() {OnFocusChange();}
+
+  // Changes the current window of this frame and all descendents. This will only be called if
+  // window is indeed different from the current window.
+  virtual void SetWindow(GlopWindow *window) {window_ = window;}
 
   // Data
   GlopFrame *parent_;
+  GlopWindow *window_;
   int old_rec_width_, old_rec_height_;
   int width_, height_;
   int screen_x_, screen_y_, clip_x1_, clip_y1_, clip_x2_, clip_y2_;
-  bool is_in_focus_;
   FocusFrame *focus_frame_;
   
   friend class GlopWindow;
@@ -308,9 +322,9 @@ class SingleParentFrame: public GlopFrame {
 
   // Child delegation functions
   virtual void Render() const {if (child_ != 0) child_->Render();}
-  virtual bool OnKeyEvent(const KeyEvent &event, int dt) {
+  virtual bool OnKeyEvent(const KeyEvent &event, int dt, bool gained_focus) {
     if (child_ != 0 && !child_->IsFocusFrame())
-      return child_->OnKeyEvent(event, dt);
+      return child_->OnKeyEvent(event, dt, gained_focus);
     else
       return false;
   }
@@ -332,9 +346,6 @@ class SingleParentFrame: public GlopFrame {
       GlopFrame::RecomputeSize(rec_width, rec_height);
     }
   }
-  virtual void OnFocusChange() {
-    if (child_ != 0 && !child_->IsFocusFrame()) child_->SetFocusInfo(focus_frame_, is_in_focus_);
-  }
 
   // Child manipulation. Note that any child added to a parent frame becomes owned by the
   // parent, and will be deleted on removal from the parent unless RemoveChildNoDelete is called.
@@ -349,8 +360,43 @@ class SingleParentFrame: public GlopFrame {
   string GetContextStringHelper(bool extend_down, bool extend_up, const string &prefix) const;
 
  private:
+  friend class FocusFrame;
+  void SetFocusFrame(FocusFrame *focus_frame) {
+    GlopFrame::SetFocusFrame(focus_frame);
+    if (child_ != 0) child_->SetFocusFrame(focus_frame);
+  }
+  void NotifyFocusChange() {
+    GlopFrame::NotifyFocusChange();
+    if (child_ != 0) child_->NotifyFocusChange();
+  }
+  void RegisterFocusFrames() {if (child_ != 0) child_->RegisterFocusFrames();}
+  void UnregisterFocusFrames() {if (child_ != 0) child_->UnregisterFocusFrames();}
+  void SetWindow(GlopWindow *window) {
+    GlopFrame::SetWindow(window);
+    if (child_ != 0 && child_->GetWindow() != window) child_->SetWindow(window);
+  } 
   GlopFrame *child_;
   DISALLOW_EVIL_CONSTRUCTORS(SingleParentFrame);
+};
+
+// EditableSingleParentFrame
+// =========================
+//
+// A SingleParentFrame with public functions for changing its child. It is used as a dummy wrapper
+// if you want to add a frame to a window but then wish to be able to easily change what that frame
+// is in the future. This is useful, for example, in MenuFrames.
+class EditableSingleParentFrame: public SingleParentFrame {
+ public:
+  EditableSingleParentFrame(): SingleParentFrame() {}
+  EditableSingleParentFrame(GlopFrame *child): SingleParentFrame(child) {}
+  string GetType() const {return "PublicSingleParentFrame";}
+
+  const GlopFrame *GetChild() const {return SingleParentFrame::GetChild();}
+  GlopFrame *GetChild() {return SingleParentFrame::GetChild();}
+  GlopFrame *RemoveChildNoDelete() {return SingleParentFrame::RemoveChildNoDelete();}
+  void SetChild(GlopFrame *frame) {SingleParentFrame::SetChild(frame);}
+ private:
+  DISALLOW_EVIL_CONSTRUCTORS(EditableSingleParentFrame);
 };
 
 // MultiParentFrame
@@ -371,14 +417,13 @@ class MultiParentFrame: public GlopFrame {
   
   // Child delegation functions
   virtual void Render() const;
-  virtual bool OnKeyEvent(const KeyEvent &event, int dt);
+  virtual bool OnKeyEvent(const KeyEvent &event, int dt, bool gained_focus);
   virtual void Think(int dt);
   virtual void SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2);
   virtual bool IsFocusMagnet(const KeyEvent &event) const;
 
  protected:
   virtual void RecomputeSize(int rec_width, int rec_height);
-  virtual void OnFocusChange();
 
   // Child manipulation. Note that any child added to a parent frame becomes owned by the
   // parent, and will be deleted on removal from the parent unless RemoveChildNoDelete is
@@ -386,6 +431,7 @@ class MultiParentFrame: public GlopFrame {
   const GlopFrame *GetChild(ListId id) const {return children_[id];}
   GlopFrame *GetChild(ListId id) {return children_[id];}
   int GetNumChildren() const {return children_.size();}
+  const List<GlopFrame*> &GetChildren() const {return children_;}
   List<GlopFrame*>::const_iterator children_begin() const {return children_.begin();}
   List<GlopFrame*>::const_iterator children_end() const {return children_.end();}
   ListId AddChild(GlopFrame *frame);
@@ -396,6 +442,11 @@ class MultiParentFrame: public GlopFrame {
   string GetContextStringHelper(bool extend_down, bool extend_up, const string &prefix) const;
   
  private:
+  void SetFocusFrame(FocusFrame *focus_frame);
+  void NotifyFocusChange();
+  void RegisterFocusFrames();
+  void UnregisterFocusFrames();
+  void SetWindow(GlopWindow *window);
   friend class GlopWindow;
   List<GlopFrame*> children_;
   DISALLOW_EVIL_CONSTRUCTORS(MultiParentFrame);
@@ -517,34 +568,35 @@ class ScalingPaddedFrame: public SingleParentFrame {
 class FocusFrame: public SingleParentFrame {
  public:
   FocusFrame(GlopFrame *frame);
-  ~FocusFrame();
   string GetType() const {return "FocusFrame";}
 
+  // Returns whether this frame is in focus (either it or one if its children is the primary focus)
+  bool IsInFocus() const {return is_in_focus_;}
+
+  // Returns whether we can be the primary focus, or whether we have descendant focus frames on the
+  // same layer that would be the primary focus instead.
+  bool CanBePrimaryFocus() const {return registered_child_focuses_ == 0;}
+
   // Returns whether we are descended from the given focus frame.
+  // NOTE: If the frames are in different layers, this does NOT count as a sub-focus frame.
   bool IsSubFocusFrame(const FocusFrame *frame) const;
 
-  // Returns whether a KeyEvent is being processed which just gave us focus. This is useful if we
-  // do not want that event to be processed. For example, a GlopKeyPromptFrame should not process
-  // the tab or mouse click event that gave it focus.
-  bool IsGainingFocus() const {return is_gaining_focus_;}
-
-  // Immediately makes this FocusFrame in focus (for it's level).
-  void DemandFocus();
-
+  // Immediately makes this FocusFrame in focus (within its layer). Can automatically ping the
+  // frame if desired. The ping is ignored unless the frame is in the topmost layer.
+  void DemandFocus(bool ping);
  private:
-  // Overload SetParent to not overwrite our focus information.
-  virtual void SetParent(GlopFrame *parent) {parent_ = parent;}
+  void SetFocusFrame(FocusFrame *focus_frame) {}
+  void NotifyFocusChange() {}
+  void RegisterFocusFrames();
+  void UnregisterFocusFrames();
 
   // GlopWindow interface
   friend class GlopWindow;
-  void SetIsInFocus(bool is_in_focus) {
-    if (is_in_focus && !IsInFocus()) NewRelativePing(0, 0, 1, 1);
-    SetFocusInfo(this, is_in_focus);
-  }
+  void SetIsInFocus(bool is_in_focus);
 
-  bool is_gaining_focus_;
-  int layer_;
   FocusFrame *next_, *prev_;
+  bool is_in_focus_;
+  int layer_, registered_child_focuses_;
   DISALLOW_EVIL_CONSTRUCTORS(FocusFrame);
 };
 
@@ -1066,41 +1118,50 @@ class MinSizeFrame: public SingleParentFrame {
 //   - it cannot be user-controlled (although it does respond to pings)
 //   - It is possible to scroll to regions past the right and bottom extents of the frame if they
 //     are pinged, or if the inner frame shrinks. This is useful, for example, with text boxes.
+//
+// MakeVisible is similar to a ping except it does not propogate upwards. It makes sure a certain
+// region of the child (given in child's local coordinate) is visible within the MaxSizeFrame BUT
+// it does not ensure the MaxSizeFrame is visible within its own parent. AbsoluteMakeVisible
+// resolves instantly, but RelativeMakeVisible waits until it can be sure that sizing information
+// is valid (similar to how pings work).
 class MaxWidthFrame: public SingleParentFrame {
  public:
-  MaxWidthFrame(GlopFrame *frame, float max_width = kSizeLimitRec,
-                float horz_justify = kJustifyLeft);
+  MaxWidthFrame(GlopFrame *frame, float max_width = kSizeLimitRec);
   string GetType() const {return "MaxWidthFrame";}
+  void AbsoluteMakeVisible(int x1, int x2, bool center);
+  void RelativeMakeVisible(float x1, float x2, bool center);
  private:
   DISALLOW_EVIL_CONSTRUCTORS(MaxWidthFrame);
 };
 
 class MaxHeightFrame: public SingleParentFrame {
  public:
-  MaxHeightFrame(GlopFrame *frame, float max_height = kSizeLimitRec,
-                 float vert_justify = kJustifyTop);
+  MaxHeightFrame(GlopFrame *frame, float max_height = kSizeLimitRec);
   string GetType() const {return "MaxHeightFrame";}
+  void AbsoluteMakeVisible(int y1, int y2, bool center);
+  void RelativeMakeVisible(float y1, float y2, bool center);
  private:
   DISALLOW_EVIL_CONSTRUCTORS(MaxHeightFrame);
 };
 
 class MaxSizeFrame: public SingleParentFrame {
  public:
-  MaxSizeFrame(GlopFrame *frame, float max_width = kSizeLimitRec, float max_height = kSizeLimitRec,
-               float horz_justify = kJustifyLeft, float vert_justify = kJustifyTop);
+  MaxSizeFrame(GlopFrame *frame, float max_width = kSizeLimitRec, float max_height = kSizeLimitRec);
   string GetType() const {return "MaxSizeFrame";}
   void SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2);
+  void AbsoluteMakeVisible(int x1, int y1, int x2, int y2, bool center);
+  void RelativeMakeVisible(float x1, float y1, float x2, float y2, bool center);
  protected:
   void RecomputeSize(int rec_width, int rec_height);
   void OnChildPing(GlopFrame *child, int x1, int y1, int x2, int y2, bool center);
-  void OnWindowResize(int width, int height) {
-    must_recenter_ = true;
-    SingleParentFrame::OnWindowResize(width, height);
-  }
-
  private:
-  void ScrollToChildPing(int x1, int y1, int x2, int y2, bool center);
-  bool must_recenter_;
+  struct MakeVisible {
+    MakeVisible(float _x1, float _y1, float _x2, float _y2, bool _center)
+    : x1(_x1), y1(_y1), x2(_x2), y2(_y2), center(_center) {}
+    float x1, y1, x2, y2;
+    bool center;
+  };
+  vector<MakeVisible> make_visibles_;
   float max_width_, max_height_;
   int x_offset_, y_offset_;
   DISALLOW_EVIL_CONSTRUCTORS(MaxSizeFrame);
@@ -1111,33 +1172,47 @@ class MaxSizeFrame: public SingleParentFrame {
 //
 // A combined MinSizeFrame and MaxSizeFrame. justify_max is used if the frame is too small,
 // justify_min is used if the frame is too large.
-class ExactWidthFrame: public MinWidthFrame {
+class ExactWidthFrame: public MaxWidthFrame {
  public:
-  ExactWidthFrame(GlopFrame *frame, float width = kSizeLimitRec,
-                  float horz_justify_max = kJustifyLeft, float horz_justify_min = kJustifyLeft)
-  : MinWidthFrame(new MaxWidthFrame(frame, width, horz_justify_max), width, horz_justify_min) {}
+  ExactWidthFrame(GlopFrame *frame, float width = kSizeLimitRec, float horz_justify = kJustifyLeft)
+  : MaxWidthFrame(new MinWidthFrame(frame, width, horz_justify), width) {}
   string GetType() const {return "ExactWidthFrame";}
+  void AbsoluteMakeVisible(int x1, int x2, bool center) {
+    ((MaxWidthFrame*)GetChild())->AbsoluteMakeVisible(x1, x2, center);
+  }
+  void RelativeMakeVisible(float x1, float x2, bool center) {
+    ((MaxWidthFrame*)GetChild())->RelativeMakeVisible(x1, x2, center);
+  }
  private:
   DISALLOW_EVIL_CONSTRUCTORS(ExactWidthFrame);
 };
-class ExactHeightFrame: public MinHeightFrame {
+class ExactHeightFrame: public MaxHeightFrame {
  public:
-  ExactHeightFrame(GlopFrame *frame, float height = kSizeLimitRec,
-                   float vert_justify_max = kJustifyTop, float vert_justify_min = kJustifyTop)
-  : MinHeightFrame(new MaxHeightFrame(frame, height, vert_justify_max),
-                   height, vert_justify_min) {}
+  ExactHeightFrame(GlopFrame *frame, float height = kSizeLimitRec, float vert_justify = kJustifyTop)
+  : MaxHeightFrame(new MinHeightFrame(frame, height, vert_justify), height) {}
   string GetType() const {return "ExactHeightFrame";}
+  void AbsoluteMakeVisible(int y1, int y2, bool center) {
+    ((MaxWidthFrame*)GetChild())->AbsoluteMakeVisible(y1, y2, center);
+  }
+  void RelativeMakeVisible(float y1, float y2, bool center) {
+    ((MaxWidthFrame*)GetChild())->RelativeMakeVisible(y1, y2, center);
+  }
  private:
   DISALLOW_EVIL_CONSTRUCTORS(ExactHeightFrame);
 };
-class ExactSizeFrame: public MinSizeFrame {
+class ExactSizeFrame: public MaxSizeFrame {
  public:
   ExactSizeFrame(GlopFrame *frame, float width = kSizeLimitRec, float height = kSizeLimitRec,
-                 float horz_justify_max = kJustifyLeft, float vert_justify_max = kJustifyTop,
-                 float horz_justify_min = kJustifyLeft, float vert_justify_min = kJustifyTop)
-  : MinSizeFrame(new MaxSizeFrame(frame, width, height, horz_justify_max, vert_justify_max),
-                 width, height, horz_justify_min, vert_justify_min) {}
+                 float horz_justify = kJustifyLeft, float vert_justify = kJustifyTop)
+  : MaxSizeFrame(new MinSizeFrame(frame, width, height, horz_justify, vert_justify),
+                 width, height) {}
   string GetType() const {return "ExactSizeFrame";}
+  void AbsoluteMakeVisible(int x1, int y1, int x2, int y2, bool center) {
+    ((MaxSizeFrame*)GetChild())->AbsoluteMakeVisible(x1, y1, x2, y2, center);
+  }
+  void RelativeMakeVisible(float x1, float y1, float x2, float y2, bool center) {
+    ((MaxSizeFrame*)GetChild())->RelativeMakeVisible(x1, y1, x2, y2, center);
+  }
  private:
   DISALLOW_EVIL_CONSTRUCTORS(ExactSizeFrame);
 };
@@ -1150,11 +1225,28 @@ class ExactSizeFrame: public MinSizeFrame {
 // to allow the user to scroll through the frame. It also responds to pings.
 //
 // See also MaxSizeFrame.
+class UnfocusableScrollingFrame;
 class ScrollingFrame: public FocusFrame {
  public:
-  ScrollingFrame(GlopFrame *frame, const SliderViewFactory *factory = gSliderViewFactory);
+  ScrollingFrame(GlopFrame *frame, const SliderView *view = gSliderView);
   string GetType() const {return "ScrollingFrame";}
+
+  // Pings that do not propogate upwards - see MaxSizeFrame
+  void AbsoluteMakeVisible(int x1, int y1, int x2, int y2, bool center);
+  void RelativeMakeVisible(float x1, float y1, float x2, float y2, bool center);
+
+  // Programatic scrolling
+  void ScrollUp();
+  void ScrollRight();
+  void ScrollDown();
+  void ScrollLeft();
+  void PageUp();
+  void PageRight();
+  void PageDown();
+  void PageLeft();
  private:
+  UnfocusableScrollingFrame *Scroller() {return scroller_;}
+  UnfocusableScrollingFrame *scroller_;
   DISALLOW_EVIL_CONSTRUCTORS(ScrollingFrame);
 };
 

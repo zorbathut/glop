@@ -3,20 +3,21 @@
 // we are not aiming for perfect flexibility here. A WindowFrame will always be a TextFrame on top
 // of an internal frame. However, the window background and border can be customized as desired.
 //
-// Generically, a View is structured as follows:
-//  - There is a ViewFactory class. This has one purpose - to instantiate Views.
-//  - By convention, a View contains three kinds of methods:
-//     OnResize: Any method with OnResize in it will be guaranteed to be called whenever either the
-//               frame or the window resizes. Generally OnResize is given the option of reserving
-//               some space for the frame.
-//     Render: If a frame has a View, it likely delegates to the View for ALL rendering. The View
-//             is responsible for rendering the frame and all of its children.
-//     Other methods: These are generally used to construct child frames. For example, a WindowView
-//                    can specify the GuiTextStyle used for the window text.
-//  - Default___View and Default___ViewFactory classes are provided.
+// By convention, a View contains three kinds of methods:
+//   OnResize: Any method with OnResize in it will be guaranteed to be called whenever either the
+//             frame or the window resizes. Generally OnResize is given the option of reserving
+//             some space for the frame.
+//   Render: If a frame has a View, it likely delegates to the View for ALL rendering. The View
+//           is responsible for rendering the frame and all of its children, often including
+//           explicit calls to Render on the child frames.
+//   Other methods: These are generally used to construct child frames. For example, a WindowView
+//                  can specify the GuiTextStyle used for the window text.
 //
-// In addition to the View classes, we also include GuiTextStyle, which is full font specification -
-// a Font object, size, color, and flags (underline, italics, etc.)
+// In addition to the View classes, we also include GuiTextStyle, which is a full font
+// specification - a Font object, size, color, and flags (underline, italics, etc.)
+//
+// WARNING: Behavior is undefined if a View object is modified or deleted while a GlopFrame is using
+//          that View.
 
 #ifndef GLOP_GLOP_FRAME_STYLE_H__
 #define GLOP_GLOP_FRAME_STYLE_H__
@@ -62,8 +63,8 @@ const float kDefaultSliderWidth = 0.03f;
 const Color kDefaultSliderBackgroundColor(0.7f, 0.7f, 0.7f);
 const Color kDefaultSliderBorderColor(0.2f, 0.2f, 0.2f);
 
-const Color kDefaultMenuSelectionColor(0.6f, 0.6f, 1.0f);
-const Color kDefaultMenuSelectionColorNoFocus(0.8f, 0.8f, 1.0f);
+const Color kDefaultMenuSelectionColor(0.55f, 0.55f, 0.9f);
+const Color kDefaultMenuSelectionColorNoFocus(0.7f, 0.7f, 0.95f);
 
 const float kDefaultDialogVertJustify = 0.4f;
 const float kDefaultDialogRecWidth = 0.7f;
@@ -118,44 +119,25 @@ class InputBoxView {
  private:
   DISALLOW_EVIL_CONSTRUCTORS(InputBoxView);
 };
-class InputBoxViewFactory {
- public:
-  virtual InputBoxView *Create() const = 0;
-  virtual ~InputBoxViewFactory() {}
- protected:
-  InputBoxViewFactory() {}
- private:
-  DISALLOW_EVIL_CONSTRUCTORS(InputBoxViewFactory);
-};
 
-// Default implementation
 class DefaultInputBoxView: public InputBoxView {
  public:
-  void OnResize(int rec_width, int rec_height, int *lp, int *tp, int *rp, int *bp) const;
-  void Render(int x1, int y1, int x2, int y2, const PaddedFrame *padded_frame) const;
-
- private:
-  friend class DefaultInputBoxViewFactory;
-  DefaultInputBoxView(const DefaultInputBoxViewFactory *factory): factory_(factory) {}
-  const DefaultInputBoxViewFactory *factory_;
-  DISALLOW_EVIL_CONSTRUCTORS(DefaultInputBoxView);
-};
-class DefaultInputBoxViewFactory: public InputBoxViewFactory {
- public:
-  DefaultInputBoxViewFactory()
+  DefaultInputBoxView()
   : background_color_(kDefaultInputBoxBackgroundColor),
     border_color_(kDefaultInputBoxBorderColor) {}
-  InputBoxView *Create() const {return new DefaultInputBoxView(this);}
+
+  // View methods
+  void OnResize(int rec_width, int rec_height, int *lp, int *tp, int *rp, int *bp) const;
+  void Render(int x1, int y1, int x2, int y2, const PaddedFrame *padded_frame) const;
 
   // Accessors and mutators
   const Color &GetBackgroundColor() const {return background_color_;}
   void SetBackgroundColor(const Color &c) {background_color_ = c;}
   const Color &GetBorderColor() const {return border_color_;}
   void SetBorderColor(const Color &c) {border_color_ = c;}
-
  private:
   Color background_color_, border_color_;
-  DISALLOW_EVIL_CONSTRUCTORS(DefaultInputBoxViewFactory);
+  DISALLOW_EVIL_CONSTRUCTORS(DefaultInputBoxView);
 };
 
 // TextPromptView
@@ -166,7 +148,7 @@ class TextPromptView {
   virtual ~TextPromptView() {}
 
   // Returns the GuiTextStyle that will be used for the text.
-  virtual const GuiTextStyle GetTextStyle() const = 0;
+  virtual const GuiTextStyle &GetTextStyle() const = 0;
 
   // Returns the padding reserved around the prompt. The text_frame will already be resized, so
   // the TextRenderer there can be used for setting the padding.
@@ -174,8 +156,8 @@ class TextPromptView {
                         int *tp, int *rp, int *bp) const = 0;
 
   // Renders the text prompt. cursor_pos and selection_start, selection_end are gaps between
-  // characters ranging from 0 to length. cursor_time is the number of milliseconds since this
-  // frame last gained focus. Render is free to change that value itself.
+  // characters and they range from 0 to length. cursor_time is the number of milliseconds since
+  // this frame last gained focus. Render is free to change that value itself.
   virtual void Render(int x1, int y1, int x2, int y2, int cursor_pos, int *cursor_time,
                       int selection_start, int selection_end, bool is_in_focus,
                       const TextFrame *text_frame) const = 0;
@@ -184,49 +166,30 @@ class TextPromptView {
  private:
   DISALLOW_EVIL_CONSTRUCTORS(TextPromptView);
 };
-class TextPromptViewFactory {
- public:
-  virtual TextPromptView *Create() const = 0;
-  virtual ~TextPromptViewFactory() {}
- protected:
-  TextPromptViewFactory() {}
- private:
-  DISALLOW_EVIL_CONSTRUCTORS(TextPromptViewFactory);
-};
 
-// Default implementation
 class DefaultTextPromptView: public TextPromptView {
  public:
-  const GuiTextStyle GetTextStyle() const ;
+  DefaultTextPromptView(Font *font)
+  : highlight_color_(kDefaultTextHighlightColor), cursor_color_(kDefaultTextPromptCursorColor),
+    text_style_(kDefaultTextPromptColor, kDefaultTextHeight, font, 0) {}
+
+  // View methods
+  const GuiTextStyle &GetTextStyle() const {return text_style_;}
   void OnResize(int rec_width, int rec_height, const TextFrame *text_frame, int *lp, int *tp,
                 int *rp, int *bp) const;
   void Render(int x1, int y1, int x2, int y2, int cursor_pos, int *cursor_time, int selection_start,
               int selection_end, bool is_in_focus, const TextFrame *text_frame) const;
- private:
-  friend class DefaultTextPromptViewFactory;
-  DefaultTextPromptView(const DefaultTextPromptViewFactory *factory): factory_(factory) {}
-  const DefaultTextPromptViewFactory *factory_;
-  DISALLOW_EVIL_CONSTRUCTORS(DefaultTextPromptView);
-};
-class DefaultTextPromptViewFactory: public TextPromptViewFactory {
- public:
-  DefaultTextPromptViewFactory(Font *font)
-  : highlight_color_(kDefaultTextHighlightColor), cursor_color_(kDefaultTextPromptCursorColor),
-    text_style_(kDefaultTextPromptColor, kDefaultTextHeight, font, 0) {}
-  TextPromptView *Create() const {return new DefaultTextPromptView(this);}
 
   // Accessors and mutators
   const Color &GetHighlightColor() const {return highlight_color_;}
   void SetHighlightColor(const Color &c) {highlight_color_ = c;}
-  const GuiTextStyle &GetTextStyle() const {return text_style_;}
   void SetTextStyle(const GuiTextStyle &style) {text_style_ = style;}
   const Color &GetCursorColor() const {return cursor_color_;}
   void SetCursorColor(const Color &c) {cursor_color_ = c;}
-
  private:
   Color highlight_color_, cursor_color_;
   GuiTextStyle text_style_;
-  DISALLOW_EVIL_CONSTRUCTORS(DefaultTextPromptViewFactory);
+  DISALLOW_EVIL_CONSTRUCTORS(DefaultTextPromptView);
 };
 
 // WindowView
@@ -237,7 +200,7 @@ class WindowView {
   virtual ~WindowView() {}
 
   // Returns the GuiTextStyle that will be used for rendering the title.
-  virtual const GuiTextStyle GetTitleStyle() const = 0;
+  virtual const GuiTextStyle &GetTitleStyle() const = 0;
 
   // Returns the padding reserved around the title frame and around the inner frame.
   // If has_title is false, the title padding is ignored.
@@ -254,39 +217,22 @@ class WindowView {
  private:
   DISALLOW_EVIL_CONSTRUCTORS(WindowView);
 };
-class WindowViewFactory {
- public:
-  virtual WindowView *Create() const = 0;
-  virtual ~WindowViewFactory() {}
- protected:
-  WindowViewFactory() {}
- private:
-  DISALLOW_EVIL_CONSTRUCTORS(WindowViewFactory);
-};
 
-// Default implementation
 class DefaultWindowView: public WindowView {
  public:
-  const GuiTextStyle GetTitleStyle() const;
+  DefaultWindowView(Font *font)
+  : border_highlight_color_(kDefaultWindowBorderHighlightColor),
+    border_lowlight_color_(kDefaultWindowBorderLowlightColor),
+    inner_color_(kDefaultWindowInnerColor),
+    title_style_(kDefaultWindowTitleColor, kDefaultTextHeight, font, 0) {}
+
+  // View methods
+  const GuiTextStyle &GetTitleStyle() const {return title_style_;}
   void OnResize(int rec_width, int rec_height, bool has_title,
                 int *title_l, int *title_t, int *title_r, int *title_b,
                 int *inner_l, int *inner_t, int *inner_r, int *inner_b) const;
   void Render(int x1, int y1, int x2, int y2, const PaddedFrame *padded_title_frame,
               const PaddedFrame *padded_inner_frame) const;
- private:
-  friend class DefaultWindowViewFactory;
-  DefaultWindowView(const DefaultWindowViewFactory *factory): factory_(factory) {}
-  const DefaultWindowViewFactory *factory_;
-  DISALLOW_EVIL_CONSTRUCTORS(DefaultWindowView);
-};
-class DefaultWindowViewFactory: public WindowViewFactory {
- public:
-  DefaultWindowViewFactory(Font *font)
-  : border_highlight_color_(kDefaultWindowBorderHighlightColor),
-    border_lowlight_color_(kDefaultWindowBorderLowlightColor),
-    inner_color_(kDefaultWindowInnerColor),
-    title_style_(kDefaultWindowTitleColor, kDefaultTextHeight, font, 0) {}
-  WindowView *Create() const {return new DefaultWindowView(this);}
 
   // Accessors and mutators
   const Color &GetBorderHighlightColor() const {return border_highlight_color_;}
@@ -295,12 +241,11 @@ class DefaultWindowViewFactory: public WindowViewFactory {
   void SetBorderLowlightColor(const Color &c) {border_lowlight_color_ = c;}
   const Color &GetInnerColor() const {return inner_color_;}
   void SetInnerColor(const Color &c) {inner_color_ = c;}
-  const GuiTextStyle &GetTitleStyle() const {return title_style_;}
   void SetTitleStyle(const GuiTextStyle &style) {title_style_ = style;}
  private:
   Color border_highlight_color_, border_lowlight_color_, inner_color_;
   GuiTextStyle title_style_;
-  DISALLOW_EVIL_CONSTRUCTORS(DefaultWindowViewFactory);
+  DISALLOW_EVIL_CONSTRUCTORS(DefaultWindowView);
 };
 
 // ButtonView
@@ -323,38 +268,21 @@ class ButtonView {
  private:
   DISALLOW_EVIL_CONSTRUCTORS(ButtonView);
 };
-class ButtonViewFactory {
- public:
-  virtual ButtonView *Create() const = 0;
-  virtual ~ButtonViewFactory() {}
- protected:
-  ButtonViewFactory() {}
- private:
-  DISALLOW_EVIL_CONSTRUCTORS(ButtonViewFactory);
-};
 
-// Default implementation
 class DefaultButtonView: public ButtonView {
  public:
-  void OnResize(int rec_width, int rec_height, bool is_down,
-                int *lp, int *tp, int *rp, int *bp) const;
-  void Render(int x1, int y1, int x2, int y2, bool is_down, bool is_primary_focus,
-              const PaddedFrame *padded_inner_frame) const ;
- private:
-  friend class DefaultButtonViewFactory;
-  DefaultButtonView(const DefaultButtonViewFactory *factory): factory_(factory) {}
-  const DefaultButtonViewFactory *factory_;
-  DISALLOW_EVIL_CONSTRUCTORS(DefaultButtonView);
-};
-class DefaultButtonViewFactory: public ButtonViewFactory {
- public:
-  DefaultButtonViewFactory()
+  DefaultButtonView()
   : border_size_(kDefaultButtonBorderSize), selection_color_(kDefaultButtonSelectionColor),
     border_color_(kDefaultButtonBorderColor), highlight_color_(kDefaultButtonHighlightColor),
     lowlight_color_(kDefaultButtonLowlightColor),
     unpressed_inner_color_(kDefaultButtonUnpressedInnerColor),
     pressed_inner_color_(kDefaultButtonPressedInnerColor) {}
-  ButtonView *Create() const {return new DefaultButtonView(this);}
+
+  // View methods
+  void OnResize(int rec_width, int rec_height, bool is_down,
+                int *lp, int *tp, int *rp, int *bp) const;
+  void Render(int x1, int y1, int x2, int y2, bool is_down, bool is_primary_focus,
+              const PaddedFrame *padded_inner_frame) const ;
 
   // Accessors and mutators
   const float GetBorderSize() const {return border_size_;}
@@ -369,13 +297,13 @@ class DefaultButtonViewFactory: public ButtonViewFactory {
   void SetLowlightColor(const Color &c) {lowlight_color_ = c;}
   const Color &GetUnpressedInnerColor() const {return unpressed_inner_color_;}
   void SetUnpressedInnerColor(const Color &c) {unpressed_inner_color_ = c;}
-  const Color &GetPressedInnercolor() const {return pressed_inner_color_;}
+  const Color &GetPressedInnerColor() const {return pressed_inner_color_;}
   void SetPressedInnerColor(const Color &c) {pressed_inner_color_ = c;}
  private:
   float border_size_;
   Color selection_color_, border_color_, highlight_color_, lowlight_color_, unpressed_inner_color_,
         pressed_inner_color_;
-  DISALLOW_EVIL_CONSTRUCTORS(DefaultButtonViewFactory);
+  DISALLOW_EVIL_CONSTRUCTORS(DefaultButtonView);
 };
 
 // ArrowView
@@ -387,7 +315,7 @@ class ArrowView {
 
   // Returns the frame size, including any padding. Should also be called if the arrow direction
   // changes for any reason.
-  enum Direction {Up, Right, Down, Left};  // Should match ArrowViewFrame
+  enum Direction {Up, Right, Down, Left};
   virtual void OnResize(int rec_width, int rec_height, Direction direction,
                         int *width, int *height) const = 0;
 
@@ -398,38 +326,21 @@ class ArrowView {
  private:
   DISALLOW_EVIL_CONSTRUCTORS(ArrowView);
 };
-class ArrowViewFactory {
- public:
-  virtual ArrowView *Create() const = 0;
-  virtual ~ArrowViewFactory() {}
- protected:
-  ArrowViewFactory() {}
- private:
-  DISALLOW_EVIL_CONSTRUCTORS(ArrowViewFactory);
-};
 
-// Default implementation
 class DefaultArrowView: public ArrowView {
  public:
+  DefaultArrowView(): color_(kDefaultArrowColor) {}
+
+  // View methods
   void OnResize(int rec_width, int rec_height, Direction direction, int *width, int *height) const;
   void Render(int x1, int y1, int x2, int y2, Direction direction) const;
- private:
-  friend class DefaultArrowViewFactory;
-  DefaultArrowView(const DefaultArrowViewFactory *factory): factory_(factory) {}
-  const DefaultArrowViewFactory *factory_;
-  DISALLOW_EVIL_CONSTRUCTORS(DefaultArrowView);
-};
-class DefaultArrowViewFactory: public ArrowViewFactory {
- public:
-  DefaultArrowViewFactory(): color_(kDefaultArrowColor) {}
-  ArrowView *Create() const {return new DefaultArrowView(this);}
 
   // Accessors and mutators
   const Color &GetColor() const {return color_;}
   void SetColor(const Color &c) {color_ = c;}
  private:
   Color color_;
-  DISALLOW_EVIL_CONSTRUCTORS(DefaultArrowViewFactory);
+  DISALLOW_EVIL_CONSTRUCTORS(DefaultArrowView);
 };
 
 // SliderView
@@ -441,14 +352,15 @@ class SliderView {
 
   // Returns the view factories for the buttons at the edge of the slider, and for the arrows that
   // are to be displayed on those buttons.
-  virtual const ArrowViewFactory *GetArrowViewFactory() const = 0;
-  virtual const ButtonViewFactory *GetButtonViewFactory() const = 0;
+  virtual const ArrowView *GetArrowView() const = 0;
+  virtual const ButtonView *GetButtonView() const = 0;
 
   // These are both called any time the frame resizes. They return the desired "width" of the slider
   // ("width" is defined as the short dimension - so it is actually measuring y-distance for
   // horizontal sliders), and the minimum length of the tab.
   virtual int GetWidthOnResize(int rec_width, int rec_height, bool is_horizontal) const = 0;
-  virtual int GetMinTabLengthOnResize(int inner_width, int inner_height, bool is_horizontal) = 0;
+  virtual int GetMinTabLengthOnResize(int inner_width, int inner_height,
+                                      bool is_horizontal) const = 0;
 
   // Renders the slider. Tab coordinates are relative to the screen.
   virtual void Render(int x1, int y1, int x2, int y2, bool is_horizontal, bool is_primary_focus,
@@ -459,50 +371,30 @@ class SliderView {
  private:
   DISALLOW_EVIL_CONSTRUCTORS(SliderView);
 };
-class SliderViewFactory {
- public:
-  virtual SliderView *Create() const = 0;
-  virtual ~SliderViewFactory() {}
- protected:
-  SliderViewFactory() {}
- private:
-  DISALLOW_EVIL_CONSTRUCTORS(SliderViewFactory);
-};
 
-// Default implementation
 class DefaultSliderView: public SliderView {
  public:
-  const ArrowViewFactory *GetArrowViewFactory() const;
-  const ButtonViewFactory *GetButtonViewFactory() const;
-  int GetWidthOnResize(int rec_width, int rec_height, bool is_horizontal) const;
-  int GetMinTabLengthOnResize(int inner_width, int inner_height, bool is_horizontal);
-  void Render(int x1, int y1, int x2, int y2, bool is_horizontal, bool is_primary_focus,
-              int tab_x1, int tab_y1, int tab_x2, int tab_y2, const GlopFrame *dec_button,
-              const GlopFrame *inc_button) const;
- private:
-  friend class DefaultSliderViewFactory;
-  DefaultSliderView(const DefaultSliderViewFactory *factory): factory_(factory) {}
-  const DefaultSliderViewFactory *factory_;
-  DISALLOW_EVIL_CONSTRUCTORS(DefaultSliderView);
-};
-class DefaultSliderViewFactory: public SliderViewFactory {
- public:
-  DefaultSliderViewFactory(const ArrowViewFactory *arrow_factory,
-                           const ButtonViewFactory *button_factory)
-  : button_factory_(button_factory), arrow_factory_(arrow_factory),
+  DefaultSliderView(const ArrowView *arrow_view, const ButtonView *button_view)
+  : arrow_view_(arrow_view), button_view_(button_view),
     width_(kDefaultSliderWidth), tab_border_size_(kDefaultButtonBorderSize),
     background_color_(kDefaultSliderBackgroundColor), border_color_(kDefaultSliderBorderColor),
     tab_border_color_(kDefaultButtonBorderColor),
     tab_highlight_color_(kDefaultButtonHighlightColor),
     tab_lowlight_color_(kDefaultButtonLowlightColor),
     tab_inner_color_(kDefaultButtonUnpressedInnerColor) {}
-  SliderView *Create() const {return new DefaultSliderView(this);}
+
+  // View methods
+  const ArrowView *GetArrowView() const {return arrow_view_;}
+  const ButtonView *GetButtonView() const {return button_view_;}
+  int GetWidthOnResize(int rec_width, int rec_height, bool is_horizontal) const;
+  int GetMinTabLengthOnResize(int inner_width, int inner_height, bool is_horizontal) const;
+  void Render(int x1, int y1, int x2, int y2, bool is_horizontal, bool is_primary_focus,
+              int tab_x1, int tab_y1, int tab_x2, int tab_y2, const GlopFrame *dec_button,
+              const GlopFrame *inc_button) const;
 
   // Accessors and mutators
-  const ArrowViewFactory *GetArrowViewFactory() const {return arrow_factory_;}
-  void SetArrowViewFactory(const ArrowViewFactory *factory) {arrow_factory_ = factory;}
-  const ButtonViewFactory *GetButtonViewFactory() const {return button_factory_;}
-  void SetButtonViewFactory(const ButtonViewFactory *factory) {button_factory_ = factory;}
+  void SetArrowView(const ArrowView *view) {arrow_view_ = view;}
+  void SetButtonView(const ButtonView *view) {button_view_ = view;}
   float GetWidth() const {return width_;}
   void SetWidth(float width) {width_ = width;}
   float GetTabBorderSize() const {return tab_border_size_;}
@@ -520,12 +412,12 @@ class DefaultSliderViewFactory: public SliderViewFactory {
   const Color &GetTabInnerColor() const {return tab_inner_color_;}
   void SetTabInnerColor(const Color &c) {tab_inner_color_ = c;}
  private:
-  const ArrowViewFactory *arrow_factory_;
-  const ButtonViewFactory *button_factory_;
+  const ArrowView *arrow_view_;
+  const ButtonView *button_view_;
   float width_, tab_border_size_;
   Color background_color_, border_color_, tab_border_color_, tab_highlight_color_,
         tab_lowlight_color_, tab_inner_color_;
-  DISALLOW_EVIL_CONSTRUCTORS(DefaultSliderViewFactory);
+  DISALLOW_EVIL_CONSTRUCTORS(DefaultSliderView);
 };
 
 // MenuView
@@ -542,66 +434,57 @@ class MenuView {
   // Renders the menu. Selection coordinates are given relative to the screen. It is guaranteed
   // that items is non-null, and the selection is valid.
   virtual void Render(int x1, int y1, int x2, int y2, int sel_x1, int sel_y1, int sel_x2,
-                      int sel_y2, bool is_in_focus, const GlopFrame *items) const = 0;
+                      int sel_y2, bool is_in_focus, const List<GlopFrame *> &items) const = 0;
+
+  // Returns the default style used for rendering any text appearing in the menu.
+  virtual const GuiTextStyle &GetTextStyle() const = 0;
+
  protected: 
   MenuView() {}
  private:
   DISALLOW_EVIL_CONSTRUCTORS(MenuView);
 };
-class MenuViewFactory {
- public:
-  virtual MenuView *Create() const = 0;
-  virtual ~MenuViewFactory() {}
- protected:
-  MenuViewFactory() {}
- private:
-  DISALLOW_EVIL_CONSTRUCTORS(MenuViewFactory);
-};
 
-// Default implementation
 class DefaultMenuView: public MenuView {
  public:
+  DefaultMenuView(Font *font)
+  : selection_color_(kDefaultMenuSelectionColor),
+    selection_color_no_focus_(kDefaultMenuSelectionColorNoFocus),
+    text_style_(kDefaultTextColor, kDefaultTextHeight, font, 0) {}
+
+  // View methods
+  const GuiTextStyle &GetTextStyle() const {return text_style_;}
   void OnResize(int rec_width, int rec_height, int *item_lp, int *item_tp, int *item_rp,
                 int *item_bp) const;
   void Render(int x1, int y1, int x2, int y2, int sel_x1, int sel_y1, int sel_x2, int sel_y2,
-              bool is_in_focus, const GlopFrame *items) const;
- private:
-  friend class DefaultMenuViewFactory;
-  DefaultMenuView(const DefaultMenuViewFactory *factory): factory_(factory) {}
-  const DefaultMenuViewFactory *factory_;
-  DISALLOW_EVIL_CONSTRUCTORS(DefaultMenuView);
-};
-class DefaultMenuViewFactory: public MenuViewFactory {
- public:
-  DefaultMenuViewFactory()
-  : selection_color_(kDefaultMenuSelectionColor),
-    selection_color_no_focus_(kDefaultMenuSelectionColorNoFocus) {}
-  MenuView *Create() const {return new DefaultMenuView(this);}
+              bool is_in_focus, const List<GlopFrame *> &items) const;
 
   // Accessors and mutators
   const Color &GetSelectionColor() const {return selection_color_;}
   void SetSelectionColor(const Color &c) {selection_color_ = c;}
   const Color &GetSelectionColorNoFocus() const {return selection_color_no_focus_;}
   void SetSelectionColorNoFocus(const Color &c) {selection_color_no_focus_ = c;}
+  void SetTextStyle(const GuiTextStyle &style) {text_style_ = style;}
  private:
+  GuiTextStyle text_style_;
   Color selection_color_, selection_color_no_focus_;
-  DISALLOW_EVIL_CONSTRUCTORS(DefaultMenuViewFactory);
+  DISALLOW_EVIL_CONSTRUCTORS(DefaultMenuView);
 };
 
 // DialogView
 // ==========
 //
-// Note that there is no DialogView, just a DialogViewFactory. Thus, it is set up differently from
-// some of the other classes. The difference results from the fact that there is not actually such
-// a thing as a DialogFrame - it is just a combination of other objects.
-class DialogViewFactory {
+// Since there is no actual DialogFrame class similar to, say, ButtonFrame, this view is set up a
+// little different from the other views.
+
+class DialogView {
  public:
-  virtual ~DialogViewFactory() {}
-  virtual const TextPromptViewFactory *GetTextPromptViewFactory() const = 0;
-  virtual const InputBoxViewFactory *GetInputBoxViewFactory() const = 0;
-  virtual const WindowViewFactory *GetWindowViewFactory() const = 0;
-  virtual const ButtonViewFactory *GetButtonViewFactory() const = 0;
-  virtual const SliderViewFactory *GetSliderViewFactory() const = 0;
+  virtual ~DialogView() {}
+  virtual const TextPromptView *GetTextPromptView() const = 0;
+  virtual const InputBoxView *GetInputBoxView() const = 0;
+  virtual const WindowView *GetWindowView() const = 0;
+  virtual const ButtonView *GetButtonView() const = 0;
+  virtual const SliderView *GetSliderView() const = 0;
   virtual const GuiTextStyle &GetTextStyle() const = 0;
   virtual const GuiTextStyle &GetButtonTextStyle() const = 0;
   virtual float GetVertJustify() const = 0;
@@ -613,22 +496,20 @@ class DialogViewFactory {
   virtual float GetInnerHorzPadding() const = 0;
   virtual float GetInnerVertPadding() const = 0;
  protected:
-  DialogViewFactory() {}
+  DialogView() {}
  private:
-  DISALLOW_EVIL_CONSTRUCTORS(DialogViewFactory);
+  DISALLOW_EVIL_CONSTRUCTORS(DialogView);
 };
 
-// Default implementation
-class DefaultDialogViewFactory: public DialogViewFactory {
+class DefaultDialogView: public DialogView {
  public:
-  DefaultDialogViewFactory(const InputBoxViewFactory *input_box_view_factory,
-                           const TextPromptViewFactory *text_prompt_view_factory,
-                           const WindowViewFactory *window_view_factory,
-                           const ButtonViewFactory *button_view_factory,
-                           const SliderViewFactory *slider_view_factory, Font *font)
-  : input_box_view_factory_(input_box_view_factory),
-    text_prompt_view_factory_(text_prompt_view_factory), window_view_factory_(window_view_factory),
-    button_view_factory_(button_view_factory), slider_view_factory_(slider_view_factory),   
+  DefaultDialogView(const InputBoxView *input_box_view,
+                    const TextPromptView *text_prompt_view,
+                    const WindowView *window_view,
+                    const ButtonView *button_view,
+                    const SliderView *slider_view, Font *font)
+  : input_box_view_(input_box_view), text_prompt_view_(text_prompt_view), window_view_(window_view),
+    button_view_(button_view), slider_view_(slider_view),
     text_style_(kDefaultTextColor, kDefaultTextHeight, font, 0),
     button_text_style_(kDefaultButtonTextColor, kDefaultTextHeight, font, 0),
     vert_justify_(kDefaultDialogVertJustify), rec_width_(kDefaultDialogRecWidth),
@@ -639,75 +520,74 @@ class DefaultDialogViewFactory: public DialogViewFactory {
     inner_horz_padding_(kDefaultDialogInnerHorzPadding),
     inner_vert_padding_(kDefaultDialogInnerVertPadding) {}
 
-  // Accessors and mutators
-  const InputBoxViewFactory *GetInputBoxViewFactory() const {return input_box_view_factory_;}
-  void SetInputBoxViewFactory(const InputBoxViewFactory *f) {input_box_view_factory_ = f;}
-  const TextPromptViewFactory *GetTextPromptViewFactory() const {return text_prompt_view_factory_;}
-  void SetTextPromptViewFactory(const TextPromptViewFactory *f) {text_prompt_view_factory_ = f;}
-  const WindowViewFactory *GetWindowViewFactory() const {return window_view_factory_;}
-  void SetWindowViewFactory(const WindowViewFactory *f) {window_view_factory_ = f;}
-  const ButtonViewFactory *GetButtonViewFactory() const {return button_view_factory_;}
-  void SetButtonViewFactory(const ButtonViewFactory *f) {button_view_factory_ = f;}
-  const SliderViewFactory *GetSliderViewFactory() const {return slider_view_factory_;}
-  void SetSliderViewFactory(const SliderViewFactory *f) {slider_view_factory_ = f;}
-
+  // View methods
+  const InputBoxView *GetInputBoxView() const {return input_box_view_;}
+  const TextPromptView *GetTextPromptView() const {return text_prompt_view_;}
+  const WindowView *GetWindowView() const {return window_view_;}
+  const ButtonView *GetButtonView() const {return button_view_;}
+  const SliderView *GetSliderView() const {return slider_view_;}
   const GuiTextStyle &GetTextStyle() const {return text_style_;}
-  void SetTextStyle(const GuiTextStyle &style) {text_style_ = style;}
   const GuiTextStyle &GetButtonTextStyle() const {return button_text_style_;}
-  void SetButtonTextStyle(const GuiTextStyle &style) {button_text_style_ = style;}
-
   float GetVertJustify() const {return vert_justify_;}
-  void SetVertJustify(float justify) {vert_justify_ = justify;}
   float GetRecWidth() const {return rec_width_;}
-  void SetRecWidth(float rec_width) {rec_width_ = rec_width;}
   float GetRecHeight() const {return rec_height_;}
-  void SetRecHeight(float rec_height) {rec_height_ = rec_height;}
   float GetTextHorzJustify() const {return text_horz_justify_;}
-  void SetTextHorzJustify(float justify) {text_horz_justify_ = justify;}
   float GetButtonsHorzJustify() const {return buttons_horz_justify_;}
-  void SetButtonsHorzJustify(float justify) {buttons_horz_justify_ = justify;}
   void GetPadding(float *lp, float *tp, float *rp, float *bp) const {
     *lp = left_padding_;
     *tp = top_padding_;
     *rp = right_padding_;
     *bp = bottom_padding_;
   }
+  float GetInnerHorzPadding() const {return inner_horz_padding_;}
+  float GetInnerVertPadding() const {return inner_vert_padding_;}
+
+  // Accessors and mutators
+  void SetInputBoxView(const InputBoxView *view) {input_box_view_ = view;}
+  void SetTextPromptView(const TextPromptView *view) {text_prompt_view_ = view;}
+  void SetWindowView(const WindowView *view) {window_view_ = view;}
+  void SetButtonView(const ButtonView *view) {button_view_ = view;}
+  void SetSliderView(const SliderView *view) {slider_view_ = view;}
+  void SetTextStyle(const GuiTextStyle &style) {text_style_ = style;}
+  void SetButtonTextStyle(const GuiTextStyle &style) {button_text_style_ = style;}
+  void SetVertJustify(float justify) {vert_justify_ = justify;}
+  void SetRecWidth(float rec_width) {rec_width_ = rec_width;}
+  void SetRecHeight(float rec_height) {rec_height_ = rec_height;}
+  void SetTextHorzJustify(float justify) {text_horz_justify_ = justify;}
+  void SetButtonsHorzJustify(float justify) {buttons_horz_justify_ = justify;}
   void SetPadding (float lp, float tp, float rp, float bp) {
     left_padding_ = lp;
     top_padding_ = tp;
     right_padding_ = rp;
     bottom_padding_ = bp;
   }
-  float GetInnerHorzPadding() const {return inner_horz_padding_;}
   void SetInnerHorzPadding(float padding) {inner_horz_padding_ = padding;}
-  float GetInnerVertPadding() const {return inner_vert_padding_;}
   void SetInnerVertPadding(float padding) {inner_vert_padding_ = padding;}
-
  private:
-  const InputBoxViewFactory *input_box_view_factory_;
-  const ButtonViewFactory *button_view_factory_;
-  const SliderViewFactory *slider_view_factory_;
-  const TextPromptViewFactory *text_prompt_view_factory_;
-  const WindowViewFactory *window_view_factory_;
+  const InputBoxView *input_box_view_;
+  const ButtonView *button_view_;
+  const SliderView *slider_view_;
+  const TextPromptView *text_prompt_view_;
+  const WindowView *window_view_;
   GuiTextStyle text_style_, button_text_style_;
   float vert_justify_, rec_width_, rec_height_, text_horz_justify_, buttons_horz_justify_,
         left_padding_, top_padding_, right_padding_, bottom_padding_, inner_horz_padding_,
         inner_vert_padding_;
-  DISALLOW_EVIL_CONSTRUCTORS(DefaultDialogViewFactory);
+  DISALLOW_EVIL_CONSTRUCTORS(DefaultDialogView);
 };
 
 // Global frame style
 // ==================
 
 extern GuiTextStyle *gGuiTextStyle;
-extern InputBoxViewFactory *gInputBoxViewFactory;
-extern ArrowViewFactory *gArrowViewFactory;
-extern TextPromptViewFactory *gTextPromptViewFactory;
-extern WindowViewFactory *gWindowViewFactory;
-extern ButtonViewFactory *gButtonViewFactory;
-extern SliderViewFactory *gSliderViewFactory;
-extern MenuViewFactory *gMenuViewFactory;
-extern DialogViewFactory *gDialogViewFactory;
+extern InputBoxView *gInputBoxView;
+extern ArrowView *gArrowView;
+extern TextPromptView *gTextPromptView;
+extern WindowView *gWindowView;
+extern ButtonView *gButtonView;
+extern SliderView *gSliderView;
+extern MenuView *gMenuView;
+extern DialogView *gDialogView;
 
 // Deletes all global frame styles that is initialized.
 void ClearFrameStyle();

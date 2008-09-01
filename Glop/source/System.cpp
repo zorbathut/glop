@@ -1,6 +1,5 @@
 // Includes
 #include "../include/System.h"
-#include "../include/GlopFrameStyle.h"
 #include "../include/GlopWindow.h"
 #include "../include/Image.h"
 #include "../include/Input.h"

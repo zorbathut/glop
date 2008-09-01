@@ -106,7 +106,8 @@ class Os {
   struct KeyEvent {
     // A button is pressed or released (special case of the following event).
     // - timestamp gives the time in milliseconds when this event occurred. Only differences between
-    //   times are ever considered, so 0 can be based anywhere.
+    //   times are ever considered, so 0 can be based anywhere, and it does not need to align with
+    //   System::GetTime().
     // - cursor_x and cursor_y give the mouse position in screen coordinates when this event
     //   occurred.
     // - is_num_lock_set and is_caps_lock_set state whether num lock and caps lock were on when
@@ -150,10 +151,10 @@ class Os {
   // the order in which they occurred. This function will be called exactly once per frame.
   // - Redundant events may be generated. For example, it is okay to repeatedly state that a key
   //   has been pressed while it is held down. These events are never necessary however.
-  // - Derived keys (eg. kKeyLeftShiftjoystick == kDeviceAnyJoystick) should never have events
+  // - Derived keys (eg. kKeyLeftShift or anything with kDeviceAnyJoystick) should never have events
   //   generated for them. That is done in Input.
   // There should always be a dummy event at the end of the event list giving the current input
-  // state.
+  // state (timestamp, cursor pos, num lock & caps lock).
   static vector<KeyEvent> GetInputEvents(OsWindowData *window);
 
   // Warps the mouse cursor to the given screen coordinates (NOT window coordinates).
