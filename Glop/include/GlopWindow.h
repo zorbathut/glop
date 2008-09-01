@@ -11,7 +11,7 @@
 // Includes
 #include "Base.h"
 #include "GlopFrameBase.h"
-#include "LightSet.h"
+#include "List.h"
 using namespace std;
 
 // Class declarations
@@ -39,8 +39,8 @@ struct GlopWindowSettings {
         min_inverse_aspect_ratio; //  width/height and 1/(width/height).
 };
 
-// Globals
-extern GlopWindow *gWindow;
+// Returns the Glop window. Currently there can only be one window.
+GlopWindow *window();
 
 // GlopWindow class definition
 class GlopWindow {
@@ -72,6 +72,16 @@ class GlopWindow {
   // should not be deleted while it remains set as the window icon.
   void SetIcon(const Image *icon);
 
+  // Sets whether rendering to this window should wait for video refresh before rendering. This
+  // caps the max frame rate at the video refresh rate, but it should eliminate on-screen tearing.
+  // This is off by default.
+  void SetVSync(bool is_enabled) {
+    if (is_enabled != is_vsync_requested_) {
+      is_vsync_requested_ = is_enabled;
+      is_vsync_setting_current_ = false;
+    }
+  }
+
   // Window accessors
   // ================
   //
@@ -98,6 +108,9 @@ class GlopWindow {
   // or operating system equivalent).
   bool IsMinimized() const {return is_minimized_;}
 
+  // Returns whether vsync is enabled. See SetVSync.
+  bool IsVSynced() const {return is_vsync_requested_;}
+
   // Returns the current title of the window.
   const string &GetTitle() const {return title_;}
 
@@ -110,34 +123,43 @@ class GlopWindow {
   //
   // See TableauFrame in GlopFrameBase.h
   string GetFrameContextString() const;
-  const GlopFrame *GetFrame(LightSetId id) const;
-  GlopFrame *GetFrame(LightSetId id);
-  LightSetId GetFirstFrameId() const;
-  LightSetId GetNextFrameId(LightSetId id) const;
-  float GetFrameRelX(LightSetId id) const;
-  float GetFrameRelY(LightSetId id) const;
-  int GetFrameDepth(LightSetId id) const;
-  float GetFrameHorzJustify(LightSetId id) const;
-  float GetFrameVertJustify(LightSetId id) const;
+  const GlopFrame *GetFrame(ListId id) const;
+  GlopFrame *GetFrame(ListId id);
+  List<GlopFrame*>::const_iterator frame_begin() const;
+  List<GlopFrame*>::const_iterator frame_end() const;
+  float GetFrameRelX(ListId id) const;
+  float GetFrameRelY(ListId id) const;
+  int GetFrameDepth(ListId id) const;
+  float GetFrameHorzJustify(ListId id) const;
+  float GetFrameVertJustify(ListId id) const;
     
   // Frame mutators
   // ==============
   //
   // See TableauFrame in GlopFrameBase.h
-  LightSetId AddFrame(GlopFrame *frame, float rel_x, float rel_y,
+  ListId AddFrame(GlopFrame *frame, float rel_x, float rel_y,
                       float horz_justify, float vert_justify, int depth = 0);
-  LightSetId AddFrame(GlopFrame *frame, int depth = 0) {
+  ListId AddFrame(GlopFrame *frame, int depth = 0) {
     return AddFrame(frame, 0.5f, 0.5f, kJustifyCenter, kJustifyCenter, depth);
   }
-  void MoveFrame(LightSetId id, int depth);
-  void MoveFrame(LightSetId id, float rel_x, float rel_y);
-  void MoveFrame(LightSetId id, float rel_x, float rel_y, int depth);
-  void SetFrameJustify(LightSetId id, float horz_justify, float vert_justify);
-  GlopFrame *RemoveFrameNoDelete(LightSetId id);
-  void RemoveFrame(LightSetId id);
+  void MoveFrame(ListId id, int depth);
+  void MoveFrame(ListId id, float rel_x, float rel_y);
+  void MoveFrame(ListId id, float rel_x, float rel_y, int depth);
+  void SetFrameJustify(ListId id, float horz_justify, float vert_justify);
+  GlopFrame *RemoveFrameNoDelete(ListId id);
+  void RemoveFrame(ListId id);
   void ClearFrames();
-  
+
+  // Changes the tab order of a FocusFrame. By default, the tab order is given by the order in which
+  // FocusFrames are added to the GlopWindow. This is deterministic but potentially hard to control
+  // when a GlopFrame and all its descendants are added together. These functions can be used to
+  // correct any undesirable orderings caused from this.
+  void SetFocusPredecessor(FocusFrame *base, FocusFrame *successor);
+  void SetFocusSuccessor(FocusFrame *base, FocusFrame *successor);
+
   // See GlopFrameBase.h
+  const FocusFrame *GetFocusFrame() const {return focus_stack_[focus_stack_.size()-1];}
+  FocusFrame *GetFocusFrame() {return focus_stack_[focus_stack_.size()-1];}
   void PushFocus();
   void PopFocus();
 
@@ -146,35 +168,45 @@ class GlopWindow {
   friend class System;
   GlopWindow();
   ~GlopWindow();
-  void Think(int dt);
+  int Think(int dt);
  
   // Interface to GlopFrame
   friend class GlopFrame;
-  void UnregisterAllPings(GlopFrame *frame);
-  void RegisterPing(GlopFrame::Ping *ping);
-  void PropogatePing(GlopFrame::Ping *ping);
+  static void UnregisterAllPings(GlopFrame *frame);
+  static void RegisterPing(GlopFrame::Ping *ping);
+  static void PropogatePing(GlopFrame::Ping *ping);
 
   // Interface to Input
   friend class Input;
-  void OnKeyEvent(const KeyEvent &event, int dt);
+  void OnKeyEvents(const vector<KeyEvent> &events, int dt);
 
   // Resizing
   void ChooseValidSize(int width, int height, int *new_width, int *new_height);
 
-  // Focus utilities - see GlopFrameBase.h
+  // Focus utilities to be used by FocusFrame - see GlopFrameBase.h
   friend class FocusFrame;
   int RegisterFocusFrame(FocusFrame *frame);
-  void UnregisterFocusFrame(int layer, FocusFrame *frame);
-  void DemandFocus(int layer, FocusFrame *frame, bool update_is_gaining_focus);
+  void UnregisterFocusFrame(FocusFrame *frame);
+  void DemandFocus(FocusFrame *frame, bool ping);
+
+  // Focus internal utilities
+  void UpdateFramesInFocus();
+  void UpdateFramesInFocus(FocusFrame *old_frame, FocusFrame *frame, bool ping);
+  FocusFrame *ChooseFocus(FocusFrame *old_focus, const vector<FocusFrame*> &options);
+  FocusFrame *GetNextPossibleFocusFrame(FocusFrame *frame);
+  FocusFrame *GetPrevPossibleFocusFrame(FocusFrame *frame);
+  bool SendKeyEventsToFrame(FocusFrame *frame, const vector<KeyEvent> &events, int dt,
+                            bool gained_focus);
   
   // Configuration data
-  OsWindowData *os_data_;        // OS handle on this window - needed for all OS calls
+  OsWindowData *os_data_;           // OS handle on this window - needed for all OS calls
   bool is_created_;
   int width_, height_;
   bool is_full_screen_;
   GlopWindowSettings settings_;
   string title_;
   const Image *icon_;
+  bool is_vsync_requested_, is_vsync_setting_current_;
 
   // Additional tracked data
   bool is_in_focus_, is_minimized_; // See window accessors above
@@ -184,10 +216,8 @@ class GlopWindow {
                                     //  Values of -1 indicate no value has ever been recorded.
 
   // Content data
-  enum TabDirection {Forward, Backward, None};
-  TabDirection tab_direction_;  // Used to prevent too-rapid switching between tab & shift+tab
   bool is_resolving_ping_;
-  LightSet<GlopFrame::Ping*> ping_list_;
+  static List<GlopFrame::Ping*> ping_list_;
   vector<FocusFrame*> focus_stack_;
   TableauFrame *frame_;
   Input *input_;

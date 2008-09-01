@@ -21,6 +21,15 @@ void CameraFrame::Project(const Point3 &val, int *x, int *y) const {
   *y = int(GetY2() - GetHeight() * (local[1] / height + 1)/2);
 }
 
+Point3 CameraFrame::Unproject(int x, int y, float depth) const {
+  float x_frac = float(x - GetX()) / GetWidth();
+  float y_frac = float(y - GetY()) / GetHeight();
+  float height = float(tan(GetCamera().GetFieldOfView() * kPi / 360) * 2 * depth);
+	float width = height * float(GetWidth()) / GetHeight();
+  Point3 local((x_frac - 0.5f) * width, (0.5f - y_frac) * width, depth);
+  return camera_.LocalToGlobal(local);
+}
+
 void CameraFrame::LookAt(const Point3 &top_left, const Point3 &top_right,
                          const Point3 &bottom_left, float field_of_view) {
   camera_.SetFieldOfView(field_of_view);
@@ -50,19 +59,25 @@ void CameraFrame::Render() const {
     glGetIntegerv(GL_SCISSOR_BOX, old_scissor_test);
   else
     glEnable(GL_SCISSOR_TEST);
-  glScissor(cx1, gWindow->GetHeight() - 1 - cy2, cx2 - cx1 + 1, cy2 - cy1 + 1);
+  glScissor(cx1, window()->GetHeight() - 1 - cy2, cx2 - cx1 + 1, cy2 - cy1 + 1);
 
-  // Draw a fog background
+  // Draw the background - we can't just draw it in the fog color because, on some machines, the
+  // fog will not actually fade things out to precisely the fog color. Instead, we render the
+  // background in any color, but far into the fog.
   if (is_fog_enabled_) {
-    GlUtils2d::FillRectangle(GetX(), GetY(), GetX2(), GetY2(), fog_color_);
-    GlUtils::SetColor(kWhite);
+    glEnable(GL_FOG);
+    glFogfv(GL_FOG_COLOR, fog_color_.GetData());
+		glFogf(GL_FOG_START, -1);
+		glFogf(GL_FOG_END, 0);
+		glFogi(GL_FOG_MODE, GL_LINEAR);
   }
+  GlUtils2d::FillRectangle(GetX(), GetY(), GetX2(), GetY2(), kBlack);
 
   // Activate the camera
 	glMatrixMode(GL_PROJECTION);
 	glPushMatrix();
 	glLoadIdentity();
-  glViewport(GetX(), gWindow->GetHeight() - GetY() - GetHeight(), GetWidth(), GetHeight());
+  glViewport(GetX(), window()->GetHeight() - GetY() - GetHeight(), GetWidth(), GetHeight());
   float near_height = float(tan(GetCamera().GetFieldOfView() * kPi / 360 ) *
                             GetCamera().GetNearPlane());
 	float near_width = near_height * float(GetWidth()) / GetHeight();
@@ -92,17 +107,18 @@ void CameraFrame::Render() const {
 	glEnable(GL_DEPTH_TEST);
 	glClear(GL_DEPTH_BUFFER_BIT);
 
-  // Activate fog if that is enabled
+  // Activate fog if it is enabled. Note some of this was done above while drawing the background.
 	if (is_fog_enabled_) {
-    glFogfv(GL_FOG_COLOR, fog_color_.GetData());
 		glFogf(GL_FOG_START, fog_start_);
 		glFogf(GL_FOG_END, fog_end_);
-		glFogi(GL_FOG_MODE, GL_LINEAR);
-		glEnable(GL_FOG);
 	}
 
   // Render the scene
   Render3d();
+
+  // Deactivate fog
+  if (is_fog_enabled_)
+    glDisable(GL_FOG);
 
   // Reset everything
 	glMatrixMode(GL_PROJECTION);
@@ -111,7 +127,7 @@ void CameraFrame::Render() const {
 	glPopMatrix();
 	glDepthMask(false);
 	glDisable(GL_DEPTH_TEST);
-	glViewport(0, 0, gWindow->GetWidth(), gWindow->GetHeight());   
+	glViewport(0, 0, window()->GetWidth(), window()->GetHeight());   
   if (old_clipping_enabled)
     glScissor(old_scissor_test[0], old_scissor_test[1], old_scissor_test[2], old_scissor_test[3]);
   else

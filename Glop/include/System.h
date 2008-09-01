@@ -1,10 +1,9 @@
-#ifndef SYSTEM_H__
-#define SYSTEM_H__
+#ifndef GLOP_SYSTEM_H__
+#define GLOP_SYSTEM_H__
 
 // Includes
 #include "Base.h"
 #include "BinaryFileManager.h"
-#include "LightSet.h"
 #include <vector>
 
 // Class declarations
@@ -14,12 +13,12 @@ class Image;
 class System;
 
 // Globals
-extern System *gSystem;
+System *system();
 
 // System class definition
 class System {
  public:
-  // Startup. Creates gSystem and does all setup we want. ShutDown is done automatically.
+  // Startup. Creates system() and does all setup we want. ShutDown is done automatically.
   static void Init();
 
   // Internal logic - Think must be called exactly once per frame. It returns the number of
@@ -41,19 +40,11 @@ class System {
   // During this time, it will cause 0 load on the CPU. If no time is supplied for Sleep, it
   // sleeps for a fraction of the desired frame speed.
   void Sleep(int t);
-  void Sleep() {
-    Sleep(max_fps_ == 0? 0 : (250 / max_fps_));
-  }
+  void Sleep() {Sleep(0);}
 
   // Returns the current frame rate for the program. This is a running average from data over a
   // fixed time interval.
   float GetFps() {return fps_;}
-
-  // Gets/sets the maximum frame rate for the program. If this is 0, then no artificial frame rate
-  // will be set. Otherwise System::Think will automatically sleep to ensure the frame rate does
-  // not exceed this value.
-  int GetMaxFps() {return max_fps_;}
-  void SetMaxFps(int fps) {max_fps_ = fps;}
 
   // Windowing
   // =========
@@ -63,19 +54,20 @@ class System {
   // set to restrict the list to only contain resolutions with at least a certain size.
   vector<pair<int, int> > GetFullScreenModes(int min_width = 640, int min_height = 480);
 
-  // Returns the main window for this Glop program. This can also be gotten via the gWindow global
-  // variable (see GlopWindow.h).
+  // Returns the main window for this Glop program. This can also be gotten via the window() global
+  // function (see GlopWindow.h).
   GlopWindow *window() {return window_;}
   
  private:
   System();
-  static void ShutDown() {delete gSystem;}
+  static void ShutDown() {delete system();}
   ~System();
   
   // General data
   GlopWindow *window_;
-  int max_fps_;
   int frame_count_;
+  int refresh_rate_query_delay_, refresh_rate_;
+  int vsync_time_;             // Time spent waiting for vsync last frame
   int start_time_, old_time_;  // Os::Time as of program start and as of the last call to Think
   void *free_type_library_;    // Internal handle to the FreeType library, used for text
 

@@ -48,8 +48,8 @@ void __Log(const char *filename, int line, const string &message) {
   gLoggingStarted = true;
 
   // Output the log message
-  int frame_count = gSystem->GetFrameCount();
-  int ticks = gSystem->GetTime();
+  int frame_count = system()->GetFrameCount();
+  int ticks = system()->GetTime();
   int index = (int)strlen(filename);
   const char *temp_filename = filename + strlen(filename) - 1;
   while (index > 0 && filename[index-1] != '/' && filename[index-1] != '\\')
@@ -92,7 +92,6 @@ void FatalError(const string &error) {
 // Handles a failed assertion. It returns an integer so that the ASSERT macro can be done with a ?:
 // operator and thus require a semi-colon.
 int __AssertionFailure(const char *filename, int line, const char *expression) {
-
   FatalError(Format("Assertion failed on line #%d of file %s:\n\n%s.",
                     line, filename, expression));
   return 1;

@@ -12,6 +12,7 @@
 #include <set>
 #include <vector>
 #include <windows.h>
+#include <gl/gl.h>
 using namespace std;
 
 // Do not show the console window for a console application running in release mode
@@ -139,7 +140,7 @@ class InputPollingThread: public Thread {
 	  GetCursorPos(&cursor_pos);
     bool is_num_lock_set = (GetKeyState(VK_NUMLOCK) & 1) > 0;
     bool is_caps_lock_set = (GetKeyState(VK_CAPITAL) & 1) > 0;
-    result.push_back(Os::KeyEvent(gSystem->GetTime(), cursor_pos.x, cursor_pos.y, is_num_lock_set,
+    result.push_back(Os::KeyEvent(system()->GetTime(), cursor_pos.x, cursor_pos.y, is_num_lock_set,
                                   is_caps_lock_set));
     return result;
   }
@@ -149,7 +150,7 @@ class InputPollingThread: public Thread {
   void Run() {
     while (!IsStopRequested()) {
       window_->input_mutex.Acquire();
-      int timestamp = gSystem->GetTime();
+      int timestamp = system()->GetTime();
 
       // Read metastate
  	    POINT cursor_pos;
@@ -827,12 +828,12 @@ void Os::DisplayMessage(const string &title, const string &message) {
 
 vector<pair<int, int> > Os::GetFullScreenModes() {
   set<pair<int,int> > result;  // EnumDisplaySettings could return duplicates
-  DEVMODE devMode;
-  devMode.dmSize = sizeof(devMode);
-  devMode.dmDriverExtra = 0;
-  for (int i = 0; EnumDisplaySettings(0, DWORD(i), &devMode); i++)
-  if (devMode.dmBitsPerPel == kBpp)
-    result.insert(make_pair(devMode.dmPelsWidth, devMode.dmPelsHeight));
+  DEVMODE dev_mode;
+  dev_mode.dmSize = sizeof(dev_mode);
+  dev_mode.dmDriverExtra = 0;
+  for (int i = 0; EnumDisplaySettings(0, DWORD(i), &dev_mode); i++)
+  if (dev_mode.dmBitsPerPel == kBpp)
+    result.insert(make_pair(dev_mode.dmPelsWidth, dev_mode.dmPelsHeight));
   return vector<pair<int,int> >(result.begin(), result.end());
 }
 
@@ -844,6 +845,33 @@ int Os::GetTime() {
   LARGE_INTEGER current_time;  // A 64-bit integer (accessible via ::QuadPart)
   QueryPerformanceCounter(&current_time);
   return int((1000 * current_time.QuadPart) / gTimerFrequency.QuadPart);
+}
+
+int Os::GetRefreshRate() {
+  DEVMODE dev_mode;
+  dev_mode.dmSize = sizeof(dev_mode);
+  dev_mode.dmDriverExtra = 0;
+  EnumDisplaySettings(0, ENUM_CURRENT_SETTINGS, &dev_mode);
+  return dev_mode.dmDisplayFrequency;
+}
+
+typedef BOOL (APIENTRY *WGLSwapProc)( int );
+void Os::EnableVSync(bool is_enabled) {
+  static bool sLookedForExtension = false;
+  static WGLSwapProc sSwapProc = 0;
+
+  // Make sure the necessary OpenGL extension exists
+  if (!sLookedForExtension) {
+    const char *extensions = (const char*)glGetString(GL_EXTENSIONS);
+    if (strstr(extensions, "WGL_EXT_swap_control") != 0)
+      sSwapProc = (WGLSwapProc)wglGetProcAddress("wglSwapIntervalEXT");
+    sLookedForExtension = true;
+  }
+  if (sSwapProc == 0)
+    return;
+
+  // Set the vsync mode
+  sSwapProc(is_enabled? 1 : 0);
 }
 
 void Os::SwapBuffers(OsWindowData *window) {

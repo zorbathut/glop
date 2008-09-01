@@ -5,9 +5,9 @@
 
 // Globals
 void *FreeTypeLibrary::library_ = 0;
-LightSet<Texture*> GlDataManager::textures_;
-LightSet<DisplayList*> GlDataManager::display_lists_;
-LightSet<DisplayLists*> GlDataManager::multi_display_lists_;
+List<Texture*> GlDataManager::textures_;
+List<DisplayList*> GlDataManager::display_lists_;
+List<DisplayLists*> GlDataManager::multi_display_lists_;
 
 // FreeTypeLibrary
 // ===============
@@ -28,16 +28,16 @@ void FreeTypeLibrary::ShutDown() {
 // =============
 
 void GlDataManager::GlInitAll() {
-  for (LightSetId id = textures_.GetFirstId(); id != 0; id = textures_.GetNextId(id))
-    textures_[id]->GlInit();
+  for (List<Texture*>::iterator it = textures_.begin(); it != textures_.end(); ++it)
+    (*it)->GlInit();
 }
 
 void GlDataManager::GlShutDownAll() {
-  for (LightSetId id = textures_.GetFirstId(); id != 0; id = textures_.GetNextId(id))
-    textures_[id]->GlShutDown();
-  for (LightSetId id = display_lists_.GetFirstId(); id != 0; id = display_lists_.GetNextId(id))
-    display_lists_[id]->Clear();
-  for (LightSetId id = multi_display_lists_.GetFirstId(); id != 0;
-        id = multi_display_lists_.GetNextId(id))
-    multi_display_lists_[id]->Clear();
+  for (List<Texture*>::iterator it = textures_.begin(); it != textures_.end(); ++it)
+    (*it)->GlShutDown();
+  for (List<DisplayList*>::iterator it = display_lists_.begin(); it != display_lists_.end(); ++it)
+    (*it)->Clear();
+  for (List<DisplayLists*>::iterator it = multi_display_lists_.begin();
+       it != multi_display_lists_.end(); ++it)
+    (*it)->Clear();
 }

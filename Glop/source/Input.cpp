@@ -32,7 +32,7 @@ const char *const kKeyNames[] = {
   0, 0, 0, 0, 0,
   0, "[", "\\", "]", 0,
   0, "`", "A", "B", "C",
-  "D", "E", "F", "G", "H",                                                            // 100
+  "D", "E", "F", "G", "H",                                                  // 100
   "I", "J", "K", "L", "M",
   "N", "O", "P", "Q", "R",
   "S", "T", "U", "V", "W",
@@ -118,12 +118,11 @@ const unsigned char kShiftedAsciiValues[] = {
 
 // Globals
 vector<string> Input::derived_key_names_;
-vector<vector<vector<GlopKey> > > Input::derived_key_bindings_;
-vector<vector<vector<bool> > > Input::derived_key_bindings_down_;
+vector<vector<Input::DerivedKeyBinding> > Input::derived_key_bindings_;
 
 // Static accessor convenience method
 Input *input() {
-  return gSystem->window()->input();
+  return system()->window()->input();
 }
 
 // GlopKey
@@ -261,116 +260,59 @@ int GlopKey::GetJoystickButtonNumber() const {
 
 void KeyListener::BeginKeyListening() {
   if (listener_id_ == 0)
-    listener_id_ = input()->key_listeners_.InsertItem(this);
+    listener_id_ = input()->key_listeners_.push_back(this);
 }
 
 void KeyListener::StopKeyListening() {
   if (listener_id_ != 0) {
-    input()->key_listeners_.RemoveItem(listener_id_);
+    input()->key_listeners_.erase(listener_id_);
     listener_id_ = 0;
   }
 }
 
-// KeyTracker
-// ==========
+// KeyState
+// ========
 
-Input::KeyTracker::KeyTracker(int release_delay)
+Input::KeyState::KeyState()
 : press_amount_now_(0), press_amount_frame_(0),
   is_down_now_(false), is_down_frame_(false),
-  total_frame_time_(0), 
-  release_delay_left_(0), release_delay_(release_delay),
-  double_press_time_left_(0),
-  repeat_delay_left_(0),
+  total_frame_time_(0),  double_press_time_left_(0),
   was_pressed_(false), was_pressed_no_repeats_(false), was_released_(false) {}
 
-KeyEvent::Type Input::KeyTracker::SetPressAmount(float amount) {
-  press_amount_now_ = amount;
-
-  // Handle presses
-  if (amount > 0) {
-    press_amount_virtual_ = amount;
-    release_delay_left_ = release_delay_;
-    if (!is_down_now_) {
-      is_down_now_ = true;
-      is_down_frame_ = true;
-      was_pressed_ = true;
-      was_pressed_no_repeats_ = true;
-      repeat_delay_left_ = kRepeatDelay;
-      if (double_press_time_left_ > 0) {
-        double_press_time_left_ = 0;
-        return KeyEvent::DoublePress;
-      } else {
-        double_press_time_left_ = kDoublePressThreshold;
-        return KeyEvent::Press;
-      }
-    }
-  }
-
-  // Handle releases
-  else if (is_down_now_ && release_delay_ == 0) {
-    press_amount_virtual_ = 0;
-    is_down_now_ = false;
-    was_released_ = true;
-    return KeyEvent::Release;
-  } else if (is_down_now_ && !keep_press_amount_on_release_delay_) {
-    press_amount_virtual_ = 0;
-  }
-  return KeyEvent::Nothing;
-}
-
-KeyEvent::Type Input::KeyTracker::Clear() {
-  press_amount_now_ = 0;
-  if (is_down_now_) {
-    is_down_now_ = false;
-    was_released_ = true;
-    return KeyEvent::Release;
-  }
-  return KeyEvent::Nothing;
-}
-
-KeyEvent::Type Input::KeyTracker::OnKeyEventDt(int dt) {
-  if (dt == 0)
+KeyEvent::Type Input::KeyState::SetIsDown(bool is_down) {
+  bool changed_state = (is_down != is_down_now_);
+  is_down_now_ = is_down;
+  is_down_frame_ |= is_down;
+  if (!changed_state)
     return KeyEvent::Nothing;
+  if (is_down) {
+    was_pressed_ = was_pressed_no_repeats_ = true;
+    if (double_press_time_left_ > 0) {
+      double_press_time_left_ = 0;
+      return KeyEvent::DoublePress;
+    } else {
+      double_press_time_left_ = kDoublePressThreshold;
+      return KeyEvent::Press;
+    }
+  } else {
+    was_released_ = true;
+    return KeyEvent::Release;
+  }
+}
 
-  // Update frame info
-  is_down_frame_ |= is_down_now_;
-  press_amount_frame_ = (press_amount_frame_ * total_frame_time_ + press_amount_virtual_ * dt) /
+void Input::KeyState::OnKeyEventDt(int dt) {
+  press_amount_frame_ = (press_amount_frame_ * total_frame_time_ + press_amount_now_ * dt) /
                         (total_frame_time_ + dt);
   total_frame_time_ += dt;
-
-  if (is_down_now_) {
-    // Handle releases
-    if (press_amount_now_ == 0) {
-      release_delay_left_ -= dt;
-      if (release_delay_left_ <= 0) {
-        press_amount_virtual_ = 0;
-        is_down_now_ = false;
-        was_released_ = true;
-        return KeyEvent::Release;
-      }
-    }
-
-    // Handle repeat events
-    else {
-      repeat_delay_left_ -=  dt;
-      if (repeat_delay_left_ <= 0) {
-        was_pressed_ = true;
-        repeat_delay_left_ += kRepeatRate;
-        return KeyEvent::RepeatPress;
-      }
-    }
-  }
-  if (double_press_time_left_ > 0) {
+  if (double_press_time_left_ > 0)
     double_press_time_left_ -= dt;
-  }
-  return KeyEvent::Nothing;
 }
 
-void Input::KeyTracker::Think() {
+void Input::KeyState::Think() {
   press_amount_frame_ = press_amount_now_;
   total_frame_time_ = 0;
   is_down_frame_ = is_down_now_;
-  was_pressed_ =  was_pressed_no_repeats_ = was_released_ = false;
+  was_pressed_ = was_pressed_no_repeats_ = was_released_ = false;
 }
 
 // Input status
@@ -410,8 +352,10 @@ const GlopKey &Input::GetKeyPress(bool accept_clicks, bool accept_modifiers, boo
 
 const GlopKey &Input::WaitForKeyPress(bool accept_clicks, bool accept_modifiers,
                                       bool accept_motion) {
+  // Note that we need to think before checking for key presses. This ensures we don't exit
+  // immediately if a key was already pressed this frame.
   while (1) {
-    gSystem->Think();
+    system()->Think();
     const GlopKey &key = GetKeyPress(accept_clicks, accept_modifiers, accept_motion);
     if (key != kNoKey)
       return key;
@@ -423,16 +367,22 @@ void Input::ConfigureGuiKeys(bool keyboard_bindings, bool mouse_bindings, bool j
     UnbindDerivedKey(GlopKey(i, kDeviceDerived));
   if (keyboard_bindings) {
     BindDerivedKey(kGuiKeyPageUp, kKeyPageUp);
+    BindDerivedKey(kGuiKeyPageUp, kKeyPad9);
     BindDerivedKey(kGuiKeyPageDown, kKeyPageDown);
+    BindDerivedKey(kGuiKeyPageDown, kKeyPad3);
     BindDerivedKey(kGuiKeyUp, kKeyUp);
+    BindDerivedKey(kGuiKeyUp, kKeyPad8);
     BindDerivedKey(kGuiKeyRight, kKeyRight);
+    BindDerivedKey(kGuiKeyRight, kKeyPad6);
     BindDerivedKey(kGuiKeyDown, kKeyDown);
+    BindDerivedKey(kGuiKeyDown, kKeyPad2);
     BindDerivedKey(kGuiKeyLeft, kKeyLeft);
+    BindDerivedKey(kGuiKeyLeft, kKeyPad4);
     BindDerivedKey(kGuiKeyConfirm, kKeyEnter);
     BindDerivedKey(kGuiKeyConfirm, kKeyPadEnter);
     BindDerivedKey(kGuiKeyCancel, kKeyEscape);
-    BindDerivedKey(kGuiKeySelectPrev, kKeyTab, kKeyEitherShift, kKeyEitherAlt, true, true, false);
-    BindDerivedKey(kGuiKeySelectNext, kKeyTab, kKeyEitherShift, kKeyEitherAlt, true, false, false);
+    BindDerivedKey(kGuiKeySelectPrev, kKeyTab, kKeyEitherShift, kKeyEitherAlt, true, false);
+    BindDerivedKey(kGuiKeySelectNext, kKeyTab, kKeyEitherShift, kKeyEitherAlt, false, false);
   }
   if (mouse_bindings) {
     BindDerivedKey(kGuiKeyScrollUp, kMouseWheelUp);
@@ -459,8 +409,7 @@ void Input::ConfigureGuiKeys(bool keyboard_bindings, bool mouse_bindings, bool j
 
 GlopKey Input::AllocateDerivedKey(const string &key_name) {
   derived_key_names_.push_back(key_name);
-  derived_key_bindings_.push_back(vector<vector<GlopKey> >(0));
-  derived_key_bindings_down_.push_back(vector<vector<bool> >(0));
+  derived_key_bindings_.push_back(vector<DerivedKeyBinding>(0));
   return GlopKey(GetNumDerivedKeys() - 1, kDeviceDerived);
 }
 
@@ -469,55 +418,116 @@ void Input::UnbindDerivedKey(const GlopKey &derived_key) {
   ASSERT(derived_key.device == kDeviceDerived);
   ASSERT(index >= kNumFixedDerivedKeys && index < GetNumDerivedKeys());
   derived_key_bindings_[index].clear();
-  derived_key_bindings_down_[index].clear();
 }
 
-void Input::BindDerivedKey(const GlopKey &derived_key, const GlopKey &binding, bool down) {
-  Input::BindDerivedKey(derived_key, vector<GlopKey>(1, binding), vector<bool>(1, down));
+void Input::BindDerivedKey(const GlopKey &derived_key, const GlopKey &key) {
+  Input::BindDerivedKey(derived_key, key, vector<GlopKey>(0), vector<bool>(0));
 }
 
-void Input::BindDerivedKey(const GlopKey &derived_key, const GlopKey &binding1,
-                           const GlopKey &binding2, bool down1, bool down2) {
-  vector<GlopKey> binding;
-  binding.push_back(binding1);
-  binding.push_back(binding2);
+void Input::BindDerivedKey(const GlopKey &derived_key, const GlopKey &key,
+                           const GlopKey &modifier, bool down) {
+  BindDerivedKey(derived_key, key, vector<GlopKey>(1, modifier), vector<bool>(1, down));
+}
+
+void Input::BindDerivedKey(const GlopKey &derived_key, const GlopKey &key, const GlopKey &modifier1,
+                           const GlopKey &modifier2, bool down1, bool down2) {
+  vector<GlopKey> modifiers;
+  modifiers.push_back(modifier1);
+  modifiers.push_back(modifier2);
   vector<bool> down;
   down.push_back(down1);
   down.push_back(down2);
-  BindDerivedKey(derived_key, binding, down);
+  BindDerivedKey(derived_key, key, modifiers, down);
 }
 
-void Input::BindDerivedKey(const GlopKey &derived_key, const GlopKey &binding1,
-                           const GlopKey &binding2, const GlopKey &binding3, bool down1, bool down2,
-                           bool down3) {
-  vector<GlopKey> binding;
-  binding.push_back(binding1);
-  binding.push_back(binding2);
-  binding.push_back(binding3);
-  vector<bool> down;
-  down.push_back(down1);
-  down.push_back(down2);
-  down.push_back(down3);
-  BindDerivedKey(derived_key, binding, down);
-}
-
-void Input::BindDerivedKey(const GlopKey &derived_key, const vector<GlopKey> &binding,
-                           const vector<bool> &down) {
+void Input::BindDerivedKey(const GlopKey &derived_key, const GlopKey &key,
+                           const vector<GlopKey> &modifiers, const vector<bool> &down) {
   int index = derived_key.index;
   ASSERT(derived_key.device == kDeviceDerived);
   ASSERT(index >= kNumFixedDerivedKeys && index < GetNumDerivedKeys());
-  ASSERT(binding.size() == down.size());
-  for (int i = 0; i < (int)binding.size(); i++)
-    ASSERT(binding[i].device != kDeviceDerived || binding[i].index < index);
-  derived_key_bindings_[index].push_back(binding);
-  derived_key_bindings_down_[index].push_back(down);
+  ASSERT(modifiers.size() == down.size());
+  for (int i = 0; i < (int)modifiers.size(); i++)
+    ASSERT(modifiers[i].device != kDeviceDerived || modifiers[i].index < index);
+  derived_key_bindings_[index].push_back(DerivedKeyBinding(key, modifiers, down));
 }
 
 void Input::ClearDerivedKeys() {
   derived_key_names_.resize(kNumBasicDerivedKeys);
   derived_key_bindings_.resize(kNumBasicDerivedKeys);
-  derived_key_bindings_down_.resize(kNumBasicDerivedKeys);
 }
+
+// KeyTracker
+// ==========
+
+Input::KeyTracker::KeyTracker()
+: requested_press_amount_(0), release_delay_left_(0), release_delay_(0), repeat_delay_left_(0) {}
+
+KeyEvent::Type Input::KeyTracker::SetPressAmount(float amount) {
+  requested_press_amount_ = amount;
+
+  // Handle presses
+  if (amount > 0) {
+    state_.SetPressAmount(amount);
+    release_delay_left_ = release_delay_;
+    if (!state_.IsDownNow()) {
+      repeat_delay_left_ = kRepeatDelay;
+      return state_.SetIsDown(true);
+    }
+
+    // For the mouse wheel, we hold the press amount down for a period of time to make it function
+    // similar to other keys for smooth movement. However, tracking presses is done much better by
+    // just sending events directly from the Os.
+    if (mouse_wheel_hack_)
+      return KeyEvent::RepeatPress;
+  }
+
+  // Handle releases
+  else if (state_.IsDownNow()) {
+    if (release_delay_ == 0) {
+      state_.SetPressAmount(0);
+      return state_.SetIsDown(false);
+    } else if (!mouse_wheel_hack_) {
+      state_.SetPressAmount(0);
+    }
+  }
+  return KeyEvent::Nothing;
+}
+
+KeyEvent::Type Input::KeyTracker::Clear() {
+  state_.SetPressAmount(0);
+  return state_.SetIsDown(false);
+}
+
+KeyEvent::Type Input::KeyTracker::OnKeyEventDt(int dt) {
+  if (dt == 0)
+    return KeyEvent::Nothing;
+  state_.OnKeyEventDt(dt);
+
+  if (state_.IsDownNow()) {
+    // Handle releases
+    if (requested_press_amount_ == 0) {
+      release_delay_left_ -= dt;
+      if (release_delay_left_ <= 0) {
+        state_.SetPressAmount(0);
+        return state_.SetIsDown(false);
+      }
+    }
+
+    // Handle repeat events
+    if (state_.IsDownNow() && !mouse_wheel_hack_) {
+      repeat_delay_left_ -= dt;
+      if (repeat_delay_left_ <= 0) {
+        state_.OnKeyEventRepeatPress();
+        repeat_delay_left_ += kRepeatRate;
+        return KeyEvent::RepeatPress;
+      }
+    }
+  }
+  return KeyEvent::Nothing;
+}
+
+// Private member functions
+// ========================
 
 void Input::InitDerivedKeys() {
  // Allocate the derived keys
@@ -545,18 +555,12 @@ void Input::InitDerivedKeys() {
   ASSERT(kGuiKeySelectPrev.index == kNumBasicDerivedKeys - 1);
 
   // Bind the derived keys
-  derived_key_bindings_[kKeyEitherShift.index].push_back(vector<GlopKey>(1, kKeyLeftShift));
-  derived_key_bindings_[kKeyEitherShift.index].push_back(vector<GlopKey>(1, kKeyRightShift));
-  derived_key_bindings_[kKeyEitherControl.index].push_back(vector<GlopKey>(1, kKeyLeftControl));
-  derived_key_bindings_[kKeyEitherControl.index].push_back(vector<GlopKey>(1, kKeyRightControl));
-  derived_key_bindings_[kKeyEitherAlt.index].push_back(vector<GlopKey>(1, kKeyLeftAlt));
-  derived_key_bindings_[kKeyEitherAlt.index].push_back(vector<GlopKey>(1, kKeyRightAlt));
-  derived_key_bindings_down_[kKeyEitherShift.index] =
-    vector<vector<bool> >(2, vector<bool>(1, true));
-  derived_key_bindings_down_[kKeyEitherControl.index] =
-    vector<vector<bool> >(2, vector<bool>(1, true));
-  derived_key_bindings_down_[kKeyEitherAlt.index] =
-    vector<vector<bool> >(2, vector<bool>(1, true));
+  derived_key_bindings_[kKeyEitherShift.index].push_back(DerivedKeyBinding(kKeyLeftShift));
+  derived_key_bindings_[kKeyEitherShift.index].push_back(DerivedKeyBinding(kKeyRightShift));
+  derived_key_bindings_[kKeyEitherControl.index].push_back(DerivedKeyBinding(kKeyLeftControl));
+  derived_key_bindings_[kKeyEitherControl.index].push_back(DerivedKeyBinding(kKeyRightControl));
+  derived_key_bindings_[kKeyEitherAlt.index].push_back(DerivedKeyBinding(kKeyLeftAlt));
+  derived_key_bindings_[kKeyEitherAlt.index].push_back(DerivedKeyBinding(kKeyRightAlt));
   ConfigureGuiKeys(true, true, false);
 }
 
@@ -572,12 +576,12 @@ Input::Input(GlopWindow *window)
   num_joysticks_(0),
   joystick_refresh_time_(kJoystickRefreshDelay),
   requested_joystick_refresh_(true) {
-  GetKeyTracker(kMouseUp)->SetReleaseDelay(100, false);
-  GetKeyTracker(kMouseRight)->SetReleaseDelay(100, false);
-  GetKeyTracker(kMouseDown)->SetReleaseDelay(100, false);
-  GetKeyTracker(kMouseLeft)->SetReleaseDelay(100, false);
-  GetKeyTracker(kMouseWheelUp)->SetReleaseDelay(150, true);
-  GetKeyTracker(kMouseWheelDown)->SetReleaseDelay(150, true);
+  GetNonDerivedKeyTracker(kMouseUp)->SetReleaseDelay(100, false);
+  GetNonDerivedKeyTracker(kMouseRight)->SetReleaseDelay(100, false);
+  GetNonDerivedKeyTracker(kMouseDown)->SetReleaseDelay(100, false);
+  GetNonDerivedKeyTracker(kMouseLeft)->SetReleaseDelay(100, false);
+  GetNonDerivedKeyTracker(kMouseWheelUp)->SetReleaseDelay(150, true);
+  GetNonDerivedKeyTracker(kMouseWheelDown)->SetReleaseDelay(150, true);
 }
 
 // Performs all per-frame logic for the input manager. lost_focus indicates whether the owning
@@ -585,12 +589,20 @@ Input::Input(GlopWindow *window)
 // to forget all key down information because it may no longer be current.
 void Input::Think(bool lost_focus, int frame_dt) {
   // Update all editable derived keys - this is useful in the case that the user has changed their
-  // definitions since the last frame.
-  derived_key_trackers_.resize(GetNumDerivedKeys());
-  for (int i = 0; i < GetNumDerivedKeys(); i++)
-    UpdateDerivedKey(GlopKey(i, kDeviceDerived));
+  // definitions since the last frame. We do it here rather than at key-binding time since the data
+  // here is naturally tied to a single window, but key binding is naturally static across all
+  // windows.
+  derived_key_states_.resize(GetNumDerivedKeys());
+  for (int i = 0; i < GetNumDerivedKeys(); i++) {
+    GlopKey key(i, kDeviceDerived);
+    vector<KeyEvent> key_events;
+    UpdateDerivedKeyState(key, &key_events);
+    if (key_events.size() > 0)
+      OnKeyEvents(key_events, 0);
+  }
 
-  // Update mouse and joystick status
+  // Update mouse and joystick status. If the number of joysticks changes, we do a full reset of all
+  // input data.
   UpdateOsCursorVisibility();
   if (joystick_refresh_time_ < kJoystickRefreshDelay) {
     joystick_refresh_time_ += frame_dt;
@@ -607,8 +619,8 @@ void Input::Think(bool lost_focus, int frame_dt) {
     requested_joystick_refresh_ = false;
   }
 
-  // What has happened since our last poll? Even if we have gone out of focus, we should still
-  // check the polling thread so that the information gets cleared.
+  // What has happened since our last poll? Even if we have gone out of focus, we still promise to
+  // call Os::GetInputEvents.
   vector<Os::KeyEvent> os_events = Os::GetInputEvents(window_->os_data_);
   Os::GetWindowPosition(window_->os_data_, &window_x_, &window_y_);
   int n = (int)os_events.size();
@@ -617,14 +629,22 @@ void Input::Think(bool lost_focus, int frame_dt) {
   // If we have lost focus, clear all key state. Note that down_keys_frame_ is rebuilt every frame
   // regardless, so we do not need to worry about it here.
   if (lost_focus) {
+    // Set the current state
     is_num_lock_set_ = os_events[n - 1].is_num_lock_set;
     is_caps_lock_set_ = os_events[n - 1].is_caps_lock_set;
     mouse_x_ = os_events[n - 1].cursor_x - window_x_;
     mouse_y_ = os_events[n - 1].cursor_y - window_y_;
+
+    // Release all keys. Releasing each non-derived key will also release the derived keys, but
+    // we need to explicitly recalculate the press amount (to 0) for derived keys.
     for (int i = kMinDevice; i <= GetMaxDevice(); i++)
     for (int j = 0; j < GetNumKeys(i); j++)
-    if (GetKeyTracker(GlopKey(j, i))->Clear() == KeyEvent::Release)
-      OnKeyEvent(KeyEvent(GlopKey(j, i), KeyEvent::Release), 0);
+    if (!GlopKey(j, i).IsDerivedKey()) {
+      if (GetNonDerivedKeyTracker(GlopKey(j, i))->Clear() == KeyEvent::Release) {
+        UpdateDerivedKeyStatesAndProcessEvents(GlopKey(j, i),
+          vector<KeyEvent>(1, KeyEvent(GlopKey(j, i), KeyEvent::Release)));
+      }
+    }
   }
 
   // Do all per-frame logic on keys.
@@ -632,7 +652,10 @@ void Input::Think(bool lost_focus, int frame_dt) {
   pressed_keys_frame_.clear();
   for (int i = kMinDevice; i <= GetMaxDevice(); i++)
   for (int j = 0; j < GetNumKeys(i); j++)
-    GetKeyTracker(GlopKey(j, i))->Think();
+  if (GlopKey(j, i).IsDerivedKey())
+    GetKeyState(GlopKey(j, i))->Think();
+  else
+    GetNonDerivedKeyTracker(GlopKey(j, i))->Think();
 
   // Now update key statuses for this frame. We only do this if !lost_focus. Otherwise, some down
   // key os_events might have been generated before losing focus, and the corresponding up key event
@@ -641,8 +664,8 @@ void Input::Think(bool lost_focus, int frame_dt) {
   for (int i = 0; i < n; i++) {
     // Calculate the time differential for this phase and add mouse motion os_events. Note that we
     // do not assume the times are strictly increasing. This is because the dummy input event is
-    // likely generated asynchronously from the other os_events, and could thus cause an inconsistent
-    // ordering.
+    // likely generated asynchronously from the other os_events, and could thus cause an
+    // inconsistent ordering.
     const int kTimeGranularity = 10;
     int new_t = os_events[i].timestamp;
     int old_t = (i == 0? last_poll_time_ : os_events[i-1].timestamp);
@@ -661,21 +684,25 @@ void Input::Think(bool lost_focus, int frame_dt) {
     for (int t = t_boundary; (t - new_t) < 0; t += kTimeGranularity) {
       // Send elapsed time messages
       for (int j = kMinDevice; j <= GetMaxDevice(); j++)
-      for (int k = 0; k < GetNumKeys(j); k++) {
-        KeyTracker *info = GetKeyTracker(GlopKey(k, j));
+      for (int k = 0; k < GetNumKeys(j); k++)
+      if (GlopKey(k, j).IsDerivedKey()) {
+        GetKeyState(GlopKey(k, j))->OnKeyEventDt(kTimeGranularity);
+      } else {
+        KeyTracker *info = GetNonDerivedKeyTracker(GlopKey(k, j));
         KeyEvent::Type type = info->OnKeyEventDt(kTimeGranularity);
-        if (type != KeyEvent::Nothing)
-          OnKeyEvent(KeyEvent(GlopKey(k, j), type), 0);
+        if (type != KeyEvent::Nothing) {
+          UpdateDerivedKeyStatesAndProcessEvents(GlopKey(k, j),
+            vector<KeyEvent>(1, KeyEvent(GlopKey(k, j), type)));
+        }
       }
       float mouse_scale = mouse_sensitivity_ * kBaseMouseSensitivity / kTimeGranularity;
-      OnOsKeyEvent(kMouseUp, -mouse_dy_ * mouse_scale);
-      OnOsKeyEvent(kMouseRight, mouse_dx_ * mouse_scale);
-      OnOsKeyEvent(kMouseDown, mouse_dy_ * mouse_scale);
-      OnOsKeyEvent(kMouseLeft, -mouse_dx_ * mouse_scale);
+      SetNonDerivedKeyPressAmount(kMouseUp, -mouse_dy_ * mouse_scale);
+      SetNonDerivedKeyPressAmount(kMouseRight, mouse_dx_ * mouse_scale);
+      SetNonDerivedKeyPressAmount(kMouseDown, mouse_dy_ * mouse_scale);
+      SetNonDerivedKeyPressAmount(kMouseLeft, -mouse_dx_ * mouse_scale);
       mouse_dx_ = mouse_dy_ = 0;
-      OnKeyEvent(KeyEvent(kNoKey, KeyEvent::Nothing), kTimeGranularity);
+      OnKeyEvents(vector<KeyEvent>(0), kTimeGranularity);
     }
-    if (i == n) break;
 
     // Update the new settings
     is_num_lock_set_ = os_events[i].is_num_lock_set;
@@ -683,7 +710,8 @@ void Input::Think(bool lost_focus, int frame_dt) {
     mouse_x_ = os_events[i].cursor_x - window_x_;
     mouse_y_ = os_events[i].cursor_y - window_y_;
 
-    // Add mouse mouse os_events - note this requires dt > 0.
+    // Update the total mouse motion - note we do not actually send events until the time exceeds
+    // kTimeGranularity, at which point we send them in the above loop.
     if (os_events[i].key == kNoKey) {
       mouse_dx_ += os_events[i].mouse_dx;
       mouse_dy_ += os_events[i].mouse_dy;
@@ -692,112 +720,188 @@ void Input::Think(bool lost_focus, int frame_dt) {
 
     // Process all key up/key down os_events from this phase
     ASSERT(!os_events[i].key.IsDerivedKey());
-    OnOsKeyEvent(os_events[i].key, os_events[i].press_amount);
+    SetNonDerivedKeyPressAmount(os_events[i].key, os_events[i].press_amount);
   }
 
   // Fill the down keys vector
   for (int i = kMinDevice; i <= GetMaxDevice(); i++)
   for (int j = 0; j < GetNumKeys(i); j++)
-  if (GetKeyTracker(GlopKey(j, i))->IsDownFrame())
+  if (GetKeyState(GlopKey(j, i))->IsDownFrame())
     down_keys_frame_.push_back(GlopKey(j, i));
 }
 
-// Handles a message from the operating system that a non-derived key is pressed the given amount.
-// We generate regular input events if appropriate, and also update the derived keys.
-void Input::OnOsKeyEvent(const GlopKey &key, float press_amount) {
-  // Get the key information and press amount (accounting for the deadzone)
-  KeyTracker *info = GetKeyTracker(key);
-  if (key.IsJoystickKey())
+// Updates the press amount of a non-derived key, propogating the effect to derived keys, and
+// handling any events caused in the meantime.
+void Input::SetNonDerivedKeyPressAmount(const GlopKey &key, float press_amount) {
+  // Get the key information and adjust the press amount to account for deadzone
+  KeyTracker *info = GetNonDerivedKeyTracker(key);
+  if (key.IsJoystickAxis())
     press_amount = (press_amount - kJoystickAxisThreshold) / (1 - kJoystickAxisThreshold);
+  float old_press_amount = info->GetPressAmountNow();
   press_amount = max(press_amount, 0.0f);
-  if (press_amount == info->GetPressAmountNow())
-    return;
+  vector<KeyEvent> key_events;
   KeyEvent::Type type = info->SetPressAmount(press_amount);
-  if (type != KeyEvent::Nothing)
-    OnKeyEvent(KeyEvent(key, type), 0);
 
-  // Update derived keys that could possibly be affected
+  // Handle events
+  if (type != KeyEvent::Nothing)
+    key_events.push_back(KeyEvent(key, type));
+  else if (press_amount == old_press_amount)
+    return;
+  UpdateDerivedKeyStatesAndProcessEvents(key, key_events);
+}
+
+// Recalculates all state for derived keys that could depend on key, and generate events for them.
+// Also, handle all events explicitly given to us in events_so_far
+void Input::UpdateDerivedKeyStatesAndProcessEvents(const GlopKey &key,
+  const vector<KeyEvent> &events_so_far) {
+  vector<KeyEvent> key_events = events_so_far;
   if (key.IsJoystickKey()) {
     if (key.IsJoystickAxis()) {
-      UpdateDerivedKey(GetJoystickAxisPos(key.GetJoystickAxisNumber()));
-      UpdateDerivedKey(GetJoystickAxisNeg(key.GetJoystickAxisNumber()));
+      UpdateDerivedKeyState(GetJoystickAxisPos(key.GetJoystickAxisNumber()), &key_events);
+      UpdateDerivedKeyState(GetJoystickAxisNeg(key.GetJoystickAxisNumber()), &key_events);
     } else {
-      UpdateDerivedKey(GlopKey(key.index, kDeviceAnyJoystick));
+      UpdateDerivedKeyState(GlopKey(key.index, kDeviceAnyJoystick), &key_events);
     }
   }
   for (int k = 0; k < GetNumDerivedKeys(); k++)
-    UpdateDerivedKey(GlopKey(k, kDeviceDerived));
+    UpdateDerivedKeyState(GlopKey(k, kDeviceDerived), &key_events);
+  if (key_events.size() != 0)
+    OnKeyEvents(key_events, 0);
 }
 
-// Recalculates how pressed a derived key is, and then updates our internal records, possibly
-// sending out event notifications.
-void Input::UpdateDerivedKey(const GlopKey &key) {
+// Recalculates all state for a derived key, and appends any events caused by this into the
+// key_events vector.
+void Input::UpdateDerivedKeyState(const GlopKey &key, vector<KeyEvent> *key_events) {
   float amount = 0.0f;
+  bool is_down = false;
+ 
+  // Get press amount for any-joystick derived keys
+  if (key.device == kDeviceAnyJoystick) {
+    if (key.IsJoystickAxis()) {
+      int axis = key.GetJoystickAxisNumber();
+      for (int i = 0; i < GetNumJoysticks(); i++) {
+        amount += GetKeyPressAmountNow(GetJoystickAxisPos(axis, i)) -
+                  GetKeyPressAmountNow(GetJoystickAxisNeg(axis, i));
+      }
+      if (key.IsJoystickAxisNeg())
+        amount = -amount;
+    } else {
+      for (int i = 0; i < GetNumJoysticks(); i++)
+        amount += GetKeyPressAmountNow(GlopKey(key.index, i));
+    }
+    if (amount > 0)
+      is_down = true;
+    else
+      amount = 0;
+  }
 
   // Get press amount for normal derived keys
-  if (key.device == kDeviceDerived) {
+  else {
     for (int i = 0; i < (int)derived_key_bindings_[key.index].size(); i++) {
       bool is_binding_down = true;
-      for (int j = 0; j < (int)derived_key_bindings_[key.index][i].size(); j++)
-      if (IsKeyDownNow(derived_key_bindings_[key.index][i][j]) !=
-          derived_key_bindings_down_[key.index][i][j])
+      for (int j = 0; j < (int)derived_key_bindings_[key.index][i].modifiers.size(); j++)
+      if (IsKeyDownNow(derived_key_bindings_[key.index][i].modifiers[j]) !=
+          derived_key_bindings_[key.index][i].down[j])
         is_binding_down = false;
-      if (is_binding_down) {
-        amount = 1.0f;
-        break;
+      if (is_binding_down && IsKeyDownNow(derived_key_bindings_[key.index][i].key)) {
+        is_down = true;
+        amount += GetKeyPressAmountNow(derived_key_bindings_[key.index][i].key);
       }
     }
   }
+
+  // Update the state and return value
+  KeyState *state = GetKeyState(key);
+  state->SetPressAmount(amount);
+  KeyEvent::Type type = state->SetIsDown(is_down);
+  if (type != KeyEvent::Nothing)
+    key_events->push_back(KeyEvent(key, type));
+}
+
+// Returns whether the derived key given by key is pressed because it has an active binding with
+// main key given by binding.
+// Precondition: binding itself is always down, although the state of any relevant modifier keys
+//               is unknonw.
+bool Input::IsDerivedKeyBindingActive(const GlopKey &key, const GlopKey &binding) {
+  // Handle joystick derived keys. Note that even if binding is down for a joystick axis, key itself
+  // might not be down. This could happen if one controller is moving right, but all others are
+  // moving left.
+  if (key.device == kDeviceAnyJoystick) {
+    return key.index == binding.index && IsKeyDownNow(key);
+  } 
   
-  // Get press amount for any-joystick derived keys
+  // Handle standard derived keys
   else {
-    ASSERT(key.device == kDeviceAnyJoystick);
-    if (key.IsJoystickAxis()) {
-      int axis = key.GetJoystickAxisNumber();
-      for (int i = 0; i < GetNumJoysticks(); i++)
-        amount += GetKeyPressAmountNow(GetJoystickAxisPos(axis, i)) -
-                  GetKeyPressAmountNow(GetJoystickAxisNeg(axis, i));
-      if (key.IsJoystickAxisNeg()) amount = -amount;
-      amount = max(amount, 0.0f);
-    } else {
-      for (int i = 0; i < GetNumJoysticks(); i++)
-        amount = max(amount, GetKeyPressAmountNow(GlopKey(key.index, i)));
+    for (int i = 0; i < (int)derived_key_bindings_[key.index].size(); i++)
+    if (derived_key_bindings_[key.index][i].key == binding) {
+      bool is_binding_down = true;
+      for (int j = 0; j < (int)derived_key_bindings_[key.index][i].modifiers.size(); j++)
+      if (IsKeyDownNow(derived_key_bindings_[key.index][i].modifiers[j]) !=
+          derived_key_bindings_[key.index][i].down[j])
+        is_binding_down = false;
+      if (is_binding_down)
+        return true;
     }
   }
-
-  // Update the key
-  KeyEvent::Type type = GetKeyTracker(key)->SetPressAmount(amount);
-  if (type != KeyEvent::Nothing)
-    OnKeyEvent(KeyEvent(key, type), 0);
+  return false;
 }
 
 // Updates internal records and sends out notifications on a key event.
-void Input::OnKeyEvent(const KeyEvent &event, int dt) {
-  if (event.IsPress())
-    pressed_keys_frame_.push_back(event.key);
-  window_->OnKeyEvent(event, dt);
-  for (LightSetId id = key_listeners_.GetFirstId(); id != 0; id = key_listeners_.GetNextId(id))
-    key_listeners_[id]->OnKeyEvent(event, dt);
+void Input::OnKeyEvents(const vector<KeyEvent> &events, int dt) {
+  // Find simultaneous repeat events
+  vector<KeyEvent> all_events = events;
+  if (events.size() > 0 && events[0].IsPress()) {
+    for (int pass = 0; pass < 2; pass++)
+    for (int i = 0; i < (pass == 0? kNumJoystickKeys : GetNumDerivedKeys()); i++) {
+      GlopKey test_key(i, (pass == 0? kDeviceAnyJoystick : kDeviceDerived));
+      bool is_matched = false, is_active = false;
+      for (int j = 0; j < (int)all_events.size(); j++) {
+        is_matched |= (test_key == all_events[j].key);
+        is_active |= IsDerivedKeyBindingActive(test_key, all_events[j].key);
+      }
+      if (is_active && !is_matched) {
+        all_events.push_back(KeyEvent(test_key, KeyEvent::RepeatPress));
+        GetKeyState(test_key)->OnKeyEventRepeatPress();
+      }
+    }
+  }
+
+  // Handle the events
+  for (int i = 0; i < (int)all_events.size(); i++)
+  if (all_events[i].IsPress())
+    pressed_keys_frame_.push_back(all_events[i].key);
+  window_->OnKeyEvents(all_events, dt);
+  for (List<KeyListener*>::iterator it = key_listeners_.begin(); it != key_listeners_.end(); ++it)
+    (*it)->OnKeyEvents(all_events, dt);
 }
 
-// Returns a pointer to the KeyTracker corresponding to a given GlopKey.
-const Input::KeyTracker *Input::GetKeyTracker(const GlopKey &key) const {
+// Returns a pointer to the KeyState corresponding to a given GlopKey.
+const Input::KeyState *Input::GetKeyState(const GlopKey &key) const {
   switch (key.device) {
     case kDeviceKeyboard:
       ASSERT(key.index >= 0 && key.index < kNumKeyboardKeys);
-      return &keyboard_key_trackers_[key.index];
+      return &keyboard_key_trackers_[key.index].GetState();
     case kDeviceAnyJoystick:
       ASSERT(key.index >= 0 && key.index < kNumJoystickKeys);
-      return &any_joystick_key_trackers_[key.index];
+      return &any_joystick_key_states_[key.index];
     case kDeviceDerived:
       ASSERT(key.index >= 0 && key.index < GetNumDerivedKeys());
-      return &derived_key_trackers_[key.index];
+      return &derived_key_states_[key.index];
     default:
       ASSERT(key.device >= 0 && key.index >= 0 && key.index < kNumJoystickKeys);
       if (key.device < GetNumJoysticks())
-        return &joystick_key_trackers_[key.device][key.index];
+        return &joystick_key_trackers_[key.device][key.index].GetState();
       else
         return 0;
+  };
+}
+
+Input::KeyTracker *Input::GetNonDerivedKeyTracker(const GlopKey &key) {
+  switch (key.device) {
+    case kDeviceKeyboard:
+      return &keyboard_key_trackers_[key.index];
+    default:
+      return &joystick_key_trackers_[key.device][key.index];
   };
 }
 

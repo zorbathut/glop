@@ -92,7 +92,6 @@ class PCQueue {
   void PushInt64(int64 data) {PushData(&data, sizeof(int64));}
   void PushFloat(float data) {PushData(&data, sizeof(float));}
   void PushDouble(double data) {PushData(&data, sizeof(double));}
-  void PushLightSetId(LightSetId data) {PushData(&data, sizeof(LightSetId));}
   void PushPointer(void *data) {PushData(&data, sizeof(void*));}
 
   // Can only be called by a unique consumer thread
@@ -104,7 +103,6 @@ class PCQueue {
   int64 PopInt64() {int64 data; PopData(&data, sizeof(int64)); return data;}
   float PopFloat() {float data; PopData(&data, sizeof(float)); return data;}
   double PopDouble() {double data; PopData(&data, sizeof(double)); return data;}
-  LightSetId PopLightSetId() {LightSetId data; PopData(&data, sizeof(LightSetId)); return data;}
   void *PopPointer() {void *data; PopData(&data, sizeof(void*)); return data;}
 
  private:

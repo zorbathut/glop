@@ -72,13 +72,13 @@ class TextRenderer;
 // =============
 //
 // A utility class for tracking one or more interchangeable "hot keys" for a frame. Interface is
-// similar to Input::KeyTracker. kAnyKey can be used as a hot key, and it is interpreted as
+// similar to Input::KeyState. kAnyKey can be used as a hot key, and it is interpreted as
 // anything other than mouse motion or modifiers.
 class HotKeyTracker {
  public:
   HotKeyTracker() {}
-  LightSetId AddHotKey(const GlopKey &key) {return hot_keys_.InsertItem(key);}
-  KeyEvent::Type RemoveHotKey(LightSetId id);
+  ListId AddHotKey(const GlopKey &key) {return hot_keys_.push_back(key);}
+  KeyEvent::Type RemoveHotKey(ListId id);
 
   bool OnKeyEvent(const KeyEvent &event, int dt, KeyEvent::Type *result);
   bool OnKeyEvent(const KeyEvent &event, int dt) {
@@ -88,17 +88,17 @@ class HotKeyTracker {
   KeyEvent::Type Clear();
   bool IsFocusMagnet(const KeyEvent &event) const;
 
-  void Think() {tracker_.Think();}
-  bool IsDownNow() const {return tracker_.IsDownNow();}
-  bool IsDownFrame() const {return tracker_.IsDownFrame();}
-  bool WasPressed() const {return tracker_.WasPressed();}
-  bool WasReleased() const {return tracker_.WasReleased();}
+  void Think() {key_state_.Think();}
+  bool IsDownNow() const {return key_state_.IsDownNow();}
+  bool IsDownFrame() const {return key_state_.IsDownFrame();}
+  bool WasPressed() const {return key_state_.WasPressed();}
+  bool WasReleased() const {return key_state_.WasReleased();}
  
  private:
   bool IsMatchingKey(const GlopKey &hot_key, const GlopKey &key) const;
 
-  Input::KeyTracker tracker_;
-  LightSet<GlopKey> hot_keys_, down_hot_keys_;
+  Input::KeyState key_state_;
+  List<GlopKey> hot_keys_, down_hot_keys_;
   DISALLOW_EVIL_CONSTRUCTORS(HotKeyTracker);
 };
 
@@ -155,16 +155,15 @@ class HollowBoxFrame: public SingleParentFrame {
 
 class InputBoxFrame: public SingleParentFrame {
  public:
-  InputBoxFrame(GlopFrame *inner_frame, const InputBoxViewFactory *factory = gInputBoxViewFactory)
-  : SingleParentFrame(new PaddedFrame(inner_frame, 0)), view_(factory->Create()) {}
-  ~InputBoxFrame() {delete view_;}
+  InputBoxFrame(GlopFrame *inner_frame, const InputBoxView *view = gInputBoxView)
+  : SingleParentFrame(new PaddedFrame(inner_frame, 0)), view_(view) {}
   string GetType() const {return "InputBoxFrame";}
 
   void Render() const;
  protected:
   void RecomputeSize(int rec_width, int rec_height); 
  private:
-  InputBoxView *view_;
+  const InputBoxView *view_;
   DISALLOW_EVIL_CONSTRUCTORS(InputBoxFrame);
 };
 
@@ -195,9 +194,8 @@ class ImageFrame: public GlopFrame {
 class ArrowFrame: public GlopFrame {
  public:
   enum Direction {Up, Right, Down, Left};
-  ArrowFrame(Direction d, const ArrowViewFactory *factory)
-  : direction_(d), view_(factory->Create()) {}
-  ~ArrowFrame() {delete view_;}
+  ArrowFrame(Direction d, const ArrowView *view)
+  : direction_(d), view_(view) {}
   string GetType() const {return "ArrowFrame";}
 
   void Render() const;
@@ -205,7 +203,7 @@ class ArrowFrame: public GlopFrame {
   void RecomputeSize(int rec_width, int rec_height);
  private:
   Direction direction_;
-  ArrowView *view_;  
+  const ArrowView *view_;  
   DISALLOW_EVIL_CONSTRUCTORS(ArrowFrame);
 };
 
@@ -341,7 +339,7 @@ class FancyTextFrame: public MultiParentFrame {
   GuiTextStyle text_style_;
   bool add_soft_returns_;
   struct TextBlock {
-    LightSetId child_id;
+    ListId child_id;
     int x, y;
   };
   vector<vector<TextBlock> > text_blocks_;
@@ -371,8 +369,7 @@ class FpsFrame: public SingleParentFrame {
 
 class DummyTextPromptFrame: public SingleParentFrame {
  public:
-  DummyTextPromptFrame(const string &text, const TextPromptViewFactory *view_factory);
-  ~DummyTextPromptFrame() {delete view_;}
+  DummyTextPromptFrame(const string &text, const TextPromptView *view);
   string GetType() const {return "DummyTextPromptFrame";}
 
   // Basic accessors and mutators. SetText automatically moves the cursor to the end of the prompt
@@ -410,17 +407,17 @@ class DummyTextPromptFrame: public SingleParentFrame {
   int cursor_pos_, cursor_time_;
   int selection_start_, selection_end_;
   int left_padding_, top_padding_, right_padding_;
-  TextPromptView *view_;
+  const TextPromptView *view_;
   DISALLOW_EVIL_CONSTRUCTORS(DummyTextPromptFrame);
 };
 
 class BaseTextPromptFrame: public SingleParentFrame {
  public:
   string GetType() const {return "BaseTextPromptFrame";}
-  bool OnKeyEvent(const KeyEvent &event, int dt);
+  bool OnKeyEvent(const KeyEvent &event, int dt, bool gained_focus);
 
  protected:
-  BaseTextPromptFrame(const string &text, const TextPromptViewFactory *view_factory);
+  BaseTextPromptFrame(const string &text, const TextPromptView *view);
   void OnFocusChange();
 
   // Text accessors, mutators. SetText ensures the cursor information is valid but does not
@@ -444,6 +441,7 @@ class BaseTextPromptFrame: public SingleParentFrame {
   const DummyTextPromptFrame *prompt() const {return (const DummyTextPromptFrame*)GetChild();}
   DummyTextPromptFrame *prompt() {return (DummyTextPromptFrame*)GetChild();}
 
+  void PingSelection();
   int GetPrevWordBoundary(int pos) const;
   int GetNextWordBoundary(int pos) const;
   void DeleteSelection();
@@ -467,7 +465,7 @@ class BaseTextPromptFrame: public SingleParentFrame {
 class StringPromptFrame: public BaseTextPromptFrame {
  public:
   StringPromptFrame(const string &start_text, int length_limit,
-                    const TextPromptViewFactory *view_factory = gTextPromptViewFactory);
+                    const TextPromptView *view = gTextPromptView);
   string GetType() const {return "StringPromptFrame";}
   const string &Get() const {return GetText();}
   void Set(const string &value);
@@ -483,12 +481,13 @@ class StringPromptFrame: public BaseTextPromptFrame {
 class StringPromptWidget: public FocusFrame {
  public:
   StringPromptWidget(const string &start_text, int length_limit, float prompt_width = kSizeLimitRec,
-                     const TextPromptViewFactory *prompt_view_factory = gTextPromptViewFactory,
-                     const InputBoxViewFactory *input_box_view_factory = gInputBoxViewFactory);
+                     const TextPromptView *prompt_view = gTextPromptView,
+                     const InputBoxView *input_box_view = gInputBoxView);
   string GetType() const {return "StringPromptWidget";}
   const string &Get() const {return prompt_->Get();}
   void Set(const string &value) {prompt_->Set(value);}
  private:
+  ExactWidthFrame *sizer_;
   StringPromptFrame *prompt_;
   DISALLOW_EVIL_CONSTRUCTORS(StringPromptWidget);
 };
@@ -496,7 +495,7 @@ class StringPromptWidget: public FocusFrame {
 class IntegerPromptFrame: public BaseTextPromptFrame {
  public:
   IntegerPromptFrame(int start_value, int min_value, int max_value,
-                     const TextPromptViewFactory *view_factory = gTextPromptViewFactory);
+                     const TextPromptView *view = gTextPromptView);
   string GetType() const {return "IntegerPromptFrame";}
   int Get() const {return atoi(GetText().c_str());}
   void Set(int value);
@@ -513,12 +512,13 @@ class IntegerPromptWidget: public FocusFrame {
  public:
   IntegerPromptWidget(int start_value, int min_value, int max_value,
                       float prompt_width = kSizeLimitRec,
-                      const TextPromptViewFactory *prompt_view_factory = gTextPromptViewFactory,
-                      const InputBoxViewFactory *input_box_view_factory = gInputBoxViewFactory);
+                      const TextPromptView *prompt_view = gTextPromptView,
+                      const InputBoxView *input_box_view = gInputBoxView);
   string GetType() const {return "IntegerPromptWidget";}
   int Get() const {return prompt_->Get();}
   void Set(int value) {prompt_->Set(value);}
  private:
+  ExactWidthFrame *sizer_;
   IntegerPromptFrame *prompt_;
   DISALLOW_EVIL_CONSTRUCTORS(IntegerPromptWidget);
 };
@@ -530,9 +530,8 @@ class IntegerPromptWidget: public FocusFrame {
 class WindowFrame: public SingleParentFrame {
  public:
   WindowFrame(GlopFrame *inner_frame, const string &title,
-              const WindowViewFactory *view_factory = gWindowViewFactory);
-  WindowFrame(GlopFrame *inner_frame, const WindowViewFactory *view_factory = gWindowViewFactory);
-  ~WindowFrame() {delete view_;}
+              const WindowView *view = gWindowView);
+  WindowFrame(GlopFrame *inner_frame, const WindowView *view = gWindowView);
   string GetType() const {return "WindowFrame";}
 
   void Render() const;
@@ -540,7 +539,7 @@ class WindowFrame: public SingleParentFrame {
   void RecomputeSize(int rec_width, int rec_height);
  private:
   PaddedFrame *padded_title_frame_, *padded_inner_frame_;
-  WindowView *view_;
+  const WindowView *view_;
   DISALLOW_EVIL_CONSTRUCTORS(WindowFrame);
 };
 
@@ -550,10 +549,8 @@ class WindowFrame: public SingleParentFrame {
 
 class DummyButtonFrame: public SingleParentFrame {
  public:
-  DummyButtonFrame(GlopFrame *inner_frame, bool is_down, const ButtonViewFactory *view_factory)
-  : SingleParentFrame(new PaddedFrame(inner_frame)), is_down_(is_down),
-    view_(view_factory->Create()) {}
-  ~DummyButtonFrame() {delete view_;}
+  DummyButtonFrame(GlopFrame *inner_frame, bool is_down, const ButtonView *view)
+  : SingleParentFrame(new PaddedFrame(inner_frame)), is_down_(is_down), view_(view) {}
   string GetType() const {return "DummyButtonFrame";}
   bool IsDown() const {return is_down_;}
   void SetIsDown(bool is_down);
@@ -564,21 +561,21 @@ class DummyButtonFrame: public SingleParentFrame {
   void RecomputeSize(int rec_width, int rec_height);
  private:
   bool is_down_;
-  ButtonView *view_;
+  const ButtonView *view_;
   DISALLOW_EVIL_CONSTRUCTORS(DummyButtonFrame);
 };
 
 class ButtonFrame: public SingleParentFrame {
  public:
-  ButtonFrame(GlopFrame *inner_frame, const ButtonViewFactory *view_factory = gButtonViewFactory)
-  : SingleParentFrame(new DummyButtonFrame(inner_frame, false, view_factory)),
+  ButtonFrame(GlopFrame *inner_frame, const ButtonView *view = gButtonView)
+  : SingleParentFrame(new DummyButtonFrame(inner_frame, false, view)),
     ping_on_press_(true), is_confirm_key_down_(false), was_pressed_fully_(false),
     is_mouse_locked_on_(false) {}
   string GetType() const {return "ButtonFrame";}
 
   // Hot keys
-  LightSetId AddHotKey(const GlopKey &key) {return hot_key_tracker_.AddHotKey(key);}
-  void RemoveHotKey(LightSetId id) {hot_key_tracker_.RemoveHotKey(id);}
+  ListId AddHotKey(const GlopKey &key) {return hot_key_tracker_.AddHotKey(key);}
+  void RemoveHotKey(ListId id) {hot_key_tracker_.RemoveHotKey(id);}
 
   // Returns whether the button is currently in the down state.
   bool IsDown() const {return button()->IsDown();}
@@ -586,14 +583,14 @@ class ButtonFrame: public SingleParentFrame {
   // If the button generated events similar to a key on the keyboard, this returns whether a down
   // event would have been generated this frame. It will be true if a button is just pressed or
   // it will be true periodically while a button is held down.
-  bool WasHeldDown() const {return button_tracker_.WasPressed();}
+  bool WasHeldDown() const {return button_state_.WasPressed();}
 
   // Returns whether a full press and release of the button has completed this frame.
   bool WasPressedFully() const {return was_pressed_fully_;}
 
   // Glop overloaded functions
   void Think(int dt);
-  bool OnKeyEvent(const KeyEvent &event, int dt);
+  bool OnKeyEvent(const KeyEvent &event, int dt, bool gained_focus);
   bool IsFocusMagnet(const KeyEvent &event) const {return hot_key_tracker_.IsFocusMagnet(event);}
  protected:
   void OnFocusChange();
@@ -605,13 +602,13 @@ class ButtonFrame: public SingleParentFrame {
   const DummyButtonFrame *button() const {return (DummyButtonFrame*)GetChild();}
   DummyButtonFrame *button() {return (DummyButtonFrame*)GetChild();}
 
-  enum DownType {Down, DownRepeatSoon, UpCancelPress, UpConfirmPress};
+  enum DownType {Down, UpCancelPress, UpConfirmPress};
   void SetIsDown(DownType down_type);
 
   bool ping_on_press_;
   bool is_confirm_key_down_;
   HotKeyTracker hot_key_tracker_;
-  Input::KeyTracker button_tracker_;
+  Input::KeyState button_state_;
   bool was_pressed_fully_;
   bool is_mouse_locked_on_;
   DISALLOW_EVIL_CONSTRUCTORS(ButtonFrame);
@@ -620,27 +617,27 @@ class ButtonFrame: public SingleParentFrame {
 class ButtonWidget: public FocusFrame {
  public:
   // Basic constructors
-  ButtonWidget(GlopFrame *frame, const ButtonViewFactory *factory = gButtonViewFactory)
-  : FocusFrame(new ButtonFrame(frame, factory)) {}
+  ButtonWidget(GlopFrame *frame, const ButtonView *view = gButtonView)
+  : FocusFrame(new ButtonFrame(frame, view)) {}
   ButtonWidget(GlopFrame *frame, const GlopKey &hot_key,
-               const ButtonViewFactory *factory = gButtonViewFactory)
-  : FocusFrame(new ButtonFrame(frame, factory)) {button()->AddHotKey(hot_key);}
+               const ButtonView *view = gButtonView)
+  : FocusFrame(new ButtonFrame(frame, view)) {button()->AddHotKey(hot_key);}
 
   // Convenience constructors for text button frames
   ButtonWidget(const string &text, const GuiTextStyle &text_style = *gGuiTextStyle,
-               const ButtonViewFactory *factory = gButtonViewFactory)
-  : FocusFrame(new ButtonFrame(new TextFrame(text, text_style), factory)) {}
+               const ButtonView *view = gButtonView)
+  : FocusFrame(new ButtonFrame(new TextFrame(text, text_style), view)) {}
   ButtonWidget(const string &text, const GlopKey &hot_key,
                const GuiTextStyle &text_style = *gGuiTextStyle,
-               const ButtonViewFactory *factory = gButtonViewFactory)
-  : FocusFrame(new ButtonFrame(new TextFrame(text, text_style), factory)) {
+               const ButtonView *view = gButtonView)
+  : FocusFrame(new ButtonFrame(new TextFrame(text, text_style), view)) {
     button()->AddHotKey(hot_key);
   }
   string GetType() const {return "ButtonWidget";}
 
   // Utilities
-  LightSetId AddHotKey(const GlopKey &key) {return button()->AddHotKey(key);}
-  void RemoveHotKey(LightSetId id) {button()->RemoveHotKey(id);}
+  ListId AddHotKey(const GlopKey &key) {return button()->AddHotKey(key);}
+  void RemoveHotKey(ListId id) {button()->RemoveHotKey(id);}
   bool IsDown() const {return button()->IsDown();}
   bool WasHeldDown() const {return button()->WasHeldDown();}
   bool WasPressedFully() const {return button()->WasPressedFully();}
@@ -660,10 +657,9 @@ class DummySliderFrame: public MultiParentFrame {
   DummySliderFrame(Direction direction, int logical_tab_size, int logical_total_size,
                    int logical_tab_position,
                    GlopFrame*(*button_factory)(ArrowFrame::Direction,
-                                               const ArrowViewFactory *,
-                                               const ButtonViewFactory *),
-                   const SliderViewFactory *factory);
-  ~DummySliderFrame() {delete view_;}
+                                               const ArrowView *,
+                                               const ButtonView *),
+                   const SliderView *view);
   string GetType() const {return "DummySliderFrame";}
   const GlopFrame *GetDecButton() const {return dec_button_;}
   GlopFrame *GetDecButton() {return dec_button_;}
@@ -699,24 +695,24 @@ class DummySliderFrame: public MultiParentFrame {
   int logical_tab_size_, logical_total_size_, logical_tab_position_;
   int tab_x1_, tab_y1_, tab_x2_, tab_y2_;
   int tab_pixel_length_, bar_pixel_length_;
-  SliderView *view_;
+  const SliderView *view_;
   DISALLOW_EVIL_CONSTRUCTORS(DummySliderFrame);
 };
 
 class SliderFrame: public SingleParentFrame {
  public:
-  enum Direction {Horizontal, Vertical};  // Must match DummySliderFrame::Direction
+  enum Direction {Horizontal, Vertical};
   SliderFrame(Direction direction, int logical_tab_size, int logical_total_size,
-              int logical_tab_position, const SliderViewFactory *factory = gSliderViewFactory);
+              int logical_tab_position, const SliderView *view = gSliderView);
   string GetType() const {return "SliderFrame";}
-  LightSetId AddDecHotKey(const GlopKey &key) {return GetDecButton()->AddHotKey(key);}
-  void RemoveDecHotKey(LightSetId id) {GetDecButton()->RemoveHotKey(id);}
-  LightSetId AddBigDecHotKey(const GlopKey &key) {return big_dec_tracker_.AddHotKey(key);}
-  void RemoveBigDecHotKey(LightSetId id) {big_dec_tracker_.RemoveHotKey(id);}
-  LightSetId AddIncHotKey(const GlopKey &key) {return GetIncButton()->AddHotKey(key);}
-  void RemoveIncHotKey(LightSetId id) {GetIncButton()->RemoveHotKey(id);}
-  LightSetId AddBigIncHotKey(const GlopKey &key) {return big_inc_tracker_.AddHotKey(key);}
-  void RemoveBigIncHotKey(LightSetId id) {big_inc_tracker_.RemoveHotKey(id);}
+  ListId AddDecHotKey(const GlopKey &key) {return GetDecButton()->AddHotKey(key);}
+  void RemoveDecHotKey(ListId id) {GetDecButton()->RemoveHotKey(id);}
+  ListId AddBigDecHotKey(const GlopKey &key) {return big_dec_tracker_.AddHotKey(key);}
+  void RemoveBigDecHotKey(ListId id) {big_dec_tracker_.RemoveHotKey(id);}
+  ListId AddIncHotKey(const GlopKey &key) {return GetIncButton()->AddHotKey(key);}
+  void RemoveIncHotKey(ListId id) {GetIncButton()->RemoveHotKey(id);}
+  ListId AddBigIncHotKey(const GlopKey &key) {return big_inc_tracker_.AddHotKey(key);}
+  void RemoveBigIncHotKey(ListId id) {big_inc_tracker_.RemoveHotKey(id);}
 
   // State accessors/mutators
   int GetTabPosition() const {return slider()->GetTabPosition();}
@@ -732,7 +728,7 @@ class SliderFrame: public SingleParentFrame {
 
   // Overloaded functions
   void Think(int dt);
-  bool OnKeyEvent(const KeyEvent &event, int dt);
+  bool OnKeyEvent(const KeyEvent &event, int dt, bool gained_focus);
  protected:
   void OnFocusChange();
 
@@ -748,30 +744,30 @@ class SliderFrame: public SingleParentFrame {
   enum MouseLockMode {None, Bar, Tab};
   int step_size_;
   MouseLockMode mouse_lock_mode_;
-  int tab_grab_position_;
+  int tab_grab_position_, last_grabbed_mouse_pos_;
   HotKeyTracker big_dec_tracker_, big_inc_tracker_;
   DISALLOW_EVIL_CONSTRUCTORS(SliderFrame);
 };
 
 class SliderWidget: public FocusFrame {
  public:
-  enum Direction {Horizontal, Vertical};  // Must match DummySliderFrame::Direction
+  enum Direction {Horizontal, Vertical};
   SliderWidget(Direction direction, int logical_tab_size, int logical_total_size,
                int logical_tab_position,
-               const SliderViewFactory *factory = gSliderViewFactory)
+               const SliderView *view = gSliderView)
   : FocusFrame(new SliderFrame((SliderFrame::Direction)direction, logical_tab_size,
-                               logical_total_size, logical_tab_position, factory)) {}
+                               logical_total_size, logical_tab_position, view)) {}
   string GetType() const {return "SliderWidget";}
 
   // Utilities
-  LightSetId AddDecHotKey(const GlopKey &key) {return slider()->AddDecHotKey(key);}
-  void RemoveDecHotKey(LightSetId id) {slider()->RemoveDecHotKey(id);}
-  LightSetId AddBigDecHotKey(const GlopKey &key) {return slider()->AddBigDecHotKey(key);}
-  void RemoveBigDecHotKey(LightSetId id) {slider()->RemoveBigDecHotKey(id);}
-  LightSetId AddIncHotKey(const GlopKey &key) {return slider()->AddIncHotKey(key);}
-  void RemoveIncHotKey(LightSetId id) {slider()->RemoveIncHotKey(id);}
-  LightSetId AddBigIncHotKey(const GlopKey &key) {return slider()->AddBigIncHotKey(key);}
-  void RemoveBigIncHotKey(LightSetId id) {slider()->RemoveBigIncHotKey(id);}
+  ListId AddDecHotKey(const GlopKey &key) {return slider()->AddDecHotKey(key);}
+  void RemoveDecHotKey(ListId id) {slider()->RemoveDecHotKey(id);}
+  ListId AddBigDecHotKey(const GlopKey &key) {return slider()->AddBigDecHotKey(key);}
+  void RemoveBigDecHotKey(ListId id) {slider()->RemoveBigDecHotKey(id);}
+  ListId AddIncHotKey(const GlopKey &key) {return slider()->AddIncHotKey(key);}
+  void RemoveIncHotKey(ListId id) {slider()->RemoveIncHotKey(id);}
+  ListId AddBigIncHotKey(const GlopKey &key) {return slider()->AddBigIncHotKey(key);}
+  void RemoveBigIncHotKey(ListId id) {slider()->RemoveBigIncHotKey(id);}
   int GetTabPosition() const {return slider()->GetTabPosition();}
   void SetTabPosition(int position) {slider()->SetTabPosition(position);}
   void SmallDec() {slider()->SmallDec();}
@@ -794,8 +790,8 @@ class SliderWidget: public FocusFrame {
 class DummyMenuFrame: public MultiParentFrame {
  public:
   DummyMenuFrame(int num_cols, bool is_vertical, float horz_justify, float vert_justify,
-                 const MenuViewFactory *factory = gMenuViewFactory);
-  ~DummyMenuFrame() {delete view_;}
+                 const MenuView *view = gMenuView);
+  bool IsVertical() const {return is_vertical_;}
 
   // Item layout accessors.
   int GetNumItems() const {return (int)item_ids_.size();}
@@ -814,13 +810,19 @@ class DummyMenuFrame: public MultiParentFrame {
   GlopFrame *GetItem(int item) {return GetChild(item_ids_[item]);}
   void GetItemCoords(int item, int *x1, int *y1, int *x2, int *y2) const;
   int GetItemByCoords(int x, int y) const {return GetItemIndex(y / row_height_, x / col_width_);}
+  void NewItemPing(bool center = false) {AddPing(new ItemPing(this, selection_, center));}
   void NewItemPing(int item, bool center = false) {AddPing(new ItemPing(this, item, center));}
 
   // Item mutators
-  int AddItem(GlopFrame *frame);
-  void DeleteItem();
+  int AddItem(GlopFrame *frame) {return AddItem(frame, GetNumItems());}
+  int AddItem(GlopFrame *frame, int index);
+  void RemoveItem() {RemoveItem(GetNumItems()-1);}
+  void RemoveItem(int index) {delete RemoveItemNoDelete(index);}
+  GlopFrame *RemoveItemNoDelete() {return RemoveItemNoDelete(GetNumItems()-1);}
+  GlopFrame *RemoveItemNoDelete(int index);
   void SetItem(int item, GlopFrame *frame);
   GlopFrame *SetItemNoDelete(int item, GlopFrame *frame);
+  void Clear();
 
   // Overloaded functions
   void Render() const;
@@ -840,14 +842,155 @@ class DummyMenuFrame: public MultiParentFrame {
     int item_;
     DISALLOW_EVIL_CONSTRUCTORS(ItemPing);
   };
-  vector<LightSetId> item_ids_;
+  vector<ListId> item_ids_;
   int num_cols_, selection_;
   bool is_vertical_;
   float horz_justify_, vert_justify_;
   int item_lpadding_, item_tpadding_, item_rpadding_, item_bpadding_;
   int col_width_, row_height_;
-  MenuView *view_;
+  const MenuView *view_;
   DISALLOW_EVIL_CONSTRUCTORS(DummyMenuFrame);
+};
+
+class GuiMenuItem {
+ public:
+  virtual ~GuiMenuItem() {}
+
+  // Accessors
+  const string &GetSearchKey() const {return search_key_;}
+  GlopFrame *GetFrame() {return frame_;}
+
+  // Logic functions. These are called whenever the corresponding function on the menu is called.
+  // is_selected and is_confirmed specify whether this item is selected, and whether the menu is in
+  // the confirmed state. switch_confirm_state, initially false, determines whether the menu should
+  // switch from confirmed to uncofirmed or vice-versa after this call.
+  virtual void Think(bool is_selected, bool is_confirmed, int dt, bool *switch_confirm_state) {}
+  virtual bool OnKeyEvent(bool is_selected, bool is_confirmed, const KeyEvent &event, int dt,
+                          bool *switch_confirm_state) {return false;}
+  virtual void OnConfirmSwitchState(bool is_selected, bool is_confirmed,
+                                    bool *switch_confirm_state) {}
+ protected:
+  // Utilities for overloaded functions
+  GuiMenuItem(GlopFrame *frame, const string &search_key): frame_(frame), search_key_(search_key) {}
+  void SetFrame(GlopFrame *frame) {frame_ = frame;}
+  void SetSearchKey(const string &search_key) {search_key_ = search_key;}
+
+ private:
+  GlopFrame *frame_;
+  string search_key_;
+  DISALLOW_EVIL_CONSTRUCTORS(GuiMenuItem);
+};
+
+class TextMenuItem: public GuiMenuItem {
+ public:
+  TextMenuItem(const string &text, const GuiTextStyle &style = *gGuiTextStyle)
+  : GuiMenuItem(new TextFrame(text, style), text) {}
+ private:
+  DISALLOW_EVIL_CONSTRUCTORS(TextMenuItem);
+};
+
+class MenuFrame: public SingleParentFrame {
+ public:
+  enum SelectionStyle {NoMouse, SingleClick, DoubleClick};
+
+  // Constructors - a basic one for one-column vertical and another for arbitrary menus
+  MenuFrame(float horz_justify = kJustifyCenter, SelectionStyle selection_style = SingleClick,
+            const MenuView *view = gMenuView)
+  : SingleParentFrame(new DummyMenuFrame(1, true, horz_justify, kJustifyCenter, view)),
+    selection_style_(selection_style), view_(view), is_confirmed_(false),
+    mouse_x_(-1), mouse_y_(-1), search_term_reset_timer_(0) {}
+  MenuFrame(int num_cols, bool is_vertical, float horz_justify = kJustifyCenter,
+            float vert_justify = kJustifyCenter, SelectionStyle selection_style = SingleClick,
+            const MenuView *view = gMenuView)
+  : SingleParentFrame(new DummyMenuFrame(num_cols, is_vertical, horz_justify, vert_justify, view)),
+    selection_style_(selection_style), view_(view), is_confirmed_(false),
+    mouse_x_(-1), mouse_y_(-1), search_term_reset_timer_(0) {}
+  ~MenuFrame() {Clear();}
+  const MenuView *GetView() const {return view_;}
+
+  // Item accessors. Note that all coordinates are relative to this frame.
+  int GetNumItems() const {return menu()->GetNumItems();}
+  int GetSelection() const {return menu()->GetSelection();}
+  void SetSelection(int selection, bool centered_ping = false);
+  bool SelectUp();
+  bool SelectRight();
+  bool SelectDown();
+  bool SelectLeft();
+  bool PageUp();
+  bool PageRight();
+  bool PageDown();
+  bool PageLeft();
+  void Confirm(bool is_confirmed);
+  bool IsConfirmed() const {return is_confirmed_;}
+
+  // Item addition - the menu item will be deleted by the menu
+  int AddItem(GuiMenuItem *item) {return AddItem(item, GetNumItems());}
+  int AddItem(GuiMenuItem *item, int index);
+  int AddTextItem(const string &text) {return AddTextItem(text, GetNumItems());}
+  int AddTextItem(const string &text, int index) {
+    return AddItem(new TextMenuItem(text, view_->GetTextStyle()), index);
+  }
+
+  // Item removal
+  void RemoveItem() {RemoveItem(GetNumItems()-1);}
+  void RemoveItem(int index);
+  void Clear();
+
+  // Overloaded functions
+  void Think(int dt);
+  bool OnKeyEvent(const KeyEvent &event, int dt, bool gained_focus);
+ private:
+  const DummyMenuFrame *menu() const {return (DummyMenuFrame*)GetChild();}
+  DummyMenuFrame *menu() {return (DummyMenuFrame*)GetChild();}
+  void UpdateItemFrames();
+
+  vector<GuiMenuItem*> items_;
+  SelectionStyle selection_style_;
+  const MenuView *view_;
+  bool is_confirmed_;
+  int mouse_x_, mouse_y_;
+  string search_term_;
+  int search_term_reset_timer_;
+  DISALLOW_EVIL_CONSTRUCTORS(MenuFrame);
+};
+
+class MenuWidget: public FocusFrame {
+ public:
+  enum SelectionStyle {NoMouse, SingleClick, DoubleClick};
+
+  // Constructors - a basic one for one-column vertical and another for arbitrary menus
+  MenuWidget(float horz_justify = kJustifyCenter, SelectionStyle selection_style = SingleClick,
+             const MenuView *view = gMenuView)
+  : FocusFrame(new MenuFrame(horz_justify, (MenuFrame::SelectionStyle)selection_style, view)) {}
+  MenuWidget(int num_cols, bool is_vertical, float horz_justify = kJustifyCenter,
+             float vert_justify = kJustifyCenter, SelectionStyle selection_style = SingleClick,
+             const MenuView *view = gMenuView)
+  : FocusFrame(new MenuFrame(num_cols, is_vertical, horz_justify, vert_justify,
+                             (MenuFrame::SelectionStyle)selection_style, view)) {}
+  const MenuView *GetView() const {return menu()->GetView();}
+
+  // Item accessors. Note that all coordinates are relative to this frame.
+  int GetNumItems() const {return menu()->GetNumItems();}
+  int GetSelection() const {return menu()->GetSelection();}
+  void SetSelection(int selection, bool centered_ping = false) {
+    menu()->SetSelection(selection, centered_ping);
+  }
+  bool IsConfirmed() const {return menu()->IsConfirmed();}
+
+  // Item addition - the menu item will be deleted by the menu
+  int AddItem(GuiMenuItem *item) {return menu()->AddItem(item);}
+  int AddItem(GuiMenuItem *item, int index) {return menu()->AddItem(item, index);}
+  int AddTextItem(const string &text) {return menu()->AddTextItem(text);}
+  int AddTextItem(const string &text, int index) {return menu()->AddTextItem(text, index);}
+
+  // Item removal
+  void RemoveItem() {menu()->RemoveItem();}
+  void RemoveItem(int index) {menu()->RemoveItem(index);}
+  void Clear() {menu()->Clear();}
+ private:
+  const MenuFrame *menu() const {return (MenuFrame*)GetChild();}
+  MenuFrame *menu() {return (MenuFrame*)GetChild();}
+  DISALLOW_EVIL_CONSTRUCTORS(MenuWidget);
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -857,70 +1000,70 @@ class DummyMenuFrame: public MultiParentFrame {
 class DialogWidget {
  public:
   // Hot key controls
-  static LightSetId AddYesHotKey(const GlopKey &key) {Init(); return yes_keys_.GetFirstId();}
-  static void RemoveYesHotKey(LightSetId id) {Init(); yes_keys_.RemoveItem(id);}
-  static void ClearYesHotKeys() {Init(); yes_keys_.Clear();}
-  static LightSetId AddNoHotKey(const GlopKey &key) {Init(); return no_keys_.GetFirstId();}
-  static void RemoveNoHotKey(LightSetId id) {Init(); no_keys_.RemoveItem(id);}
-  static void ClearNoHotKeys() {Init(); no_keys_.Clear();}
-  static LightSetId AddOkayHotKey(const GlopKey &key) {Init(); return okay_keys_.GetFirstId();}
-  static void RemoveOkayHotKey(LightSetId id) {Init(); okay_keys_.RemoveItem(id);}
-  static void ClearOkayHotKeys() {Init(); okay_keys_.Clear();}
-  static LightSetId AddCancelHotKey(const GlopKey &key) {Init(); return cancel_keys_.GetFirstId();}
-  static void RemoveCancelHotKey(LightSetId id) {Init(); cancel_keys_.RemoveItem(id);}
-  static void ClearCancelHotKeys() {Init(); cancel_keys_.Clear();}
+  static ListId AddYesHotKey(const GlopKey &key) {Init(); return yes_keys_.push_back(key);}
+  static void RemoveYesHotKey(ListId id) {Init(); yes_keys_.erase(id);}
+  static void ClearYesHotKeys() {Init(); yes_keys_.clear();}
+  static ListId AddNoHotKey(const GlopKey &key) {Init(); return no_keys_.push_back(key);}
+  static void RemoveNoHotKey(ListId id) {Init(); no_keys_.erase(id);}
+  static void ClearNoHotKeys() {Init(); no_keys_.clear();}
+  static ListId AddOkayHotKey(const GlopKey &key) {Init(); return okay_keys_.push_back(key);}
+  static void RemoveOkayHotKey(ListId id) {Init(); okay_keys_.erase(id);}
+  static void ClearOkayHotKeys() {Init(); okay_keys_.clear();}
+  static ListId AddCancelHotKey(const GlopKey &key) {Init(); return cancel_keys_.push_back(key);}
+  static void RemoveCancelHotKey(ListId id) {Init(); cancel_keys_.erase(id);}
+  static void ClearCancelHotKeys() {Init(); cancel_keys_.clear();}
 
   // Text-only dialog boxes.
   enum Result {Yes, No, Okay, Cancel};
   static void TextOkay(const string &title, const string &message,
-                       const DialogViewFactory *factory = gDialogViewFactory);
+                       const DialogView *view = gDialogView);
   static Result TextOkayCancel(const string &title, const string &message,
-                               const DialogViewFactory *factory = gDialogViewFactory);
+                               const DialogView *view = gDialogView);
   static Result TextYesNo(const string &title, const string &message,
-                          const DialogViewFactory *factory = gDialogViewFactory);
+                          const DialogView *view = gDialogView);
   static Result TextYesNoCancel(const string &title, const string &message,
-                                const DialogViewFactory *factory = gDialogViewFactory);
+                                const DialogView *view = gDialogView);
 
   // Dialog boxes with a string prompt.
   static string StringPromptOkay(const string &title, const string &message, const string &prompt,
                                  const string &start_value, int value_length_limit,
-                                 const DialogViewFactory *factory = gDialogViewFactory);
+                                 const DialogView *view = gDialogView);
   static Result StringPromptOkayCancel(const string &title, const string &message,
                                        const string &prompt, const string &start_value,
                                        int value_length_limit, string *prompt_value,
-                                       const DialogViewFactory *factory = gDialogViewFactory);
+                                       const DialogView *view = gDialogView);
 
   // Dialog boxes with an integer prompt.
   static int IntegerPromptOkay(const string &title, const string &message, const string &prompt,
                                int start_value, int min_value, int max_value,
-                               const DialogViewFactory *factory = gDialogViewFactory);
+                               const DialogView *view = gDialogView);
   static Result IntegerPromptOkayCancel(const string &title, const string &message,
                                         const string &prompt, int start_value, int min_value,
                                         int max_value, int *prompt_value,
-                                        const DialogViewFactory *factory = gDialogViewFactory);
+                                        const DialogView *view = gDialogView);
  private:
   static void Init();
   static GlopFrame *Create(const string &title, const string &message, const string &prompt,
                            GlopFrame *extra_frame, bool has_yes_button, bool has_no_button,
                            bool has_okay_button, bool has_cancel_button,
-                           const DialogViewFactory *factory, vector<ButtonWidget*> *buttons,
+                           const DialogView *view, vector<ButtonWidget*> *buttons,
                            vector<Result> *button_meanings);
   static Result Execute(const vector<ButtonWidget*> &buttons,
                         const vector<Result> &button_meanings);
   static Result DoText(const string &title, const string &message, bool has_yes_button,
                        bool has_no_button, bool has_okay_button, bool has_cancel_button,
-                       const DialogViewFactory *factory);
+                       const DialogView *view);
   static Result DoStringPrompt(const string &title, const string &message, const string &prompt,
                                const string &start_value, int value_length_limit,
                                string *prompt_value, bool has_okay_button, bool has_cancel_button,
-                               const DialogViewFactory *factory);
+                               const DialogView *view);
   static Result DoIntegerPrompt(const string &title, const string &message, const string &prompt,
                                 int start_value, int min_value, int max_value, int *prompt_value,
                                 bool has_okay_button, bool has_cancel_button,
-                                const DialogViewFactory *factory);
+                                const DialogView *view);
  
   static bool is_initialized_;
-  static LightSet<GlopKey> yes_keys_, no_keys_, okay_keys_, cancel_keys_;
+  static List<GlopKey> yes_keys_, no_keys_, okay_keys_, cancel_keys_;
   DISALLOW_EVIL_CONSTRUCTORS(DialogWidget);
 };
 

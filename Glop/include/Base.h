@@ -8,7 +8,6 @@
 using namespace std;
 
 // Type definitions
-typedef int LightSetId;
 #ifdef WIN32
 typedef __int64 int64;
 typedef unsigned __int64 uint64;
