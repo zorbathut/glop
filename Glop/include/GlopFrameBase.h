@@ -98,7 +98,7 @@ class FocusFrame;
 class GlopWindow;
 struct KeyEvent;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////
 
 // GlopFrame
 // =========
@@ -123,10 +123,11 @@ class GlopFrame {
   GlopWindow *GetWindow() {return window_;}
 
   // Main GlopFrame functions. OnKeyEvent is the most accurate way to respond to key presses (see
-  // discussion in Input.h). Think will be called after all OnKeyEvent calls, and it is suitable for
-  // all other logic. Here, gained_focus is true if this exact event caused the frame to gain focus.
+  // discussion in Input.h). Think will be called after all OnKeyEvent calls, and it is suitable
+  // for all other logic. Here, gained_focus is true if this exact event caused the frame to gain
+  // focus.
   virtual void Render() const {}
-  virtual bool OnKeyEvent(const KeyEvent &event, int dt, bool gained_focus) {return false;}
+  virtual bool OnKeyEvent(const KeyEvent &event, bool gained_focus) {return false;}
   virtual void Think(int dt) {}
   
   // Size and position accessors. All values are in pixels, and x, y are relative to the top-left
@@ -193,9 +194,9 @@ class GlopFrame {
   
   // Returns whether a point (given in WINDOW coordinates) is over this frame, accounting for both
   // clipping and logical size. This is useful for focus tracking due to mouse clicks for example.
-  // It can be overridden if the frame's visible extent is not the same as its size. The focus frame
-  // variant does the same thing except it uses the focus frame as a basis instead if the focus
-  // frame exists. Otherwise, it is the same as IsPointVisibel.
+  // It can be overridden if the frame's visible extent is not the same as its size. The focus
+  // frame variant does the same thing except it uses the focus frame as a basis instead if the
+  // focus frame exists. Otherwise, it is the same as IsPointVisibel.
   virtual bool IsPointVisible(int screen_x, int screen_y) const;
   virtual bool IsPointVisibleInFocusFrame(int screen_x, int screen_y) const;
   
@@ -238,6 +239,11 @@ class GlopFrame {
   // and optionally its descendants. prefix is outputted at the beginning of each line.
   virtual string GetContextStringHelper(bool extend_down, bool extend_up,
                                         const string &prefix) const;
+
+  // Changes the current window of this frame and all descendents. This will only be called if
+  // window is indeed different from the current window.
+  virtual void SetWindow(GlopWindow *window) {window_ = window;}
+
  private:
   // Ping types. See above. All coordinates are set with (0,0) being the top-left of the frame.
   class AbsolutePing: public Ping {
@@ -284,10 +290,6 @@ class GlopFrame {
   virtual void SetFocusFrame(FocusFrame *focus_frame) {focus_frame_ = focus_frame;}
   virtual void NotifyFocusChange() {OnFocusChange();}
 
-  // Changes the current window of this frame and all descendents. This will only be called if
-  // window is indeed different from the current window.
-  virtual void SetWindow(GlopWindow *window) {window_ = window;}
-
   // Data
   GlopFrame *parent_;
   GlopWindow *window_;
@@ -322,9 +324,9 @@ class SingleParentFrame: public GlopFrame {
 
   // Child delegation functions
   virtual void Render() const {if (child_ != 0) child_->Render();}
-  virtual bool OnKeyEvent(const KeyEvent &event, int dt, bool gained_focus) {
+  virtual bool OnKeyEvent(const KeyEvent &event, bool gained_focus) {
     if (child_ != 0 && !child_->IsFocusFrame())
-      return child_->OnKeyEvent(event, dt, gained_focus);
+      return child_->OnKeyEvent(event, gained_focus);
     else
       return false;
   }
@@ -358,6 +360,10 @@ class SingleParentFrame: public GlopFrame {
     if (child_ != 0) child_->OnWindowResize(width, height);
   }
   string GetContextStringHelper(bool extend_down, bool extend_up, const string &prefix) const;
+  void SetWindow(GlopWindow *window) {
+    GlopFrame::SetWindow(window);
+    if (child_ != 0 && child_->GetWindow() != window) child_->SetWindow(window);
+  } 
 
  private:
   friend class FocusFrame;
@@ -371,32 +377,8 @@ class SingleParentFrame: public GlopFrame {
   }
   void RegisterFocusFrames() {if (child_ != 0) child_->RegisterFocusFrames();}
   void UnregisterFocusFrames() {if (child_ != 0) child_->UnregisterFocusFrames();}
-  void SetWindow(GlopWindow *window) {
-    GlopFrame::SetWindow(window);
-    if (child_ != 0 && child_->GetWindow() != window) child_->SetWindow(window);
-  } 
   GlopFrame *child_;
   DISALLOW_EVIL_CONSTRUCTORS(SingleParentFrame);
-};
-
-// EditableSingleParentFrame
-// =========================
-//
-// A SingleParentFrame with public functions for changing its child. It is used as a dummy wrapper
-// if you want to add a frame to a window but then wish to be able to easily change what that frame
-// is in the future. This is useful, for example, in MenuFrames.
-class EditableSingleParentFrame: public SingleParentFrame {
- public:
-  EditableSingleParentFrame(): SingleParentFrame() {}
-  EditableSingleParentFrame(GlopFrame *child): SingleParentFrame(child) {}
-  string GetType() const {return "PublicSingleParentFrame";}
-
-  const GlopFrame *GetChild() const {return SingleParentFrame::GetChild();}
-  GlopFrame *GetChild() {return SingleParentFrame::GetChild();}
-  GlopFrame *RemoveChildNoDelete() {return SingleParentFrame::RemoveChildNoDelete();}
-  void SetChild(GlopFrame *frame) {SingleParentFrame::SetChild(frame);}
- private:
-  DISALLOW_EVIL_CONSTRUCTORS(EditableSingleParentFrame);
 };
 
 // MultiParentFrame
@@ -417,7 +399,7 @@ class MultiParentFrame: public GlopFrame {
   
   // Child delegation functions
   virtual void Render() const;
-  virtual bool OnKeyEvent(const KeyEvent &event, int dt, bool gained_focus);
+  virtual bool OnKeyEvent(const KeyEvent &event, bool gained_focus);
   virtual void Think(int dt);
   virtual void SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2);
   virtual bool IsFocusMagnet(const KeyEvent &event) const;
@@ -440,16 +422,40 @@ class MultiParentFrame: public GlopFrame {
   void ClearChildren();
   void OnWindowResize(int width, int height);
   string GetContextStringHelper(bool extend_down, bool extend_up, const string &prefix) const;
+  void SetWindow(GlopWindow *window);
   
  private:
   void SetFocusFrame(FocusFrame *focus_frame);
   void NotifyFocusChange();
   void RegisterFocusFrames();
   void UnregisterFocusFrames();
-  void SetWindow(GlopWindow *window);
   friend class GlopWindow;
   List<GlopFrame*> children_;
   DISALLOW_EVIL_CONSTRUCTORS(MultiParentFrame);
+};
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+// EditableSingleParentFrame
+// =========================
+//
+// A GlopFrame wrapper that can be publicly manipulated. If we want an arbitrary frame to be able
+// to have either child A or B, and for this to be switchable, we give it an
+// EditableSingleParentFrame as a child, and then switch the child of the
+// EditableSingleParentFrame. This is useful, for example, with MenuWidget items that can change
+// depending on context.
+class EditableSingleParentFrame: public SingleParentFrame {
+ public:
+  EditableSingleParentFrame(): SingleParentFrame() {}
+  EditableSingleParentFrame(GlopFrame *child): SingleParentFrame(child) {}
+  string GetType() const {return "EditableSingleParentFrame";}
+
+  const GlopFrame *GetChild() const {return SingleParentFrame::GetChild();}
+  GlopFrame *GetChild() {return SingleParentFrame::GetChild();}
+  GlopFrame *RemoveChildNoDelete() {return SingleParentFrame::RemoveChildNoDelete();}
+  void SetChild(GlopFrame *frame) {SingleParentFrame::SetChild(frame);}
+ private:
+  DISALLOW_EVIL_CONSTRUCTORS(EditableSingleParentFrame);
 };
 
 // ClippedFrame
@@ -547,7 +553,8 @@ class ScalingPaddedFrame: public SingleParentFrame {
   float GetRelRightPadding() const {return scaled_right_padding_;}
   float GetRelBottomPadding() const {return scaled_bottom_padding_;}
   void SetPadding(float padding) {SetPadding(padding, padding, padding, padding);}
-  void SetPadding(float left_padding, float top_padding, float right_padding, float bottom_padding);
+  void SetPadding(float left_padding, float top_padding, float right_padding,
+                  float bottom_padding);
 
   void SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2);
  protected:
@@ -1146,7 +1153,8 @@ class MaxHeightFrame: public SingleParentFrame {
 
 class MaxSizeFrame: public SingleParentFrame {
  public:
-  MaxSizeFrame(GlopFrame *frame, float max_width = kSizeLimitRec, float max_height = kSizeLimitRec);
+  MaxSizeFrame(GlopFrame *frame, float max_width = kSizeLimitRec,
+               float max_height = kSizeLimitRec);
   string GetType() const {return "MaxSizeFrame";}
   void SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2);
   void AbsoluteMakeVisible(int x1, int y1, int x2, int y2, bool center);
@@ -1188,7 +1196,8 @@ class ExactWidthFrame: public MaxWidthFrame {
 };
 class ExactHeightFrame: public MaxHeightFrame {
  public:
-  ExactHeightFrame(GlopFrame *frame, float height = kSizeLimitRec, float vert_justify = kJustifyTop)
+  ExactHeightFrame(GlopFrame *frame, float height = kSizeLimitRec,
+                   float vert_justify = kJustifyTop)
   : MaxHeightFrame(new MinHeightFrame(frame, height, vert_justify), height) {}
   string GetType() const {return "ExactHeightFrame";}
   void AbsoluteMakeVisible(int y1, int y2, bool center) {

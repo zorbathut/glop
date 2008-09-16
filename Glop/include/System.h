@@ -9,7 +9,6 @@
 // Class declarations
 class Color;
 class GlopWindow;
-class Image;
 class System;
 
 // Globals
@@ -58,7 +57,20 @@ class System {
   // function (see GlopWindow.h).
   GlopWindow *window() {return window_;}
   
- private:
+  // File system
+  // ===========
+
+  // Returns all files in the given directory matching one of the given suffixes (or all files if
+  // suffixes is empty). Wildcards are not permitted. Hidden files are ignored.
+  vector<string> ListFiles(const string &directory,
+                           const vector<string> &suffixes = vector<string>(0));
+  vector<string> ListFiles(const string &directory, string suffix) {
+    return ListFiles(directory, vector<string>(1, suffix));
+  }
+
+  // Returns all subdirectories of the given directory. Hidden directories are ignored.
+  vector<string> ListSubdirectories(const string &directory);
+private:
   System();
   static void ShutDown() {delete system();}
   ~System();

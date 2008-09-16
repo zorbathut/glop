@@ -28,33 +28,38 @@ KeyEvent::Type HotKeyTracker::RemoveHotKey(ListId id) {
     else
       ++it;
   }
-  return key_state_.SetIsDown(down_hot_keys_.size() > 0);
+  KeyEvent::Type result = KeyEvent::Nothing;
+  if (key_state_.IsDownNow() && down_hot_keys_.size() == 0)
+    result = KeyEvent::Release;
+  return result;
 }
 
-bool HotKeyTracker::OnKeyEvent(const KeyEvent &event, int dt, KeyEvent::Type *result) {
+bool HotKeyTracker::OnKeyEvent(const KeyEvent &event, KeyEvent::Type *result) {
   // Handle time passing
   *result = KeyEvent::Nothing;
-  if (dt > 0) {
-    key_state_.OnKeyEventDt(dt);
+  if (event.dt > 0) {
+    key_state_.OnDt(event.dt);
     return false;
   }
 
   // Handle presses - note that we store event.key(), not the hot key in down_hot_keys. This helps
-  // us handle removed press if kAnyKey is a hot key.
+  // us handle releases if kAnyKey is a hot key.
   bool key_used = false;
   if (event.IsPress()) {
     for (List<GlopKey>::iterator it = hot_keys_.begin(); it != hot_keys_.end(); ++it)
-    if (IsMatchingKey(*it, event.key)) {
+    for (int i = 0; i < (int)event.keys.size(); i++)
+    if (IsMatchingKey(*it, event.keys[i])) {
       key_used = true;
       if (event.IsNonRepeatPress())
-        down_hot_keys_.push_back(event.key);
+        down_hot_keys_.push_back(event.keys[i]);
     }
   }
   
   // Handle releases
   else if (event.IsRelease()) {
+    for (int i = 0; i < (int)event.keys.size(); i++)
     for (List<GlopKey>::iterator it = down_hot_keys_.begin(); it != down_hot_keys_.end();) {
-      if (IsMatchingKey(*it, event.key)) {
+      if (IsMatchingKey(*it, event.keys[i])) {
         key_used = true;
         it = down_hot_keys_.erase(it);
       } else {
@@ -63,25 +68,24 @@ bool HotKeyTracker::OnKeyEvent(const KeyEvent &event, int dt, KeyEvent::Type *re
     }
   }
 
-  // Change our state and generate repeat presses if needed
+  // Change our state
   if (key_used) {
-    *result = key_state_.SetIsDown(down_hot_keys_.size() > 0);
-    if (event.IsPress() && *result == KeyEvent::Nothing) {
-      key_state_.OnKeyEventRepeatPress();
-      *result = KeyEvent::RepeatPress;
-    }
+    key_state_.SetIsDown(down_hot_keys_.size() > 0, false);
+    if (key_state_.IsDownNow() || event.type != KeyEvent::Release)
+      *result = event.type;
   }
   return key_used;
 }
 
 KeyEvent::Type HotKeyTracker::Clear() {
   down_hot_keys_.clear();
-  return key_state_.SetIsDown(false);
+  return key_state_.SetIsDown(false, true);
 }
 
 bool HotKeyTracker::IsFocusMagnet(const KeyEvent &event) const {
   for (List<GlopKey>::const_iterator it = hot_keys_.begin(); it != hot_keys_.end(); ++it)
-  if (IsMatchingKey(*it, event.key))
+  for (int i = 0; i < (int)event.keys.size(); i++)
+  if (IsMatchingKey(*it, event.keys[i]))
     return true;
   return false;
 }
@@ -678,14 +682,14 @@ void DummyTextPromptFrame::OnFocusChange() {
   SingleParentFrame::OnFocusChange();
 }
 
-bool BaseTextPromptFrame::OnKeyEvent(const KeyEvent &event, int dt, bool gained_focus) {
+bool BaseTextPromptFrame::OnKeyEvent(const KeyEvent &event, bool gained_focus) {
   // Track mouse motion with the selection
   if (input()->IsKeyDownNow(kGuiKeyPrimaryClick)) {
     bool is_visible = IsPointVisibleInFocusFrame(input()->GetMouseX(), input()->GetMouseY());
     int mx = input()->GetMouseX() - GetX();
 
     // Handle double-clicks
-    if (event.key == kGuiKeyPrimaryClick && event.IsDoublePress() && is_visible) {
+    if (event.HasKey(kGuiKeyPrimaryClick) && event.IsDoublePress() && is_visible) {
       int pos = prompt()->PixelToCharacterPosition(mx), pos1 = GetPrevWordBoundary(pos),
           pos2 = GetNextWordBoundary(pos+1);
       selection_anchor_ = pos1;
@@ -694,7 +698,7 @@ bool BaseTextPromptFrame::OnKeyEvent(const KeyEvent &event, int dt, bool gained_
     }
 
     // Handle first clicks
-    else if (event.key == kGuiKeyPrimaryClick && event.IsNonRepeatPress() && is_visible) {
+    else if (event.HasKey(kGuiKeyPrimaryClick) && event.IsNonRepeatPress() && is_visible) {
       int pos = prompt()->PixelToBoundaryPosition(mx);
       is_tracking_mouse_ = true;
       selection_anchor_ = pos;
@@ -705,14 +709,14 @@ bool BaseTextPromptFrame::OnKeyEvent(const KeyEvent &event, int dt, bool gained_
       int pos = prompt()->PixelToBoundaryPosition(mx),
         min_pos = prompt()->PixelToBoundaryPosition(GetClipX1() - GetX()),
         max_pos = prompt()->PixelToBoundaryPosition(GetClipX2() - GetX());
-      if (event.key == kGuiKeyPrimaryClick && event.IsPress()) {
+      if (event.HasKey(kGuiKeyPrimaryClick) && event.IsPress()) {
         min_pos = max(min_pos - 1, 0);
         max_pos = min(max_pos + 1, (int)GetText().size());
       }
       pos = max(min(pos, max_pos), min_pos);
       SetCursorPos(pos, false);
       prompt()->SetSelection(selection_anchor_, pos);
-      if (event.key == kGuiKeyPrimaryClick) {
+      if (event.HasKey(kGuiKeyPrimaryClick)) {
         PingSelection();
         return true;
       }
@@ -723,10 +727,10 @@ bool BaseTextPromptFrame::OnKeyEvent(const KeyEvent &event, int dt, bool gained_
 
   // Handle all key presses
   if (event.IsPress()) {
-    int ascii = input()->GetAsciiValue(event.key);
+    int ascii = input()->GetAsciiValue(event.GetMainKey());
 
     // Handle backspace and delete
-    if (event.key == kKeyBackspace) {
+    if (event.GetMainKey() == kKeyBackspace) {
       if (prompt()->IsSelectionActive())
         DeleteSelection();
       else if (GetCursorPos() > 0)
@@ -734,7 +738,7 @@ bool BaseTextPromptFrame::OnKeyEvent(const KeyEvent &event, int dt, bool gained_
       ReformText();
       PingSelection();
       return true;
-    } else if (event.key == kKeyDelete) {
+    } else if (event.GetMainKey() == kKeyDelete) {
       if (prompt()->IsSelectionActive())
         DeleteSelection();
       else if (GetCursorPos() < (int)GetText().size())
@@ -781,20 +785,24 @@ bool BaseTextPromptFrame::OnKeyEvent(const KeyEvent &event, int dt, bool gained_
                            !input()->IsKeyDownNow(kKeyLeft) && !input()->IsKeyDownNow(kKeyHome) &&
                            (!input()->IsNumLockSet() || !input()->IsKeyDownNow(kKeyPad4)) &&
                            (!input()->IsNumLockSet() || !input()->IsKeyDownNow(kKeyPad7));
-      if (event.key == kKeyLeft || (event.key == kKeyPad4 && !input()->IsNumLockSet())) {
+      if (event.GetMainKey() == kKeyLeft || (event.GetMainKey() == kKeyPad4 &&
+                                             !input()->IsNumLockSet())) {
         if (left_allowed) {
           new_cursor_pos = (input()->IsKeyDownFrame(kKeyEitherControl)?
                             GetPrevWordBoundary(new_cursor_pos-1) : new_cursor_pos - 1);
         }
-      } else if (event.key == kKeyHome || (event.key == kKeyPad7 && !input()->IsNumLockSet())) {
+      } else if (event.GetMainKey() == kKeyHome || (event.GetMainKey() == kKeyPad7 &&
+                                                    !input()->IsNumLockSet())) {
         if (left_allowed)
           new_cursor_pos = 0;
-      } else if (event.key == kKeyRight || (event.key == kKeyPad6 && !input()->IsNumLockSet())) {
+      } else if (event.GetMainKey() == kKeyRight || (event.GetMainKey() == kKeyPad6 &&
+                                                     !input()->IsNumLockSet())) {
         if (right_allowed) {
           new_cursor_pos = (input()->IsKeyDownFrame(kKeyEitherControl)?
                             GetNextWordBoundary(new_cursor_pos+1) : new_cursor_pos + 1);
         }
-      } else if (event.key == kKeyEnd || (event.key == kKeyPad1 && !input()->IsNumLockSet())) {
+      } else if (event.GetMainKey() == kKeyEnd || (event.GetMainKey() == kKeyPad1 &&
+                                                   !input()->IsNumLockSet())) {
         if (right_allowed)
           new_cursor_pos = int(GetText().size());
       } else {
@@ -814,13 +822,27 @@ bool BaseTextPromptFrame::OnKeyEvent(const KeyEvent &event, int dt, bool gained_
 
 BaseTextPromptFrame::BaseTextPromptFrame(const string &text, const TextPromptView *view)
 : SingleParentFrame(new DummyTextPromptFrame(text, view)),
-  is_tracking_mouse_(false), selection_anchor_(-1) {}
+  is_tracking_mouse_(false), selection_anchor_(-1), focus_gain_behavior_(SelectAll) {}
 
 void BaseTextPromptFrame::OnFocusChange() {
   if (IsInFocus()) {
-    selection_anchor_ = 0;
-    SetCursorPos(int(GetText().size()), false);
-    prompt()->SetSelection(selection_anchor_, GetCursorPos());
+    switch (focus_gain_behavior_) {
+     case SelectAll:
+      selection_anchor_ = 0;
+      SetCursorPos(int(GetText().size()), false);
+      prompt()->SetSelection(selection_anchor_, GetCursorPos());
+      break;
+     case CursorToStart:
+      SetCursorPos(0, true);
+      prompt()->SetSelection(selection_anchor_, GetCursorPos());
+      PingSelection();
+      break;
+     case CursorToEnd:
+      SetCursorPos(int(GetText().size()), true);
+      prompt()->SetSelection(selection_anchor_, GetCursorPos());
+      PingSelection();
+      break;
+    };
   }
   SingleParentFrame::OnFocusChange();
 }
@@ -975,7 +997,7 @@ IntegerPromptWidget::IntegerPromptWidget(int start_value, int min_value, int max
     prompt_ = new IntegerPromptFrame(start_value, min_value, max_value, prompt_view),
     prompt_width), 1), input_box_view)) {}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////
 // WindowFrame
 // ===========
 
@@ -1040,20 +1062,20 @@ void ButtonFrame::Think(int dt) {
   was_pressed_fully_ = false;
 }
 
-bool ButtonFrame::OnKeyEvent(const KeyEvent &event, int dt, bool gained_focus) {
+bool ButtonFrame::OnKeyEvent(const KeyEvent &event, bool gained_focus) {
   bool press_generated = false;
 
   // Generate held-down repeat events
-  if (dt > 0)
-    button_state_.OnKeyEventDt(dt);
+  if (event.dt > 0)
+    button_state_.OnDt(event.dt);
 
   // Handle hot keys
   KeyEvent::Type event_type;
-  bool handled_key = hot_key_tracker_.OnKeyEvent(event, dt, &event_type);
+  bool handled_key = hot_key_tracker_.OnKeyEvent(event, &event_type);
   if (event_type == KeyEvent::Press || event_type == KeyEvent::RepeatPress ||
       event_type == KeyEvent::DoublePress)
     press_generated = true;
-  if (IsPrimaryFocus() && event.key == kGuiKeyConfirm) {
+  if (IsPrimaryFocus() && event.HasKey(kGuiKeyConfirm)) {
     if (event.IsNonRepeatPress()) {
       is_confirm_key_down_ = true;
       press_generated = true;
@@ -1066,7 +1088,7 @@ bool ButtonFrame::OnKeyEvent(const KeyEvent &event, int dt, bool gained_focus) {
 
   // Handle mouse lock
   bool was_mouse_locked_on = is_mouse_locked_on_;
-  if (event.key == kGuiKeyPrimaryClick) {
+  if (event.HasKey(kGuiKeyPrimaryClick)) {
     if (event.IsRelease() && is_mouse_locked_on_) {
       is_mouse_locked_on_ = false;
       handled_key = true;
@@ -1093,10 +1115,10 @@ bool ButtonFrame::OnKeyEvent(const KeyEvent &event, int dt, bool gained_focus) {
     SetIsDown(was_mouse_locked_on? UpCancelPress : UpConfirmPress);
   }
   if (press_generated)
-    button_state_.OnKeyEventRepeatPress();
+    button_state_.OnKeyEvent(event.type);
 
   // Delegate and return
-  handled_key |= SingleParentFrame::OnKeyEvent(event, dt, gained_focus);
+  handled_key |= SingleParentFrame::OnKeyEvent(event, gained_focus);
   return handled_key;
 }
 
@@ -1114,7 +1136,7 @@ void ButtonFrame::SetIsDown(DownType down_type) {
   if ((down_type == Down) == button()->IsDown())
     return;
   button()->SetIsDown(down_type == Down);
-  button_state_.SetIsDown(down_type == Down);
+  button_state_.SetIsDown(down_type == Down, true);
   if (down_type == Down) {
     if (ping_on_press_)
       NewRelativePing(0, 0, 1, 1);
@@ -1123,7 +1145,7 @@ void ButtonFrame::SetIsDown(DownType down_type) {
   }
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////
 // Slider
 // ======
 
@@ -1249,7 +1271,8 @@ void DummySliderFrame::RecomputeTabScreenPosition() {
     tab_y1_ = 0;
     tab_y2_ = GetHeight() - 1;
   } else {
-    tab_y1_ = LogicalPositionToFirstPixelLocation(logical_tab_position_) + dec_button_->GetHeight();
+    tab_y1_ = LogicalPositionToFirstPixelLocation(logical_tab_position_) +
+      dec_button_->GetHeight();
     tab_y2_ = tab_y1_ + tab_pixel_length_ - 1;
     tab_x1_ = 0;
     tab_x2_ = GetWidth() - 1;
@@ -1257,8 +1280,8 @@ void DummySliderFrame::RecomputeTabScreenPosition() {
 }
 
 // A SliderButtonFrame is a small wrapper around ButtonFrames - it ignores handled keys if pressing
-// the button has no effect. Useful, for example, in the case of one ScrollingFrame contained within
-// another.
+// the button has no effect. Useful, for example, in the case of one ScrollingFrame contained
+// within another.
 class SliderButtonFrame: public ButtonFrame {
  public:
   static GlopFrame *Factory(ArrowFrame::Direction direction, const ArrowView *arrow_view,
@@ -1279,10 +1302,10 @@ class SliderButtonFrame: public ButtonFrame {
       AddHotKey(kGuiKeyLeft);
   }
   string GetType() const {return "SliderButtonFrame";}
-  bool OnKeyEvent(const KeyEvent &event, int dt, bool gained_focus) {
+  bool OnKeyEvent(const KeyEvent &event, bool gained_focus) {
     bool active = IsActive();
     SetPingOnPress(active);
-    return ButtonFrame::OnKeyEvent(event, dt, gained_focus) && active;
+    return ButtonFrame::OnKeyEvent(event, gained_focus) && active;
   }
  private:
   bool IsActive() const {
@@ -1313,13 +1336,13 @@ void SliderFrame::Think(int dt) {
   SingleParentFrame::Think(dt);
 }
 
-bool SliderFrame::OnKeyEvent(const KeyEvent &event, int dt, bool gained_focus) {
+bool SliderFrame::OnKeyEvent(const KeyEvent &event, bool gained_focus) {
   bool result = false;
 
   // Handle big decrements
   KeyEvent::Type tracker_event;
   bool can_dec = (GetTabPosition() != 0);
-  result |= (big_dec_tracker_.OnKeyEvent(event, dt, &tracker_event) && can_dec);
+  result |= (big_dec_tracker_.OnKeyEvent(event, &tracker_event) && can_dec);
   if (can_dec && (tracker_event == KeyEvent::Press || tracker_event == KeyEvent::RepeatPress ||
                   tracker_event == KeyEvent::DoublePress)) {
     BigDec();
@@ -1328,7 +1351,7 @@ bool SliderFrame::OnKeyEvent(const KeyEvent &event, int dt, bool gained_focus) {
 
   // Handle big increments
   bool can_inc = (GetTabPosition() != GetTotalSize() - GetTabSize());
-  result |= (big_inc_tracker_.OnKeyEvent(event, dt, &tracker_event) && can_inc);
+  result |= (big_inc_tracker_.OnKeyEvent(event, &tracker_event) && can_inc);
   if (can_inc && (tracker_event == KeyEvent::Press || tracker_event == KeyEvent::RepeatPress ||
                   tracker_event == KeyEvent::DoublePress)) {
     BigInc();
@@ -1338,8 +1361,7 @@ bool SliderFrame::OnKeyEvent(const KeyEvent &event, int dt, bool gained_focus) {
   // Compute the mouse pixel position on the slider
   int mouse_pos = slider()->PixelToPixelLocation(input()->GetMouseX() - GetX(),
                                                  input()->GetMouseY() - GetY());
-  if (event.key == kGuiKeyPrimaryClick) {
-    result = true;
+  if (event.HasKey(kGuiKeyPrimaryClick)) {
     int tab_x1, tab_y1, tab_x2, tab_y2;
     slider()->GetTabCoordinates(&tab_x1, &tab_y1, &tab_x2, &tab_y2);
     int tab_pos1 = slider()->PixelToPixelLocation(tab_x1, tab_y1);
@@ -1348,6 +1370,7 @@ bool SliderFrame::OnKeyEvent(const KeyEvent &event, int dt, bool gained_focus) {
     // Handle mouse first clicks
     if (event.IsNonRepeatPress() && IsPointVisible(input()->GetMouseX(), input()->GetMouseY()) &&
         mouse_pos >= 0 && mouse_pos <= slider()->GetMaxPixelLocation()) {
+      result = true;
       if (mouse_pos >= tab_pos1 && mouse_pos <= tab_pos2) {
         mouse_lock_mode_ = Tab;
         last_grabbed_mouse_pos_ = mouse_pos;
@@ -1362,6 +1385,7 @@ bool SliderFrame::OnKeyEvent(const KeyEvent &event, int dt, bool gained_focus) {
     if (event.IsPress() && mouse_lock_mode_ == Bar &&
         IsPointVisible(input()->GetMouseX(), input()->GetMouseY()) &&
         mouse_pos >= 0 && mouse_pos <= slider()->GetMaxPixelLocation()) {
+      result = true;
       if (mouse_pos < tab_pos1)
         BigDec();
       else if (mouse_pos > tab_pos2)
@@ -1375,13 +1399,13 @@ bool SliderFrame::OnKeyEvent(const KeyEvent &event, int dt, bool gained_focus) {
   }
 
   // Handle mouse dragging. We do not do this until the mouse has actually moved after grabbing the
-  // tab. This is because, if the range of values is bigger than the slider length, just clicking on
-  // the tab could otherwise move it.
+  // tab. This is because, if the range of values is bigger than the slider length, just clicking
+  // on the tab could otherwise move it.
   if (mouse_lock_mode_ == Tab && mouse_pos != last_grabbed_mouse_pos_) {
     slider()->SetTabPosition(slider()->PixelLocationToLogicalPosition(
       mouse_pos - tab_grab_position_));
   }
-  result |= SingleParentFrame::OnKeyEvent(event, dt, gained_focus);
+  result |= SingleParentFrame::OnKeyEvent(event, gained_focus);
   return result;
 }
 
@@ -1391,7 +1415,7 @@ void SliderFrame::OnFocusChange() {
   SingleParentFrame::OnFocusChange();
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////
 // Menu
 // ====
 
@@ -1460,8 +1484,17 @@ void DummyMenuFrame::Render() const {
   } else {
     sel_x1 = sel_y1 = sel_x2 = sel_y2 = -1;
   }
+
+  // Only pass on the visible children to the view
+  List<GlopFrame*> visible_children;
+  for (List<GlopFrame*>::const_iterator it = GetChildren().begin(); it != GetChildren().end(); 
+       ++it) {
+    int x = (*it)->GetX(), y = (*it)->GetY(), w = (*it)->GetWidth(), h = (*it)->GetHeight();
+    if (x+w > GetClipX1() && y+h > GetClipY1() && x <= GetClipX2() && y <= GetClipY2())
+      visible_children.push_back(*it);
+  }
   view_->Render(GetX(), GetY(), GetX2(), GetY2(), sel_x1, sel_y1, sel_x2, sel_y2, IsInFocus(),
-                GetChildren());
+                visible_children);
 }
 
 void DummyMenuFrame::SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2) {
@@ -1489,41 +1522,234 @@ void DummyMenuFrame::RecomputeSize(int rec_width, int rec_height) {
   SetSize(col_width_ * GetNumCols(), row_height_ * GetNumRows());
 }
 
-void MenuFrame::SetSelection(int selection, bool centered_ping) {
-  ASSERT(!IsConfirmed());
-  menu()->SetSelection(selection);
-  menu()->NewItemPing(selection, centered_ping);
+// Customizable menu items for MenuWidget
+// ======================================
+
+KeyPromptMenuItem::KeyPromptMenuItem(const string &prompt, const GlopKey &start_value,
+                                     const GlopKey &cancel_key, const GlopKey &no_key,
+                                     GlopKey *result_address, const MenuView *view)
+: GuiMenuItem(0, prompt), prompt_(prompt), cancel_key_(cancel_key), no_key_(no_key),
+  value_(start_value), result_address_(result_address), view_(view) {
+  *result_address_ = start_value;
+  ResetFrame(false);
 }
 
-bool MenuFrame::SelectUp() {
+bool KeyPromptMenuItem::OnKeyEvent(bool is_selected, bool is_confirmed, const KeyEvent &event,
+                                   Action *action) {
+  // Only process input if we are confirmed
+  if (!is_selected || !is_confirmed || !event.IsNonRepeatPress())
+    return false;
+
+  // Handle cancel / no key
+  if (event.HasKey(cancel_key_)) {
+    *action = Unconfirm;
+    return true;
+  } else if (event.HasKey(no_key_)) {
+    *action = Unconfirm;
+    *result_address_ = value_ = kNoKey;
+    return true;
+  }
+
+  // Handle real keys
+  if (IsValidKey(event.GetMainKey())) {
+    *result_address_ = value_ = event.GetMainKey();
+    *action = Unconfirm;
+    return true;
+  }
+  return false;
+}
+
+void KeyPromptMenuItem::OnConfirmationChange(bool is_selected, bool is_confirmed, Action *action) {
+  if (is_selected)
+    ResetFrame(is_confirmed);
+}
+
+void KeyPromptMenuItem::ResetFrame(bool is_confirmed) {
+  GlopFrame *rhs;
+  if (is_confirmed)
+    rhs = new DummyTextPromptFrame("", view_->GetTextPromptView());
+  else
+    rhs = new TextFrame(value_.GetName(), view_->GetTextPromptView()->GetTextStyle());
+  SetFrame(new RowFrame(new TextFrame(prompt_, view_->GetTextStyle()), rhs));
+}
+
+StringSelectMenuItem::StringSelectMenuItem(const string &prompt, const vector<string> &options,
+                                           int start_value, int *result_address,
+                                           const MenuView *view)
+: GuiMenuItem(0, prompt), options_(options), value_(start_value), result_address_(result_address) {
+  *result_address = start_value;
+  value_frame_ = new TextFrame(options_[value_], view->GetTextPromptView()->GetTextStyle());
+  SetFrame(new RowFrame(new TextFrame(prompt, view->GetTextStyle()), value_frame_));
+}
+
+void StringSelectMenuItem::OnConfirmationChange(bool is_selected, bool is_confirmed,
+                                                Action *action) {
+  if (is_selected && is_confirmed) {
+    *result_address_ = value_ = (int)((value_ + 1) % options_.size());
+    value_frame_->SetText(options_[value_]);
+    *action = Unconfirm;
+  }
+}
+
+StringPromptMenuItem::StringPromptMenuItem(const string &prompt, const string &start_value,
+                                           int length_limit, string *result_address,
+                                           const MenuView *view)
+: GuiMenuItem(0, prompt),
+  prompt_(prompt), value_(start_value), result_address_(result_address),
+  length_limit_(length_limit), view_(view) {
+  *result_address_ = start_value;
+  ResetFrame(false);
+}
+
+bool StringPromptMenuItem::OnKeyEvent(bool is_selected, bool is_confirmed, const KeyEvent &event,
+                                      Action *action) {
+  if (is_selected && is_confirmed && event.IsPress()) {
+    if (event.GetMainKey() == kKeyEnter || event.GetMainKey() == kKeyPadEnter) {
+      *result_address_ = value_ = prompt_frame_->Get();
+      *action = Unconfirm;
+      return true;
+    }
+    if (event.GetMainKey() == kKeyEscape) {
+      *action = Unconfirm;
+      return true;
+    }
+  }
+  return false;
+}
+
+void StringPromptMenuItem::OnConfirmationChange(bool is_selected, bool is_confirmed,
+                                                Action *action) {
+  if (is_selected)
+    ResetFrame(is_confirmed);
+}
+ 
+void StringPromptMenuItem::ResetFrame(bool is_confirmed) {
+  GlopFrame *rhs;
+  if (is_confirmed) {
+    prompt_frame_ = new StringPromptFrame(value_, length_limit_, view_->GetTextPromptView());
+    prompt_frame_->SetFocusGainBehavior(BaseTextPromptFrame::CursorToEnd);
+    rhs = new MaxWidthFrame(prompt_frame_);
+  } else {
+    rhs = new TextFrame(value_, view_->GetTextPromptView()->GetTextStyle());
+  }
+  SetFrame(new RowFrame(new TextFrame(prompt_, view_->GetTextStyle()), rhs));
+}
+
+IntegerPromptMenuItem::IntegerPromptMenuItem(const string &prompt, int start_value, int min_value,
+                                             int max_value, int *result_address,
+                                             const MenuView *view)
+: GuiMenuItem(0, prompt),
+  prompt_(prompt), value_(start_value), min_value_(min_value), max_value_(max_value),
+  result_address_(result_address), view_(view) {
+  *result_address_ = start_value;
+  ResetFrame(false);
+}
+
+bool IntegerPromptMenuItem::OnKeyEvent(bool is_selected, bool is_confirmed, const KeyEvent &event,
+                                       Action *action) {
+  if (is_selected && is_confirmed && event.IsPress()) {
+    if (event.GetMainKey() == kKeyEnter || event.GetMainKey() == kKeyPadEnter) {
+      *result_address_ = value_ = prompt_frame_->Get();
+      *action = Unconfirm;
+      return true;
+    }
+    if (event.GetMainKey() == kKeyEscape) {
+      *action = Unconfirm;
+      return true;
+    }
+  }
+  return false;
+}
+
+void IntegerPromptMenuItem::OnConfirmationChange(bool is_selected, bool is_confirmed,
+                                                 Action *action) {
+  if (is_selected)
+    ResetFrame(is_confirmed);
+}
+ 
+void IntegerPromptMenuItem::ResetFrame(bool is_confirmed) {
+  GlopFrame *rhs;
+  if (is_confirmed) {
+    prompt_frame_ = new IntegerPromptFrame(value_, min_value_, max_value_,
+                                           view_->GetTextPromptView());
+    prompt_frame_->SetFocusGainBehavior(BaseTextPromptFrame::CursorToEnd);
+    rhs = new MaxWidthFrame(prompt_frame_);
+  } else {
+    rhs = new TextFrame(Format("%d", value_), view_->GetTextPromptView()->GetTextStyle());
+  }
+  SetFrame(new RowFrame(new TextFrame(prompt_, view_->GetTextStyle()), rhs));
+}
+
+// MenuFrame and MenuWidget
+// ========================
+
+void MenuFrame::SetBorderStyle(ItemBorderFactory *border_factory) {
+  delete item_border_factory_;
+  item_border_factory_ = border_factory;
+  for (int i = 0; i < GetNumItems(); i++) {
+    items_[i].parent = new EditableSingleParentFrame(items_[i].parent->RemoveChildNoDelete());
+    menu()->SetItem(i, item_border_factory_->GetBorderedItem(items_[i].parent));
+  }
+}
+
+void MenuFrame::SetSelection(int selection) {
+  ASSERT(!IsConfirmed());
+  menu()->SetSelection(selection);
+  vector<pair<int, GuiMenuItem::Action> > actions;
+  for (int i = 0; i < (int)items_.size(); i++) {
+    GuiMenuItem::Action action = GuiMenuItem::Nothing;
+    items_[i].controller->OnSelectionChange(GetSelection() == i, &action);
+    RecordAction(i, action, &actions);
+  }
+  HandleActions(actions);
+}
+
+void MenuFrame::SetSelectionAndPing(int selection, bool center) {
+  SetSelection(selection);
+  menu()->NewItemPing(center);
+}
+
+void MenuFrame::PingSelection(bool center) {
+  menu()->NewItemPing(center);
+}
+
+bool MenuFrame::SelectUp(bool ping) {
   bool result = (GetSelection() != 0);
   int r = menu()->GetRow(GetSelection()), c = menu()->GetCol(GetSelection());
   SetSelection(menu()->GetItemIndex(r - 1, c));
+  if (ping)
+    PingSelection(false);
   return result;
 }
 
-bool MenuFrame::SelectRight() {
+bool MenuFrame::SelectRight(bool ping) {
   bool result = (GetSelection() != GetNumItems() - 1);
   int r = menu()->GetRow(GetSelection()), c = menu()->GetCol(GetSelection());
   SetSelection(menu()->GetItemIndex(r, c + 1));
+  if (ping)
+    PingSelection(false);
   return result;
 }
 
-bool MenuFrame::SelectDown() {
+bool MenuFrame::SelectDown(bool ping) {
   bool result = (GetSelection() != GetNumItems() - 1);
   int r = menu()->GetRow(GetSelection()), c = menu()->GetCol(GetSelection());
   SetSelection(menu()->GetItemIndex(r + 1, c));
+  if (ping)
+    PingSelection(false);
   return result;
 }
 
-bool MenuFrame::SelectLeft() {
+bool MenuFrame::SelectLeft(bool ping) {
   bool result = (GetSelection() != 0);
   int r = menu()->GetRow(GetSelection()), c = menu()->GetCol(GetSelection());
   SetSelection(menu()->GetItemIndex(r, c - 1));
+  if (ping)
+    PingSelection(false);
   return result;
 }
 
-bool MenuFrame::PageUp() {
+bool MenuFrame::PageUp(bool ping) {
   bool result = (GetSelection() != 0);
   int x1, y1, x2, y2;
   menu()->GetItemCoords(GetSelection(), &x1, &y1, &x2, &y2);
@@ -1531,10 +1757,12 @@ bool MenuFrame::PageUp() {
     SetSelection(menu()->GetItemByCoords(x1, GetClipY1() - GetY()));
   else
     SetSelection(menu()->GetItemByCoords(x1, min(y2 + GetClipY1() - GetClipY2(), y1-1)));
+  if (ping)
+    PingSelection(false);
   return result;
 }
 
-bool MenuFrame::PageRight() {
+bool MenuFrame::PageRight(bool ping) {
   bool result = (GetSelection() != GetNumItems()-1);
   int x1, y1, x2, y2;
   menu()->GetItemCoords(GetSelection(), &x1, &y1, &x2, &y2);
@@ -1542,10 +1770,12 @@ bool MenuFrame::PageRight() {
     SetSelection(menu()->GetItemByCoords(GetClipX2() - GetX(), y1));
   else
     SetSelection(menu()->GetItemByCoords(max(x1 + GetClipX2() - GetClipX1(), x2+1), y1));
+  if (ping)
+    PingSelection(false);
   return result;
 }
 
-bool MenuFrame::PageDown() {
+bool MenuFrame::PageDown(bool ping) {
   bool result = (GetSelection() != GetNumItems()-1);
   int x1, y1, x2, y2;
   menu()->GetItemCoords(GetSelection(), &x1, &y1, &x2, &y2);
@@ -1553,10 +1783,12 @@ bool MenuFrame::PageDown() {
     SetSelection(menu()->GetItemByCoords(x1, GetClipY2() - GetY()));
   else
     SetSelection(menu()->GetItemByCoords(x1, max(y1 + GetClipY2() - GetClipY1(), y2+1)));
+  if (ping)
+    PingSelection(false);
   return result;
 }
 
-bool MenuFrame::PageLeft() {
+bool MenuFrame::PageLeft(bool ping) {
   bool result = (GetSelection() != 0);
   int x1, y1, x2, y2;
   menu()->GetItemCoords(GetSelection(), &x1, &y1, &x2, &y2);
@@ -1564,42 +1796,48 @@ bool MenuFrame::PageLeft() {
     SetSelection(menu()->GetItemByCoords(GetClipX1() - GetX(), y1));
   else
     SetSelection(menu()->GetItemByCoords(min(x2 + GetClipX1() - GetClipX2(), x1-1), y1));
+  if (ping)
+    PingSelection(false);
   return result;
 }
 
 void MenuFrame::Confirm(bool is_confirmed) {
   if (is_confirmed == is_confirmed_)
     return;
-  ASSERT(GetNumItems() > 0);
-  is_confirmed_ = is_confirmed;
-
-  // Notify the menu items that the confirm state has changed
-  while (1) {
-    bool switch_confirm_state = false;
-    for (int i = 0; i < GetNumItems(); i++)
-      items_[i]->OnConfirmSwitchState(GetSelection() == i, is_confirmed_, &switch_confirm_state);
-    if (!switch_confirm_state) {
-      UpdateItemFrames();
-      break;
-    } else {
-      is_confirmed_ = !is_confirmed_;
-    }
+  if (is_confirmed) {
+    // Make sure there is an item to confirm and that we are in the top focus layer
+    ASSERT(GetNumItems() > 0);
+    GetFocusFrame()->DemandFocus(false);
+    ASSERT(GetWindow()->GetFocusFrame() == GetFocusFrame());
+    menu()->NewItemPing(false);
+  } else {
+    // Do not jump to the mouse if it moved while the menu was confirmed
+    mouse_x_ = mouse_y_ = -1;
   }
+
+  is_confirmed_ = is_confirmed;
+  vector<pair<int, GuiMenuItem::Action> > actions;
+  for (int i = 0; i < (int)items_.size(); i++) {
+    GuiMenuItem::Action action = GuiMenuItem::Nothing;
+    items_[i].controller->OnConfirmationChange(GetSelection() == i, is_confirmed_, &action);
+    RecordAction(i, action, &actions);
+  }
+  HandleActions(actions);
 }
 
 int MenuFrame::AddItem(GuiMenuItem *item, int index) {
-  menu()->AddItem(item->GetFrame(), index);
-  items_.push_back(0);
+  items_.push_back(ItemInfo());
   for (int i = GetNumItems() - 1; i > index; i--)
     items_[i] = items_[i-1];
-  items_[index] = item;
+  items_[index] = ItemInfo(item, new EditableSingleParentFrame(item->GetFrame()));
+  menu()->AddItem(item_border_factory_->GetBorderedItem(items_[index].parent));
   return index;
 }
 
 void MenuFrame::RemoveItem(int index) {
   ASSERT(!is_confirmed_ || GetSelection() != index);
   menu()->RemoveItem(index);
-  GuiMenuItem *item = items_[index];
+  GuiMenuItem *item = items_[index].controller;
   for (int i = index; i < GetNumItems(); i++)
     items_[i] = items_[i+1];
   items_.pop_back();
@@ -1609,100 +1847,113 @@ void MenuFrame::RemoveItem(int index) {
 void MenuFrame::Clear() {
   Confirm(false);
   menu()->Clear();
-  for (int i = 0; i < GetNumItems(); i++)
-    delete items_[i];
+  for (int i = 0; i < (int)items_.size(); i++)
+    delete items_[i].controller;
   items_.clear();
 }
 
 void MenuFrame::Think(int dt) {
+  SingleParentFrame::Think(dt);
   if (search_term_reset_timer_ > 0)
     search_term_reset_timer_ -= dt;
   else
     search_term_ = "";
 
-  bool switch_confirm_state = false;
-  for (int i = 0; i < GetNumItems(); i++)
-    items_[i]->Think(GetSelection() == i, IsConfirmed(), dt, &switch_confirm_state);
-  if (switch_confirm_state)
-    Confirm(!IsConfirmed());
-  UpdateItemFrames();
+  vector<pair<int, GuiMenuItem::Action> > actions;
+  for (int i = 0; i < (int)items_.size(); i++) {
+    GuiMenuItem::Action action = GuiMenuItem::Nothing;
+    items_[i].controller->Think(GetSelection() == i, is_confirmed_, dt, &action);
+    RecordAction(i, action, &actions);
+  }
+  HandleActions(actions);
 }
 
-bool MenuFrame::OnKeyEvent(const KeyEvent &event, int dt, bool gained_focus) {
-  bool switch_confirm_state = false, used_key = false;
-  for (int i = 0; i < GetNumItems(); i++) {
-    used_key = items_[i]->OnKeyEvent(GetSelection() == i, IsConfirmed(), event, dt,
-                                     &switch_confirm_state);
+bool MenuFrame::OnKeyEvent(const KeyEvent &event, bool gained_focus) {
+  // Allow the menu items to perform logic
+  bool used_key = SingleParentFrame::OnKeyEvent(event, gained_focus);
+  vector<pair<int, GuiMenuItem::Action> > actions;
+  for (int i = 0; i < (int)items_.size(); i++) {
+    GuiMenuItem::Action action = GuiMenuItem::Nothing;
+    used_key |= items_[i].controller->OnKeyEvent(GetSelection() == i, is_confirmed_, event,
+                                                 &action);
+    RecordAction(i, action, &actions);
   }
-  if (switch_confirm_state)
-    Confirm(!IsConfirmed());
-  UpdateItemFrames();
-  if (IsConfirmed())
-    return used_key;
+  HandleActions(actions);
 
+  // If the menu is confirmed, do not do menu meta-logic and do not pass the key up the chain
+  if (IsConfirmed() || used_key)
+    return true;
+
+  // Figure out which menu item the mouse is over
   int mouse_item = -1;
   if (mouse_x_ == -1 && mouse_y_ == -1) {
     mouse_x_ = input()->GetMouseX();
     mouse_y_ = input()->GetMouseY();
   }
-  if (event.IsNothing() || event.key == kGuiKeyPrimaryClick) {
-    int mouse_x = input()->GetMouseX(), mouse_y = input()->GetMouseY();
-    if (IsPointVisible(mouse_x, mouse_y))
-      mouse_item = menu()->GetItemByCoords(mouse_x - GetX(), mouse_y - GetY());
-    if (mouse_item >= GetNumItems())
-      mouse_item = -1;
-    if (selection_style_ == SingleClick && mouse_item != -1 &&
-        (mouse_x_ != mouse_x || mouse_y_ != mouse_y)) {
-      mouse_x_ = mouse_x;
-      mouse_y_ = mouse_y;
-      SetSelection(mouse_item);
-    }
+  int mouse_x = input()->GetMouseX(), mouse_y = input()->GetMouseY();
+  if (IsPointVisible(mouse_x, mouse_y))
+    mouse_item = menu()->GetItemByCoords(mouse_x - GetX(), mouse_y - GetY());
+  if (mouse_item >= GetNumItems())
+    mouse_item = -1;
+
+  // Optionally make that item our selection
+  if (selection_style_ == SingleClick && mouse_item != -1 &&
+      (mouse_x_ != mouse_x || mouse_y_ != mouse_y)) {
+    mouse_x_ = mouse_x;
+    mouse_y_ = mouse_y;
+    SetSelectionAndPing(mouse_item, false);
   }
 
+  // Handle actual key presses
   if (event.IsPress() && !used_key) {
-    if (event.key == kGuiKeyUp)
-      used_key |= SelectUp();
-    if (event.key == kGuiKeyDown)
-      used_key |= SelectDown();
-    if (event.key == kGuiKeyRight)
-      used_key |= SelectRight();
-    if (event.key == kGuiKeyLeft)
-      used_key |= SelectLeft();
-    if (event.key == kGuiKeyPageUp || event.key == kGuiKeyPageLeft) {
+    // Selection changes
+    if (event.HasKey(kGuiKeyUp))
+      used_key |= SelectUp(true);
+    if (event.HasKey(kGuiKeyDown))
+      used_key |= SelectDown(true);
+    if (event.HasKey(kGuiKeyRight))
+      used_key |= SelectRight(true);
+    if (event.HasKey(kGuiKeyLeft))
+      used_key |= SelectLeft(true);
+    if (event.HasKey(kGuiKeyPageUp) || event.HasKey(kGuiKeyPageLeft)) {
       if (menu()->IsVertical())
-        used_key |= PageUp();
+        used_key |= PageUp(true);
       else
-        used_key |= PageLeft();
+        used_key |= PageLeft(true);
     }
-    if (event.key == kGuiKeyPageDown || event.key == kGuiKeyPageRight) {
+    if (event.HasKey(kGuiKeyPageDown) || event.HasKey(kGuiKeyPageRight)) {
       if (menu()->IsVertical())
-        used_key |= PageDown();
+        used_key |= PageDown(true);
       else
-        used_key |= PageRight();
+        used_key |= PageRight(true);
     }
-    if (event.key == kGuiKeyConfirm) {
+
+    // Confirm
+    if (event.HasKey(kGuiKeyConfirm)) {
       used_key = true;
       Confirm(true);
     }
-    if (event.key == kGuiKeyPrimaryClick && mouse_item != -1 && selection_style_ != NoMouse) {    
+
+    // Click
+    if (event.IsNonRepeatPress() && event.HasKey(kGuiKeyPrimaryClick) && mouse_item != -1 &&
+        selection_style_ != NoMouse) {
       used_key = true;
-      if (event.IsNonRepeatPress() &&
-          (GetSelection() == mouse_item || selection_style_ == SingleClick)) {
+      if (GetSelection() == mouse_item && !gained_focus)
         Confirm(true);
-      } else {
-        SetSelection(mouse_item);
-      }
+      else
+        SetSelectionAndPing(mouse_item, false);
     }
 
-    int ascii = input()->GetAsciiValue(event.key);
+    // Typing
+    int ascii = input()->GetAsciiValue(event.GetMainKey());
     if (ascii >= 32 && ascii < 127 && !used_key) {
       search_term_ += ascii;
       int match = -1;
-      for (int i = 0; i < GetNumItems(); i++)
-      if (items_[i]->GetSearchKey().size() >= search_term_.size()) {
+      for (int i = 0; i < (int)items_.size(); i++)
+      if (items_[i].controller->GetSearchKey().size() >= search_term_.size()) {
         bool is_match = true;
         for (int j = 0; j < (int)search_term_.size(); j++)
-        if (items_[i]->GetSearchKey()[j] != search_term_[j]) {
+        if (items_[i].controller->GetSearchKey()[j] != search_term_[j]) {
           is_match = false;
           break;
         }
@@ -1712,7 +1963,7 @@ bool MenuFrame::OnKeyEvent(const KeyEvent &event, int dt, bool gained_focus) {
         }
       }
       if (match != -1)
-        SetSelection(match);
+        SetSelectionAndPing(match, false);
       if (match != -1 || search_term_.size() > 1) {
         used_key = true;
         search_term_reset_timer_ = kSearchTermResetTime;
@@ -1724,13 +1975,76 @@ bool MenuFrame::OnKeyEvent(const KeyEvent &event, int dt, bool gained_focus) {
   return used_key;
 }
 
-void MenuFrame::UpdateItemFrames() {
-  for (int i = 0; i < GetNumItems(); i++)
-  if (items_[i]->GetFrame() != menu()->GetItem(i))
-    menu()->SetItemNoDelete(i, items_[i]->GetFrame());
+void MenuFrame::RecordAction(int item, GuiMenuItem::Action action,
+                             vector<pair<int, GuiMenuItem::Action> > *actions) {
+  switch (action) {
+   case GuiMenuItem::Nothing:
+    return;
+   case GuiMenuItem::SelectNoPing:
+   case GuiMenuItem::SelectAndPing:
+   case GuiMenuItem::SelectAndConfirm:
+    ASSERT(!is_confirmed_);
+    break;
+   case GuiMenuItem::Unconfirm:
+    ASSERT(is_confirmed_ && GetSelection() == item);
+    break;
+   default:
+    ASSERT(false);
+  };
+  actions->push_back(make_pair(item, action));
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
+void MenuFrame::HandleActions(const vector<pair<int, GuiMenuItem::Action> > &actions) {
+  // Make sure we are rendering the right frames
+  for (int i = 0; i < GetNumItems(); i++) {
+    if (items_[i].controller->GetFrame() != items_[i].parent->GetChild())
+      items_[i].parent->SetChild(items_[i].controller->GetFrame());
+  }
+
+  // Handle the actions
+  for (int i = 0; i < (int)actions.size(); i++) {
+    switch (actions[i].second) {
+     case GuiMenuItem::SelectNoPing:
+      SetSelection(actions[i].first);
+      break;
+     case GuiMenuItem::SelectAndPing:
+      SetSelection(actions[i].first);
+      menu()->NewItemPing(false);
+      break;
+     case GuiMenuItem::SelectAndConfirm:
+      SetSelection(actions[i].first);
+      Confirm(true);
+      break;
+     case GuiMenuItem::Unconfirm:
+      Confirm(false);
+      break;
+     default:
+      ASSERT(false);
+    };
+  }
+}
+
+GlopFrame *MenuFrame::BasicItemBorderFactory::GetBorderedItem(GlopFrame *item) {
+  if (horz_sizing_ == ExactlyRecSize)
+    item = new ExactWidthFrame(item);
+  else if (horz_sizing_ == AtLeastRecSize)
+    item = new MinWidthFrame(item);
+  else if (horz_sizing_ == AtMostRecSize)
+    item = new MaxWidthFrame(item);
+  if (vert_sizing_ == ExactlyRecSize)
+    item = new ExactHeightFrame(item);
+  else if (vert_sizing_ == AtLeastRecSize)
+    item = new MinHeightFrame(item);
+  else if (vert_sizing_ == AtMostRecSize)
+    item = new MaxHeightFrame(item);
+  if (abs_padding_ > 0)
+    item = new PaddedFrame(item, abs_padding_);
+  if (rel_padding_ > 0)
+    item = new ScalingPaddedFrame(item, rel_padding_);
+  return item;
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
 // Dialog
 // ======
 
@@ -1826,7 +2140,8 @@ GlopFrame *DialogWidget::Create(
   }
   if (has_okay_button) {
     button_meanings->push_back(Okay);
-    buttons->push_back(new ButtonWidget("Okay", view->GetButtonTextStyle(), view->GetButtonView()));
+    buttons->push_back(new ButtonWidget("Okay", view->GetButtonTextStyle(),
+      view->GetButtonView()));
     for (List<GlopKey>::iterator it = okay_keys_.begin(); it != okay_keys_.end(); ++it)
       (*buttons)[buttons->size()-1]->AddHotKey(*it);
   }

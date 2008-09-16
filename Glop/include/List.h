@@ -28,8 +28,8 @@ using namespace std;
 // ListId class definition
 class ListId {
  public: 
+  ListId(int v = 0): value_(v) {}
   template<class input_iterator> ListId(input_iterator it): value_(it.index_) {}
-  ListId(int value = -1): value_(value) {}
   int value() const {return value_;}
   bool operator==(const ListId &rhs) const {return value_ == rhs.value_;}
   bool operator!=(const ListId &rhs) const {return value_ != rhs.value_;}
@@ -60,7 +60,7 @@ template <class T> class List {
 
     const_iterator(): nodes_(0) {}
     const T &operator*() const {return (*nodes_)[index_].value;}
-    const T *operator->() const {return (*nodes_)[index_].value;}
+    const T *operator->() const {return &(*nodes_)[index_].value;}
     const_iterator& operator++() { // preincrement
       index_ = (*nodes_)[index_].next;
 			return (*this);
@@ -107,7 +107,7 @@ template <class T> class List {
 
     iterator(): nodes_(0) {}
     T &operator*() const {return (*nodes_)[index_].value;}
-    T *operator->() const {return (*nodes_)[index_].value;}
+    T *operator->() const {return &(*nodes_)[index_].value;}
     iterator& operator++() { // preincrement
       index_ = (*nodes_)[index_].next;
 			return (*this);

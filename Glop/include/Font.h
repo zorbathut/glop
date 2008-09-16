@@ -20,8 +20,8 @@
 //
 // FontBitmap - A TrueType font converted into a giant bitmap for rendering purposes. Ultimately,
 //              this will be used by Font both for rendering and for character metric queries.
-//              Each TextRenderer will be given a FontBitmap, although multiple TextRenderer's could
-//              possibly share a single TextRenderer.
+//              Each TextRenderer will be given a FontBitmap, although multiple TextRenderer's
+//              could possibly share a single TextRenderer.
 
 #ifndef GLOP_FONT_H__
 #define GLOP_FONT_H__
@@ -252,7 +252,8 @@ class GradientFont: public Font {
                const vector<float> &mid_brightness);
   void Init(float top_brightness, float bottom_brightness, const vector<float> &mid_pos,
             const vector<float> &mid_brightness);
-  void GetColors(const FontBitmap *bitmap, int y1, int y2, vector<int> *y, vector<float> *yc) const;
+  void GetColors(const FontBitmap *bitmap, int y1, int y2,
+                 vector<int> *y, vector<float> *yc) const;
 
   vector<float> brightness_pos_, brightness_;
   DISALLOW_EVIL_CONSTRUCTORS(GradientFont);

@@ -1,7 +1,6 @@
 // Includes
 #include "../include/System.h"
 #include "../include/GlopWindow.h"
-#include "../include/Image.h"
 #include "../include/Input.h"
 #include "../include/OpenGl.h"
 #include "GlopInternalData.h"
@@ -93,6 +92,28 @@ vector<pair<int, int> > System::GetFullScreenModes(int min_width, int min_height
     if (all_modes[i].first >= min_width && all_modes[i].second >= min_height)
       good_modes.push_back(all_modes[i]);
   return good_modes;
+}
+
+// File system
+// ===========
+
+vector<string> System::ListFiles(const string &directory, const vector<string> &suffixes) {
+  vector<string> files = Os::ListFiles(directory), result;
+  for (int i = 0; i < (int)files.size(); i++) {
+    bool is_match = (suffixes.size() == 0);
+    for (int j = 0; j < (int)suffixes.size(); j++) {
+      int l1 = (int)files[i].size(), l2 = (int)suffixes[j].size();
+      if (l1 > l2 && files[i][l1-l2-1] == '.' && files[i].substr(l1-l2) == suffixes[j])
+        is_match = true;
+    }
+    if (is_match)
+      result.push_back(files[i]);
+  }
+  return result;
+}
+
+vector<string> System::ListSubdirectories(const string &directory) {
+  return Os::ListSubdirectories(directory);
 }
 
 // Setup

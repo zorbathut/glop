@@ -6,15 +6,15 @@
 //
 // Conventions: Many of these frames are designed to be easily customizable by user programs. To
 //              facilitate changing how frames look, they delegate to View objects for all
-//              rendering. These View objects are defined in GlopFrameStyle.
+//              rendering. These View objects are defined in GlopFrameStyle.h.
 //
 //              To faciliate changing how frames act, many frames have a dummy version. These have
 //              all the same essential features, but their state can only be changed
 //              programmatically. Separate classes then provide the desired user interface,
 //              delegating to the dummy version as appropriate. The default implementations here
 //              also support some limited customization. Where possible, all key detection is
-//              restricted to the GUI derived keys in Input. Thus, basic GUI behavior can be changed
-//              by remapping those keys.
+//              restricted to the GUI derived keys in Input. Thus, basic GUI behavior can be
+//              changed by remapping those keys.
 //
 //              Finally, recall that a frame only receives input events if it is wrapped in a
 //              FocusFrame. By convention, all the major interactive frames here have a convenience
@@ -47,6 +47,9 @@
 // ButtonWidget: A basic push-button.
 // SliderWidget: A horizontal or vertical scroll-bar, although with no scrolling properties. It can
 //               be used to select any integer value.
+// MenuWidget: A game-style menu (i.e. a menu that is always visible, not a pull-down menu).
+//             Supports logic on the menu items themselves so that, for example, an editable
+//             (text, value) pair can be easily added to the menu.
 // DialogWidget: A modal dialog box. It displays a message and waits for the user to press a
 //               button. It may also allow the user to interact with a single other widget inside
 //               (e.g. a StringPromptWidget).
@@ -80,10 +83,10 @@ class HotKeyTracker {
   ListId AddHotKey(const GlopKey &key) {return hot_keys_.push_back(key);}
   KeyEvent::Type RemoveHotKey(ListId id);
 
-  bool OnKeyEvent(const KeyEvent &event, int dt, KeyEvent::Type *result);
-  bool OnKeyEvent(const KeyEvent &event, int dt) {
+  bool OnKeyEvent(const KeyEvent &event, KeyEvent::Type *result);
+  bool OnKeyEvent(const KeyEvent &event) {
     KeyEvent::Type x;
-    return OnKeyEvent(event, dt, &x);
+    return OnKeyEvent(event, &x);
   }
   KeyEvent::Type Clear();
   bool IsFocusMagnet(const KeyEvent &event) const;
@@ -207,14 +210,14 @@ class ArrowFrame: public GlopFrame {
   DISALLOW_EVIL_CONSTRUCTORS(ArrowFrame);
 };
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////
 // Text frames
 // ===========
 //
 // See comment at the top of the file.
 class TextFrame: public GlopFrame {
  public:
-  TextFrame(const string &text, const GuiTextStyle &style = *gGuiTextStyle);
+  TextFrame(const string &text, const GuiTextStyle &style = gGuiTextStyle);
   virtual ~TextFrame();
   string GetType() const {return "TextFrame";}
   
@@ -278,9 +281,9 @@ class TextFrame: public GlopFrame {
 class FancyTextFrame: public MultiParentFrame {
  public:
   // Constructors. horz_justify is used to align different rows of text.
-  FancyTextFrame(const string &text, const GuiTextStyle &style = *gGuiTextStyle);
+  FancyTextFrame(const string &text, const GuiTextStyle &style = gGuiTextStyle);
   FancyTextFrame(const string &text, bool add_soft_returns, float horz_justify,
-                 const GuiTextStyle &style = *gGuiTextStyle);
+                 const GuiTextStyle &style = gGuiTextStyle);
   string GetType() const {return "FancyTextFrame";}
 
   // Tags. These can be used as follows: string("Test: " + CTag(kRed) + " red");
@@ -348,7 +351,7 @@ class FancyTextFrame: public MultiParentFrame {
 
 class FpsFrame: public SingleParentFrame {
  public:
-  FpsFrame(const GuiTextStyle &style = *gGuiTextStyle)
+  FpsFrame(const GuiTextStyle &style = gGuiTextStyle)
   : SingleParentFrame(new TextFrame("", style)) {}
   string GetType() const {return "FpsFrame";}
   const GuiTextStyle &GetStyle() const {return text()->GetStyle();}
@@ -361,7 +364,7 @@ class FpsFrame: public SingleParentFrame {
   DISALLOW_EVIL_CONSTRUCTORS(FpsFrame);
 };
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////
 // Text prompts
 // ============
 //
@@ -385,8 +388,8 @@ class DummyTextPromptFrame: public SingleParentFrame {
   }
   void SetSelection(int start, int end);
 
-  // Given a pixel in local coordinates, these returns the character position it is overlapping. The
-  // first one returns a boundary in [0, len]. The second one returns an actual character in
+  // Given a pixel in local coordinates, these returns the character position it is overlapping.
+  // The first one returns a boundary in [0, len]. The second one returns an actual character in
   // [0, len-1].
   int PixelToBoundaryPosition(int x) const;
   int PixelToCharacterPosition(int x) const;
@@ -413,9 +416,11 @@ class DummyTextPromptFrame: public SingleParentFrame {
 
 class BaseTextPromptFrame: public SingleParentFrame {
  public:
+  enum FocusGainBehavior {NoChange, CursorToStart, CursorToEnd, SelectAll};
   string GetType() const {return "BaseTextPromptFrame";}
-  bool OnKeyEvent(const KeyEvent &event, int dt, bool gained_focus);
-
+  void SetFocusGainBehavior(FocusGainBehavior behavior) {focus_gain_behavior_ = behavior;}
+  bool OnKeyEvent(const KeyEvent &event, bool gained_focus);
+  
  protected:
   BaseTextPromptFrame(const string &text, const TextPromptView *view);
   void OnFocusChange();
@@ -457,6 +462,7 @@ class BaseTextPromptFrame: public SingleParentFrame {
     DISALLOW_EVIL_CONSTRUCTORS(CharacterPing);
   };
 
+  FocusGainBehavior focus_gain_behavior_;
   bool is_tracking_mouse_;
   int selection_anchor_;
   DISALLOW_EVIL_CONSTRUCTORS(BaseTextPromptFrame);
@@ -480,7 +486,8 @@ class StringPromptFrame: public BaseTextPromptFrame {
 
 class StringPromptWidget: public FocusFrame {
  public:
-  StringPromptWidget(const string &start_text, int length_limit, float prompt_width = kSizeLimitRec,
+  StringPromptWidget(const string &start_text, int length_limit,
+                     float prompt_width = kSizeLimitRec,
                      const TextPromptView *prompt_view = gTextPromptView,
                      const InputBoxView *input_box_view = gInputBoxView);
   string GetType() const {return "StringPromptWidget";}
@@ -523,7 +530,7 @@ class IntegerPromptWidget: public FocusFrame {
   DISALLOW_EVIL_CONSTRUCTORS(IntegerPromptWidget);
 };
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////
 // Window
 // ======
 
@@ -543,7 +550,7 @@ class WindowFrame: public SingleParentFrame {
   DISALLOW_EVIL_CONSTRUCTORS(WindowFrame);
 };
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////
 // Button
 // ======
 
@@ -590,7 +597,7 @@ class ButtonFrame: public SingleParentFrame {
 
   // Glop overloaded functions
   void Think(int dt);
-  bool OnKeyEvent(const KeyEvent &event, int dt, bool gained_focus);
+  bool OnKeyEvent(const KeyEvent &event, bool gained_focus);
   bool IsFocusMagnet(const KeyEvent &event) const {return hot_key_tracker_.IsFocusMagnet(event);}
  protected:
   void OnFocusChange();
@@ -624,11 +631,11 @@ class ButtonWidget: public FocusFrame {
   : FocusFrame(new ButtonFrame(frame, view)) {button()->AddHotKey(hot_key);}
 
   // Convenience constructors for text button frames
-  ButtonWidget(const string &text, const GuiTextStyle &text_style = *gGuiTextStyle,
+  ButtonWidget(const string &text, const GuiTextStyle &text_style = gGuiTextStyle,
                const ButtonView *view = gButtonView)
   : FocusFrame(new ButtonFrame(new TextFrame(text, text_style), view)) {}
   ButtonWidget(const string &text, const GlopKey &hot_key,
-               const GuiTextStyle &text_style = *gGuiTextStyle,
+               const GuiTextStyle &text_style = gGuiTextStyle,
                const ButtonView *view = gButtonView)
   : FocusFrame(new ButtonFrame(new TextFrame(text, text_style), view)) {
     button()->AddHotKey(hot_key);
@@ -647,7 +654,7 @@ class ButtonWidget: public FocusFrame {
   DISALLOW_EVIL_CONSTRUCTORS(ButtonWidget);
 };
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////
 // Slider
 // ======
 
@@ -728,7 +735,7 @@ class SliderFrame: public SingleParentFrame {
 
   // Overloaded functions
   void Think(int dt);
-  bool OnKeyEvent(const KeyEvent &event, int dt, bool gained_focus);
+  bool OnKeyEvent(const KeyEvent &event, bool gained_focus);
  protected:
   void OnFocusChange();
 
@@ -783,7 +790,7 @@ class SliderWidget: public FocusFrame {
   DISALLOW_EVIL_CONSTRUCTORS(SliderWidget);
 };
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////
 // Menu
 // ====
 
@@ -791,6 +798,7 @@ class DummyMenuFrame: public MultiParentFrame {
  public:
   DummyMenuFrame(int num_cols, bool is_vertical, float horz_justify, float vert_justify,
                  const MenuView *view = gMenuView);
+  string GetType() const {return "DummyMenuFrame";}
   bool IsVertical() const {return is_vertical_;}
 
   // Item layout accessors.
@@ -852,26 +860,42 @@ class DummyMenuFrame: public MultiParentFrame {
   DISALLOW_EVIL_CONSTRUCTORS(DummyMenuFrame);
 };
 
+// Customizable menu items for MenuWidget
+// ======================================
+
 class GuiMenuItem {
  public:
+  enum Action {Nothing, SelectNoPing, SelectAndPing, SelectAndConfirm, Unconfirm};
   virtual ~GuiMenuItem() {}
 
-  // Accessors
+  // Accessors. The search key is a string that allows the user to quickly select this item by
+  // typing it in. The frame is what is actually added to the menu and displayed. These may be
+  // changed at any time by calls to SetFrame and SetSearchKey. Note that once control leaves
+  // the GuiMenuItem, the frame returned by GetFrame is owned by the menu and will be deleted
+  // automatically.
   const string &GetSearchKey() const {return search_key_;}
   GlopFrame *GetFrame() {return frame_;}
 
   // Logic functions. These are called whenever the corresponding function on the menu is called.
   // is_selected and is_confirmed specify whether this item is selected, and whether the menu is in
-  // the confirmed state. switch_confirm_state, initially false, determines whether the menu should
-  // switch from confirmed to uncofirmed or vice-versa after this call.
-  virtual void Think(bool is_selected, bool is_confirmed, int dt, bool *switch_confirm_state) {}
-  virtual bool OnKeyEvent(bool is_selected, bool is_confirmed, const KeyEvent &event, int dt,
-                          bool *switch_confirm_state) {return false;}
-  virtual void OnConfirmSwitchState(bool is_selected, bool is_confirmed,
-                                    bool *switch_confirm_state) {}
+  // the confirmed state. These functions may optionally make the menu take an action:
+  //  - Nothing. This may always be done. It does nothing.
+  //  - SelectNoPing. If the menu is not confirmed, this switches the selection to this item.
+  //  - SelectAndPing. Same as SelectNoPing except it also pings this item.
+  //  - SelectAndConfirm. Same as SelectNoPing except it also confirms this item. (This will
+  //                      generate a ping automatically.)
+  //  - Unconfirm. If the menu is confirmed on THIS item, this Unconfirms.
+  // By default *action will always be Nothing.
+  virtual void Think(bool is_selected, bool is_confirmed, int dt, Action *action) {}
+  virtual bool OnKeyEvent(bool is_selected, bool is_confirmed, const KeyEvent &event,
+                          Action *action) {return false;}
+  virtual void OnConfirmationChange(bool is_selected, bool is_confirmed, Action *action) {}
+  virtual void OnSelectionChange(bool is_selected, Action *action) {}
+
  protected:
-  // Utilities for overloaded functions
-  GuiMenuItem(GlopFrame *frame, const string &search_key): frame_(frame), search_key_(search_key) {}
+  // Utilities for extensions
+  GuiMenuItem(GlopFrame *frame, const string &search_key)
+  : frame_(frame), search_key_(search_key) {}
   void SetFrame(GlopFrame *frame) {frame_ = frame;}
   void SetSearchKey(const string &search_key) {search_key_ = search_key;}
 
@@ -881,54 +905,203 @@ class GuiMenuItem {
   DISALLOW_EVIL_CONSTRUCTORS(GuiMenuItem);
 };
 
+// A basic line of text
 class TextMenuItem: public GuiMenuItem {
  public:
-  TextMenuItem(const string &text, const GuiTextStyle &style = *gGuiTextStyle)
+  TextMenuItem(const string &text, const GuiTextStyle &style = gGuiTextStyle)
   : GuiMenuItem(new TextFrame(text, style), text) {}
  private:
   DISALLOW_EVIL_CONSTRUCTORS(TextMenuItem);
 };
 
+// A user-editable key selector
+class KeyPromptMenuItem: public GuiMenuItem {
+ public:
+  // prompt - The text to appear before the chosen key
+  // start_value - The initial key selected
+  // cancel_key - If this key is pressed, the key selection is reverted to the last choice
+  // no_key - If this key is pressed, the key selection is set to kNoKey
+  // result_address - Whenever the selected key is changed, the new value is written here
+  KeyPromptMenuItem(const string &prompt, const GlopKey &start_value, const GlopKey &cancel_key,
+                    const GlopKey &no_key, GlopKey *result_address,
+                    const MenuView *view = gMenuView);
+  bool OnKeyEvent(bool is_selected, bool is_confirmed, const KeyEvent &event, Action *action);
+  void OnConfirmationChange(bool is_selected, bool is_confirmed, Action *action);
+ 
+ protected:
+  // Overwrite this function to change which keys are accepted as valid keys. Derived keys are
+  // never accepted.
+  virtual bool IsValidKey(const GlopKey &key) {return true;}
+
+ private:
+  void ResetFrame(bool is_confirmed);
+  string prompt_;
+  GlopKey cancel_key_, no_key_, value_, *result_address_;
+  const MenuView *view_;
+  DISALLOW_EVIL_CONSTRUCTORS(KeyPromptMenuItem);
+};
+
+// A user-selectable string
+class StringSelectMenuItem: public GuiMenuItem {
+ public:
+  // prompt - The text to appear before the chosen string
+  // options - The list of all options
+  // start_value - The initial selected option index
+  // result_address - Whenever the selected option is changed, the new index is written here
+  StringSelectMenuItem(const string &prompt, const vector<string> &options, int start_value,
+                       int *result_address, const MenuView *view = gMenuView);
+  void OnConfirmationChange(bool is_selected, bool is_confirmed, Action *action);
+
+ private:
+  vector<string> options_;
+  TextFrame *value_frame_;
+  int value_, *result_address_;
+  DISALLOW_EVIL_CONSTRUCTORS(StringSelectMenuItem);
+};
+
+// A user-editable string
+class StringPromptMenuItem: public GuiMenuItem {
+ public:
+  // prompt - The text to appear before the chosen string
+  // start_value - The initial string
+  // length_limit - The maximum length of a string the user can enter
+  // result_address - Whenever the selected string is changed, the new index is written here
+  StringPromptMenuItem(const string &prompt, const string &start_value, int length_limit,
+                       string *result_address, const MenuView *view = gMenuView);
+  bool OnKeyEvent(bool is_selected, bool is_confirmed, const KeyEvent &event, Action *action);
+  void OnConfirmationChange(bool is_selected, bool is_confirmed, Action *action);
+ 
+ private:
+  void ResetFrame(bool is_confirmed);
+  string prompt_, value_, *result_address_;
+  int length_limit_;
+  StringPromptFrame *prompt_frame_;
+  const MenuView *view_;
+  DISALLOW_EVIL_CONSTRUCTORS(StringPromptMenuItem);
+};
+
+class IntegerPromptMenuItem: public GuiMenuItem {
+ public:
+  // prompt - The text to appear before the chosen integer
+  // start_value - The initial integer
+  // min_value - The minimum integer that can be entered
+  // max_value - The maximum integer that can be entered
+  // result_address - Whenever the selected integer is changed, the new index is written here
+  IntegerPromptMenuItem(const string &prompt, int start_value, int min_value,
+                        int max_value, int *result_address, const MenuView *view = gMenuView);
+  bool OnKeyEvent(bool is_selected, bool is_confirmed, const KeyEvent &event, Action *action);
+  void OnConfirmationChange(bool is_selected, bool is_confirmed, Action *action);
+ 
+ private:
+  void ResetFrame(bool is_confirmed);
+  string prompt_;
+  int value_, min_value_, max_value_, *result_address_;
+  IntegerPromptFrame *prompt_frame_;
+  const MenuView *view_;
+  DISALLOW_EVIL_CONSTRUCTORS(IntegerPromptMenuItem);
+};
+
+// MenuFrame and MenuWidget
+// ========================
+
+// A menu that is always visible (i.e. not a pulldown menu). Items can be imbued with basic logic,
+// intended primarily to let them respond to them being chosen. At all times, a menu has a
+// "selection" - the item that is currently highlighted. If the user chooses this selection, the
+// menu switches into confirmed state. While in this state, the menu stop responding to input until
+// the menu item or the program unconfirms the selection.
 class MenuFrame: public SingleParentFrame {
  public:
   enum SelectionStyle {NoMouse, SingleClick, DoubleClick};
+  enum ItemBorderSizing {ExactlyRecSize, AtLeastRecSize, AtMostRecSize, IgnoreRecSize};
 
-  // Constructors - a basic one for one-column vertical and another for arbitrary menus
+  // Constructors - a basic one for one-column vertical menus and another for arbitrary menus
   MenuFrame(float horz_justify = kJustifyCenter, SelectionStyle selection_style = SingleClick,
             const MenuView *view = gMenuView)
   : SingleParentFrame(new DummyMenuFrame(1, true, horz_justify, kJustifyCenter, view)),
+    item_border_factory_(new BasicItemBorderFactory(0, 0, AtMostRecSize, IgnoreRecSize)),
     selection_style_(selection_style), view_(view), is_confirmed_(false),
     mouse_x_(-1), mouse_y_(-1), search_term_reset_timer_(0) {}
   MenuFrame(int num_cols, bool is_vertical, float horz_justify = kJustifyCenter,
             float vert_justify = kJustifyCenter, SelectionStyle selection_style = SingleClick,
             const MenuView *view = gMenuView)
   : SingleParentFrame(new DummyMenuFrame(num_cols, is_vertical, horz_justify, vert_justify, view)),
+    item_border_factory_(new BasicItemBorderFactory(0, 0, is_vertical? AtMostRecSize:IgnoreRecSize,
+                                                    is_vertical? IgnoreRecSize:AtLeastRecSize)),
     selection_style_(selection_style), view_(view), is_confirmed_(false),
     mouse_x_(-1), mouse_y_(-1), search_term_reset_timer_(0) {}
   ~MenuFrame() {Clear();}
-  const MenuView *GetView() const {return view_;}
+  string GetType() const {return "MenuFrame";}
 
-  // Item accessors. Note that all coordinates are relative to this frame.
-  int GetNumItems() const {return menu()->GetNumItems();}
+  // Meta-accessors. The view accessor is especially important if the client wishes to create a
+  // menu item and wishes to choose an appropriate style.
+  const MenuView *GetView() const {return view_;}
+  bool IsVertical() const {return menu()->IsVertical();}
+
+  // Item border style. The ItemBorderFactory provides a wrapper frame around every menu item. To
+  // add padding around items or set their min / max size, the ItemBorderFactory should be changed.
+  class ItemBorderFactory {
+   public:
+    virtual GlopFrame *GetBorderedItem(GlopFrame *item) = 0;
+   protected:
+    ItemBorderFactory() {}
+   private:
+    DISALLOW_EVIL_CONSTRUCTORS(ItemBorderFactory);
+  };
+  void SetBorderStyle(ItemBorderFactory *border_factory);
+  void SetBasicBorderStyle(int abs_padding, ItemBorderSizing sizing) {
+    SetBorderStyle(new BasicItemBorderFactory(abs_padding, 0, IsVertical()? sizing : IgnoreRecSize,
+                   !IsVertical()? sizing : IgnoreRecSize));
+  }
+  void SetBasicBorderStyle(float rel_padding, ItemBorderSizing sizing) {
+    SetBorderStyle(new BasicItemBorderFactory(0, rel_padding, IsVertical()? sizing : IgnoreRecSize,
+                   !IsVertical()? sizing : IgnoreRecSize));
+  }
+
+  // Selection info
+  int GetNumItems() const {return (int)items_.size();}
   int GetSelection() const {return menu()->GetSelection();}
-  void SetSelection(int selection, bool centered_ping = false);
-  bool SelectUp();
-  bool SelectRight();
-  bool SelectDown();
-  bool SelectLeft();
-  bool PageUp();
-  bool PageRight();
-  bool PageDown();
-  bool PageLeft();
+  void SetSelection(int selection);
+  void SetSelectionAndPing(int selection, bool center);
+  void PingSelection(bool center = false);
+
+  // Key-press emulation
+  bool SelectUp(bool ping);
+  bool SelectRight(bool ping);
+  bool SelectDown(bool ping);
+  bool SelectLeft(bool ping);
+  bool PageUp(bool ping);
+  bool PageRight(bool ping);
+  bool PageDown(bool ping);
+  bool PageLeft(bool ping);
+
+  // Confirmation. Note that confirming brings the menu to focus and pings the selected menu item.
   void Confirm(bool is_confirmed);
   bool IsConfirmed() const {return is_confirmed_;}
 
-  // Item addition - the menu item will be deleted by the menu
+  // Item addition - the menu item becomes owned by the menu
   int AddItem(GuiMenuItem *item) {return AddItem(item, GetNumItems());}
   int AddItem(GuiMenuItem *item, int index);
-  int AddTextItem(const string &text) {return AddTextItem(text, GetNumItems());}
-  int AddTextItem(const string &text, int index) {
-    return AddItem(new TextMenuItem(text, view_->GetTextStyle()), index);
+  int AddTextItem(const string &text) {
+    return AddItem(new TextMenuItem(text, view_->GetTextStyle()));
+  }
+  int AddKeyPromptItem(const string &prompt, const GlopKey &start_value, const GlopKey &cancel_key,
+                       const GlopKey &no_key, GlopKey *result_address) {
+    return AddItem(new KeyPromptMenuItem(prompt, start_value, cancel_key, no_key, result_address,
+                                         view_));
+  }
+  int AddStringSelectItem(const string &prompt, const vector<string> &options, int start_value,
+                          int *result_address) {
+    return AddItem(new StringSelectMenuItem(prompt, options, start_value, result_address, view_));
+  }
+  int AddStringPromptItem(const string &prompt, const string &start_value, int length_limit,
+                          string *result_address) {
+    return AddItem(new StringPromptMenuItem(prompt, start_value, length_limit, result_address,
+                                            view_));
+  }
+  int AddIntegerPromptItem(const string &prompt, int start_value, int min_value, int max_value,
+                           int *result_address) {
+    return AddItem(new IntegerPromptMenuItem(prompt, start_value, min_value, max_value,
+                                             result_address, view_));
   }
 
   // Item removal
@@ -936,15 +1109,41 @@ class MenuFrame: public SingleParentFrame {
   void RemoveItem(int index);
   void Clear();
 
-  // Overloaded functions
+  // Overloaded logic functions
   void Think(int dt);
-  bool OnKeyEvent(const KeyEvent &event, int dt, bool gained_focus);
+  bool OnKeyEvent(const KeyEvent &event, bool gained_focus);
+
  private:
   const DummyMenuFrame *menu() const {return (DummyMenuFrame*)GetChild();}
   DummyMenuFrame *menu() {return (DummyMenuFrame*)GetChild();}
-  void UpdateItemFrames();
+  void RecordAction(int item, GuiMenuItem::Action action,
+                    vector<pair<int, GuiMenuItem::Action> > *actions);
+  void HandleActions(const vector<pair<int, GuiMenuItem::Action> > &actions);
 
-  vector<GuiMenuItem*> items_;
+  class BasicItemBorderFactory: public ItemBorderFactory {
+   public:
+    BasicItemBorderFactory(int abs_padding, float rel_padding, ItemBorderSizing horz_sizing,
+                           ItemBorderSizing vert_sizing)
+    : abs_padding_(abs_padding), rel_padding_(rel_padding), horz_sizing_(horz_sizing),
+      vert_sizing_(vert_sizing) {}
+    GlopFrame *GetBorderedItem(GlopFrame *item);
+   private:
+    int abs_padding_;
+    float rel_padding_;
+    ItemBorderSizing horz_sizing_, vert_sizing_;
+    DISALLOW_EVIL_CONSTRUCTORS(BasicItemBorderFactory);
+  };
+
+  struct ItemInfo {
+    ItemInfo(): controller(0), parent(0) {}
+    ItemInfo(GuiMenuItem *_controller, EditableSingleParentFrame *_parent)
+    : controller(_controller), parent(_parent) {}
+    GuiMenuItem *controller;
+    EditableSingleParentFrame *parent;
+  };
+
+  ItemBorderFactory *item_border_factory_;
+  vector<ItemInfo> items_;
   SelectionStyle selection_style_;
   const MenuView *view_;
   bool is_confirmed_;
@@ -957,6 +1156,7 @@ class MenuFrame: public SingleParentFrame {
 class MenuWidget: public FocusFrame {
  public:
   enum SelectionStyle {NoMouse, SingleClick, DoubleClick};
+  enum ItemBorderSizing {ExactlyRecSize, AtLeastRecSize, AtMostRecSize, IgnoreRecSize};
 
   // Constructors - a basic one for one-column vertical and another for arbitrary menus
   MenuWidget(float horz_justify = kJustifyCenter, SelectionStyle selection_style = SingleClick,
@@ -967,21 +1167,66 @@ class MenuWidget: public FocusFrame {
              const MenuView *view = gMenuView)
   : FocusFrame(new MenuFrame(num_cols, is_vertical, horz_justify, vert_justify,
                              (MenuFrame::SelectionStyle)selection_style, view)) {}
-  const MenuView *GetView() const {return menu()->GetView();}
+  string GetType() const {return "MenuWidget";}
 
-  // Item accessors. Note that all coordinates are relative to this frame.
+  // Meta-accessors
+  const MenuView *GetView() const {return menu()->GetView();}
+  bool IsVertical() const {return menu()->IsVertical();}
+
+  // Item border style - see MenuFrame
+  void SetBorderStyle(MenuFrame::ItemBorderFactory *border_factory) {
+    menu()->SetBorderStyle(border_factory);
+  }
+  void SetBasicBorderStyle(int abs_padding, ItemBorderSizing sizing) {
+    menu()->SetBasicBorderStyle(abs_padding, (MenuFrame::ItemBorderSizing)sizing);
+  }
+  void SetBasicBorderStyle(float rel_padding, ItemBorderSizing sizing) {
+    menu()->SetBasicBorderStyle(rel_padding, (MenuFrame::ItemBorderSizing)sizing);
+  }
+
+  // Selection info
   int GetNumItems() const {return menu()->GetNumItems();}
   int GetSelection() const {return menu()->GetSelection();}
-  void SetSelection(int selection, bool centered_ping = false) {
-    menu()->SetSelection(selection, centered_ping);
+  void SetSelection(int selection) {menu()->SetSelection(selection);}
+  void SetSelectionAndPing(int selection, bool center) {
+    menu()->SetSelectionAndPing(selection, center);
   }
+  void PingSelection(bool center = false) {menu()->PingSelection(center);}
+
+  // Key-press emulation
+  bool SelectUp(bool ping) {return menu()->SelectUp(ping);}
+  bool SelectRight(bool ping) {return menu()->SelectRight(ping);}
+  bool SelectDown(bool ping) {return menu()->SelectDown(ping);}
+  bool SelectLeft(bool ping) {return menu()->SelectLeft(ping);}
+  bool PageUp(bool ping) {return menu()->PageUp(ping);}
+  bool PageRight(bool ping) {return menu()->PageRight(ping);}
+  bool PageDown(bool ping) {return menu()->PageDown(ping);}
+  bool PageLeft(bool ping) {return menu()->PageLeft(ping);}
+
+  // Confirmation. Note that confirming brings the menu to focus and pings the selected menu item.
+  void Confirm(bool is_confirmed) {menu()->Confirm(is_confirmed);}
   bool IsConfirmed() const {return menu()->IsConfirmed();}
 
-  // Item addition - the menu item will be deleted by the menu
+  // Item addition - the menu item becomes owned by the menu
   int AddItem(GuiMenuItem *item) {return menu()->AddItem(item);}
   int AddItem(GuiMenuItem *item, int index) {return menu()->AddItem(item, index);}
   int AddTextItem(const string &text) {return menu()->AddTextItem(text);}
-  int AddTextItem(const string &text, int index) {return menu()->AddTextItem(text, index);}
+  int AddKeyPromptItem(const string &prompt, const GlopKey &start_value, const GlopKey &cancel_key,
+                       const GlopKey &no_key, GlopKey *result_address) {
+    return menu()->AddKeyPromptItem(prompt, start_value, cancel_key, no_key, result_address);
+  }
+  int AddStringSelectItem(const string &prompt, const vector<string> &options, int start_value,
+                          int *result_address) {
+    return menu()->AddStringSelectItem(prompt, options, start_value, result_address);
+  }
+  int AddStringPromptItem(const string &prompt, const string &start_value, int length_limit,
+                          string *result_address) {
+    return menu()->AddStringPromptItem(prompt, start_value, length_limit, result_address);
+  }
+  int AddIntegerPromptItem(const string &prompt, int start_value, int min_value, int max_value,
+                           int *result_address) {
+    return menu()->AddIntegerPromptItem(prompt, start_value, min_value, max_value, result_address);
+  }
 
   // Item removal
   void RemoveItem() {menu()->RemoveItem();}
@@ -993,7 +1238,7 @@ class MenuWidget: public FocusFrame {
   DISALLOW_EVIL_CONSTRUCTORS(MenuWidget);
 };
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////
 // Dialog
 // ======
 

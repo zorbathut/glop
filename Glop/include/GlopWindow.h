@@ -30,6 +30,7 @@ struct GlopWindowSettings {
     min_height(128),
     min_aspect_ratio((4.0f / 3) * 0.3f),
     min_inverse_aspect_ratio((3.0f / 4) * 0.3f) {}
+
   int stencil_bits;
   bool is_resizable;              // Only affects windowed mode
   int min_width, min_height;      // Minimum window sizes - used to prevent user screwing things
@@ -37,6 +38,17 @@ struct GlopWindowSettings {
                                   //  seem to have bugs with height < 15.
   float min_aspect_ratio,         // Similar to min_width and min_height: Lower bounds on
         min_inverse_aspect_ratio; //  width/height and 1/(width/height).
+
+  // It is tempting to use memcmp here, but that does not seem to work correctly with bools on
+  // VC++. Instantiating is_resizable as true can lead to different binary representations.
+  bool operator==(const GlopWindowSettings &rhs) const {
+    return stencil_bits == rhs.stencil_bits &&
+      is_resizable == rhs.is_resizable &&
+      min_width == rhs.min_width &&
+      min_height == rhs.min_height &&
+      min_aspect_ratio == rhs.min_aspect_ratio &&
+      min_inverse_aspect_ratio == rhs.min_inverse_aspect_ratio;
+  }
 };
 
 // Returns the Glop window. Currently there can only be one window.
@@ -150,10 +162,10 @@ class GlopWindow {
   void RemoveFrame(ListId id);
   void ClearFrames();
 
-  // Changes the tab order of a FocusFrame. By default, the tab order is given by the order in which
-  // FocusFrames are added to the GlopWindow. This is deterministic but potentially hard to control
-  // when a GlopFrame and all its descendants are added together. These functions can be used to
-  // correct any undesirable orderings caused from this.
+  // Changes the tab order of a FocusFrame. By default, the tab order is given by the order in
+  // which FocusFrames are added to the GlopWindow. This is deterministic but potentially hard to
+  // control when a GlopFrame and all its descendants are added together. These functions can be
+  // used to correct any undesirable orderings caused from this.
   void SetFocusPredecessor(FocusFrame *base, FocusFrame *successor);
   void SetFocusSuccessor(FocusFrame *base, FocusFrame *successor);
 
@@ -178,7 +190,7 @@ class GlopWindow {
 
   // Interface to Input
   friend class Input;
-  void OnKeyEvents(const vector<KeyEvent> &events, int dt);
+  void OnKeyEvent(const KeyEvent &event);
 
   // Resizing
   void ChooseValidSize(int width, int height, int *new_width, int *new_height);
@@ -195,8 +207,7 @@ class GlopWindow {
   FocusFrame *ChooseFocus(FocusFrame *old_focus, const vector<FocusFrame*> &options);
   FocusFrame *GetNextPossibleFocusFrame(FocusFrame *frame);
   FocusFrame *GetPrevPossibleFocusFrame(FocusFrame *frame);
-  bool SendKeyEventsToFrame(FocusFrame *frame, const vector<KeyEvent> &events, int dt,
-                            bool gained_focus);
+  bool SendKeyEventToFrame(FocusFrame *frame, const KeyEvent &event, bool gained_focus);
   
   // Configuration data
   OsWindowData *os_data_;           // OS handle on this window - needed for all OS calls

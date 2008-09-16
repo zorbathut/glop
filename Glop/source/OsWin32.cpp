@@ -790,6 +790,60 @@ int Os::GetNumJoysticks(OsWindowData *window) {
   return (int)window->joystick_devices.size();
 }
 
+// File system functions
+// =====================
+
+vector<string> Os::ListFiles(const string &directory) {
+  // Construct our search query
+  string query = directory;
+  if (query.size() > 0 && query[query.size()-1] != '/')
+    query += '/';
+  query += '*';
+
+  // Iterate through each file
+  vector<string> result;
+  WIN32_FIND_DATA find_data;
+	HANDLE file_handle = FindFirstFile(query.c_str(), &find_data);
+  if (file_handle != INVALID_HANDLE_VALUE) {
+    while (1) {
+      if ( !(find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) &&
+           !(find_data.dwFileAttributes & FILE_ATTRIBUTE_HIDDEN)) {
+        result.push_back(find_data.cFileName);
+      }
+      if (!FindNextFile(file_handle, &find_data))
+        break;
+    }
+    FindClose(file_handle);
+  }
+  return result;
+}
+
+vector<string> Os::ListSubdirectories(const string &directory) {
+  // Construct our search query
+  string query = directory;
+  if (query.size() > 0 && query[query.size()-1] != '/')
+    query += '/';
+  query += '*';
+
+  // Iterate through each subdirectory
+  vector<string> result;
+  WIN32_FIND_DATA find_data;
+	HANDLE file_handle = FindFirstFile(query.c_str(), &find_data);
+  if (file_handle != INVALID_HANDLE_VALUE) {
+    while (1) {
+      if ( (find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) &&
+           !(find_data.dwFileAttributes & FILE_ATTRIBUTE_HIDDEN) &&
+           find_data.cFileName != string(".")) {
+        result.push_back(find_data.cFileName);
+      }
+      if (!FindNextFile(file_handle, &find_data))
+        break;
+    }
+    FindClose(file_handle);
+  }
+  return result;
+}
+
 // Threading functions
 // ===================
 

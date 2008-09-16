@@ -136,23 +136,22 @@ DisplayLists::DisplayLists(int n): n_(n), base_gl_id_(0) {
 // subtracted from the max. Otherwise, they remain the same. If y1 and y2 are different, one is
 // subtracted from the max. Otherwise, one is subtracted from both.
 void GlUtils2d::DrawLine(int x1, int y1, int x2, int y2) {
-  if (x2 >= x1) x2++; else x1++;
-  if (y2 >= y1) y2++; else y1++;
-  glBegin(GL_LINES);
-  glVertex2i(x1, y1);
-  glVertex2i(x2, y2);
+  glBegin(GL_LINE_STRIP);
+  glVertex2f(x1+0.5f, y1+0.5f);
+  glVertex2f(x2+0.5f, y2+0.5f);
+  glEnd();
+  glBegin(GL_POINTS);
+  glVertex2f(x2+0.5f, y2+0.5f);
   glEnd();
 }
 
 // See DrawLine conventions.
 void GlUtils2d::DrawRectangle(int x1, int y1, int x2, int y2) {
-  int minx = min(x1, x2), maxx = max(x1, x2);
-  int miny = min(y1, y2), maxy = max(y1, y2);
   glBegin(GL_LINE_LOOP);
-  glVertex2i(minx+1, miny);
-  glVertex2i(maxx+1, miny+1);
-  glVertex2i(maxx, maxy+1);
-  glVertex2i(minx, maxy);
+  glVertex2f(x1+0.5f, y1+0.5f);
+  glVertex2f(x2+0.5f, y1+0.5f);
+  glVertex2f(x2+0.5f, y2+0.5f);
+  glVertex2f(x1+0.5f, y2+0.5f);
   glEnd();
 }
 
@@ -167,8 +166,7 @@ void GlUtils2d::FillRectangle(int x1, int y1, int x2, int y2) {
   glEnd();
 }
 
-void GlUtils2d::FillRectangleTexture(int x1, int y1, int x2, int y2, const Texture *texture)
-{
+void GlUtils2d::FillRectangleTexture(int x1, int y1, int x2, int y2, const Texture *texture) {
   int min_x = min(x1, x2), max_x = max(x1, x2);
   int min_y = min(y1, y2), max_y = max(y1, y2);
   int num_tiles_x = (max_x - min_x)/texture->GetWidth();
@@ -177,7 +175,8 @@ void GlUtils2d::FillRectangleTexture(int x1, int y1, int x2, int y2, const Textu
   float y_extra = (max_y - min_y)%texture->GetHeight()/(float)texture->GetHeight();
   float x_scale = float(texture->GetWidth()) / texture->GetInternalWidth();
   float y_scale = float(texture->GetHeight()) / texture->GetInternalHeight();
-  RenderSubTexture(x1, y1, x2, y2, 0, 0, x_scale * num_tiles_x + x_scale * x_extra, y_scale * num_tiles_y + y_scale * y_extra, false, texture);
+  RenderSubTexture(x1, y1, x2, y2, 0, 0, x_scale * num_tiles_x + x_scale * x_extra,
+                   y_scale * num_tiles_y + y_scale * y_extra, false, texture);
 }
 
 void GlUtils2d::RenderSubTexture(int x1, int y1, int x2, int y2, float tu1, float tv1, float tu2,
@@ -186,8 +185,8 @@ void GlUtils2d::RenderSubTexture(int x1, int y1, int x2, int y2, float tu1, floa
   int min_y = min(y1, y2), max_y = max(y1, y2);
   GlUtils::SetTexture(texture);
   if (clamp) {
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);  // Prevents texture bleeding across
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);  //  top & bottom
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);  // Prevents texture bleeding
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);  //  across top & bottom
   }
   glBegin(GL_QUADS);
   glTexCoord2f(tu1, tv1);

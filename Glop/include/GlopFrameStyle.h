@@ -12,12 +12,13 @@
 //           explicit calls to Render on the child frames.
 //   Other methods: These are generally used to construct child frames. For example, a WindowView
 //                  can specify the GuiTextStyle used for the window text.
+// A child View object will NOT be owned by any View.
 //
 // In addition to the View classes, we also include GuiTextStyle, which is a full font
 // specification - a Font object, size, color, and flags (underline, italics, etc.)
 //
-// WARNING: Behavior is undefined if a View object is modified or deleted while a GlopFrame is using
-//          that View.
+// WARNING: Behavior is undefined if a View object is modified or deleted while a GlopFrame is
+//          using that View.
 
 #ifndef GLOP_GLOP_FRAME_STYLE_H__
 #define GLOP_GLOP_FRAME_STYLE_H__
@@ -26,6 +27,8 @@
 #include "Base.h"
 #include "Color.h"
 #include "Input.h"
+#include <vector>
+using namespace std;
 
 // Class declarations
 class Font;
@@ -38,7 +41,7 @@ const float kDefaultTextHeight(0.025f);
 const Color kDefaultTextColor(kBlack);
 const Color kDefaultTextPromptColor(0, 0, 0.5f);
 const Color kDefaultTextPromptCursorColor(0, 0, 0.75f);
-const Color kDefaultTextHighlightColor(0.6f, 0.6f, 1.0f);
+const Color kDefaultTextPromptHighlightColor(0.6f, 0.6f, 1.0f);
 
 const Color kDefaultInputBoxBackgroundColor(1.0f, 1.0f, 1.0f);
 const Color kDefaultInputBoxBorderColor(0.2f, 0.2f, 0.2f);
@@ -65,6 +68,9 @@ const Color kDefaultSliderBorderColor(0.2f, 0.2f, 0.2f);
 
 const Color kDefaultMenuSelectionColor(0.55f, 0.55f, 0.9f);
 const Color kDefaultMenuSelectionColorNoFocus(0.7f, 0.7f, 0.95f);
+const Color kDefaultMenuTextPromptColor(0, 0, 0.5f);
+const Color kDefaultMenuTextPromptCursorColor(0, 0, 0.75f);
+const Color kDefaultMenuTextPromptHighlightColor(0.75f, 0.75f, 1.0f);
 
 const float kDefaultDialogVertJustify = 0.4f;
 const float kDefaultDialogRecWidth = 0.7f;
@@ -105,6 +111,7 @@ struct GuiTextStyle {
 
 class InputBoxView {
  public:
+  static void DeleteAll();
   virtual ~InputBoxView() {}
 
   // Returns the padding reserved around the inner frame.
@@ -115,8 +122,9 @@ class InputBoxView {
   virtual void Render(int x1, int y1, int x2, int y2, const PaddedFrame *padded_frame) const = 0;
 
  protected:
-  InputBoxView() {}
+  InputBoxView() {instances_.push_back(this);}
  private:
+  static vector<InputBoxView*> instances_;
   DISALLOW_EVIL_CONSTRUCTORS(InputBoxView);
 };
 
@@ -145,6 +153,7 @@ class DefaultInputBoxView: public InputBoxView {
 
 class TextPromptView {
  public:
+  static void DeleteAll();
   virtual ~TextPromptView() {}
 
   // Returns the GuiTextStyle that will be used for the text.
@@ -162,23 +171,26 @@ class TextPromptView {
                       int selection_start, int selection_end, bool is_in_focus,
                       const TextFrame *text_frame) const = 0;
  protected:
-  TextPromptView() {}
+  TextPromptView() {instances_.push_back(this);}
  private:
+  static vector<TextPromptView*> instances_;
   DISALLOW_EVIL_CONSTRUCTORS(TextPromptView);
 };
 
 class DefaultTextPromptView: public TextPromptView {
  public:
   DefaultTextPromptView(Font *font)
-  : highlight_color_(kDefaultTextHighlightColor), cursor_color_(kDefaultTextPromptCursorColor),
+  : highlight_color_(kDefaultTextPromptHighlightColor),
+    cursor_color_(kDefaultTextPromptCursorColor),
     text_style_(kDefaultTextPromptColor, kDefaultTextHeight, font, 0) {}
 
   // View methods
   const GuiTextStyle &GetTextStyle() const {return text_style_;}
   void OnResize(int rec_width, int rec_height, const TextFrame *text_frame, int *lp, int *tp,
                 int *rp, int *bp) const;
-  void Render(int x1, int y1, int x2, int y2, int cursor_pos, int *cursor_time, int selection_start,
-              int selection_end, bool is_in_focus, const TextFrame *text_frame) const;
+  void Render(int x1, int y1, int x2, int y2, int cursor_pos, int *cursor_time,
+              int selection_start, int selection_end, bool is_in_focus,
+              const TextFrame *text_frame) const;
 
   // Accessors and mutators
   const Color &GetHighlightColor() const {return highlight_color_;}
@@ -197,6 +209,7 @@ class DefaultTextPromptView: public TextPromptView {
 
 class WindowView {
  public:
+  static void DeleteAll();
   virtual ~WindowView() {}
 
   // Returns the GuiTextStyle that will be used for rendering the title.
@@ -213,8 +226,9 @@ class WindowView {
   virtual void Render(int x1, int y1, int x2, int y2, const PaddedFrame *title_frame,
                       const PaddedFrame *inner_frame) const = 0;
  protected:
-  WindowView() {}
+  WindowView() {instances_.push_back(this);}
  private:
+  static vector<WindowView*> instances_;
   DISALLOW_EVIL_CONSTRUCTORS(WindowView);
 };
 
@@ -253,6 +267,7 @@ class DefaultWindowView: public WindowView {
 
 class ButtonView {
  public:
+  static void DeleteAll();
   virtual ~ButtonView() {}
 
   // Returns the padding reserved around the inner frame.
@@ -264,8 +279,9 @@ class ButtonView {
   virtual void Render(int x1, int y1, int x2, int y2, bool is_down, bool is_primary_focus,
                       const PaddedFrame *padded_inner_frame) const = 0;
  protected:
-  ButtonView() {}
+  ButtonView() {instances_.push_back(this);}
  private:
+  static vector<ButtonView*> instances_;
   DISALLOW_EVIL_CONSTRUCTORS(ButtonView);
 };
 
@@ -311,6 +327,7 @@ class DefaultButtonView: public ButtonView {
 
 class ArrowView {
  public:
+  static void DeleteAll();
   virtual ~ArrowView() {}
 
   // Returns the frame size, including any padding. Should also be called if the arrow direction
@@ -322,8 +339,9 @@ class ArrowView {
   // Renders the arrow.
   virtual void Render(int x1, int y1, int x2, int y2, Direction direction) const = 0;
  protected: 
-  ArrowView() {}
+  ArrowView() {instances_.push_back(this);}
  private:
+  static vector<ArrowView*> instances_;
   DISALLOW_EVIL_CONSTRUCTORS(ArrowView);
 };
 
@@ -348,6 +366,7 @@ class DefaultArrowView: public ArrowView {
 
 class SliderView {
  public:
+  static void DeleteAll();
   virtual ~SliderView() {}
 
   // Returns the view factories for the buttons at the edge of the slider, and for the arrows that
@@ -355,9 +374,9 @@ class SliderView {
   virtual const ArrowView *GetArrowView() const = 0;
   virtual const ButtonView *GetButtonView() const = 0;
 
-  // These are both called any time the frame resizes. They return the desired "width" of the slider
-  // ("width" is defined as the short dimension - so it is actually measuring y-distance for
-  // horizontal sliders), and the minimum length of the tab.
+  // These are both called any time the frame resizes. They return the desired "width" of the
+  // slider ("width" is defined as the short dimension - so it is actually measuring y-distance
+  // for horizontal sliders), and the minimum length of the tab.
   virtual int GetWidthOnResize(int rec_width, int rec_height, bool is_horizontal) const = 0;
   virtual int GetMinTabLengthOnResize(int inner_width, int inner_height,
                                       bool is_horizontal) const = 0;
@@ -367,8 +386,9 @@ class SliderView {
                       int tab_x1, int tab_y1, int tab_x2, int tab_y2, const GlopFrame *dec_button,
                       const GlopFrame *inc_button) const = 0;
  protected:
-  SliderView() {}
+  SliderView() {instances_.push_back(this);}
  private:
+  static vector<SliderView*> instances_;
   DISALLOW_EVIL_CONSTRUCTORS(SliderView);
 };
 
@@ -425,48 +445,59 @@ class DefaultSliderView: public SliderView {
 
 class MenuView {
  public:
+  static void DeleteAll();
   virtual ~MenuView() {}
+
+  // Returns the default style used for rendering any text appearing in the menu.
+  virtual const GuiTextStyle &GetTextStyle() const = 0;
+
+  // Returns the default style used for rendering any prompts appearing when an option is confirmed
+  // in the menu.
+  virtual const TextPromptView *GetTextPromptView() const = 0;
 
   // Returns the padding reserved around each menu item.
   virtual void OnResize(int rec_width, int rec_height, int *item_lp, int *item_tp, int *item_rp,
                         int *item_bp) const = 0;
 
   // Renders the menu. Selection coordinates are given relative to the screen. It is guaranteed
-  // that items is non-null, and the selection is valid.
+  // that items is non-null, and the selection is valid
   virtual void Render(int x1, int y1, int x2, int y2, int sel_x1, int sel_y1, int sel_x2,
-                      int sel_y2, bool is_in_focus, const List<GlopFrame *> &items) const = 0;
-
-  // Returns the default style used for rendering any text appearing in the menu.
-  virtual const GuiTextStyle &GetTextStyle() const = 0;
+                      int sel_y2, bool is_in_focus,
+                      const List<GlopFrame *> &visible_items) const = 0;
 
  protected: 
-  MenuView() {}
+  MenuView() {instances_.push_back(this);}
  private:
+  static vector<MenuView*> instances_;
   DISALLOW_EVIL_CONSTRUCTORS(MenuView);
 };
 
 class DefaultMenuView: public MenuView {
  public:
-  DefaultMenuView(Font *font)
-  : selection_color_(kDefaultMenuSelectionColor),
-    selection_color_no_focus_(kDefaultMenuSelectionColorNoFocus),
-    text_style_(kDefaultTextColor, kDefaultTextHeight, font, 0) {}
+  DefaultMenuView(Font *font, const TextPromptView *text_prompt_view)
+  : text_prompt_view_(text_prompt_view),
+    text_style_(kDefaultTextColor, kDefaultTextHeight, font, 0),
+    selection_color_(kDefaultMenuSelectionColor),
+    selection_color_no_focus_(kDefaultMenuSelectionColorNoFocus) {}
 
   // View methods
   const GuiTextStyle &GetTextStyle() const {return text_style_;}
+  const TextPromptView *GetTextPromptView() const {return text_prompt_view_;}
   void OnResize(int rec_width, int rec_height, int *item_lp, int *item_tp, int *item_rp,
                 int *item_bp) const;
   void Render(int x1, int y1, int x2, int y2, int sel_x1, int sel_y1, int sel_x2, int sel_y2,
-              bool is_in_focus, const List<GlopFrame *> &items) const;
+              bool is_in_focus, const List<GlopFrame *> &visible_items) const;
 
   // Accessors and mutators
+  void SetTextStyle(const GuiTextStyle &style) {text_style_ = style;}
+  void SetTextPromptView(const TextPromptView *view) {text_prompt_view_ = view;}
   const Color &GetSelectionColor() const {return selection_color_;}
   void SetSelectionColor(const Color &c) {selection_color_ = c;}
   const Color &GetSelectionColorNoFocus() const {return selection_color_no_focus_;}
   void SetSelectionColorNoFocus(const Color &c) {selection_color_no_focus_ = c;}
-  void SetTextStyle(const GuiTextStyle &style) {text_style_ = style;}
  private:
   GuiTextStyle text_style_;
+  const TextPromptView *text_prompt_view_;
   Color selection_color_, selection_color_no_focus_;
   DISALLOW_EVIL_CONSTRUCTORS(DefaultMenuView);
 };
@@ -479,6 +510,7 @@ class DefaultMenuView: public MenuView {
 
 class DialogView {
  public:
+  static void DeleteAll();
   virtual ~DialogView() {}
   virtual const TextPromptView *GetTextPromptView() const = 0;
   virtual const InputBoxView *GetInputBoxView() const = 0;
@@ -496,8 +528,9 @@ class DialogView {
   virtual float GetInnerHorzPadding() const = 0;
   virtual float GetInnerVertPadding() const = 0;
  protected:
-  DialogView() {}
+  DialogView() {instances_.push_back(this);}
  private:
+  static vector<DialogView*> instances_;
   DISALLOW_EVIL_CONSTRUCTORS(DialogView);
 };
 
@@ -508,7 +541,8 @@ class DefaultDialogView: public DialogView {
                     const WindowView *window_view,
                     const ButtonView *button_view,
                     const SliderView *slider_view, Font *font)
-  : input_box_view_(input_box_view), text_prompt_view_(text_prompt_view), window_view_(window_view),
+  : input_box_view_(input_box_view), text_prompt_view_(text_prompt_view),
+    window_view_(window_view),
     button_view_(button_view), slider_view_(slider_view),
     text_style_(kDefaultTextColor, kDefaultTextHeight, font, 0),
     button_text_style_(kDefaultButtonTextColor, kDefaultTextHeight, font, 0),
@@ -579,7 +613,7 @@ class DefaultDialogView: public DialogView {
 // Global frame style
 // ==================
 
-extern GuiTextStyle *gGuiTextStyle;
+extern GuiTextStyle gGuiTextStyle;
 extern InputBoxView *gInputBoxView;
 extern ArrowView *gArrowView;
 extern TextPromptView *gTextPromptView;
@@ -589,11 +623,12 @@ extern SliderView *gSliderView;
 extern MenuView *gMenuView;
 extern DialogView *gDialogView;
 
-// Deletes all global frame styles that is initialized.
+// Deletes all frame styles that have been created.
 void ClearFrameStyle();
 
-// Deletes any pre-existing global frame styles, and replaces them with default values. This is
-// called automatically at program start with font == 0.
+// Deletes any pre-existing global frame views, and replaces them with default values. This is
+// called automatically at program start with font == 0. Views owned by global views are not
+// deleted automatically unless they, too, are global views.
 void InitDefaultFrameStyle(Font *font);
 
 #endif // GLOP_GLOP_FRAME_STYLE_H__
