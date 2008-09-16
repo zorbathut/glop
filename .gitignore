@@ -5,3 +5,14 @@
 *.pbxuser
 *.mode1v3
 
+# Visual Studio working files
+BuildLog.htm
+GlopDbg.lib
+GlopRls.lib
+*.exe
+*.idb
+*.ilk
+*.ncb
+*.obj
+*.pdb
+*.suo
