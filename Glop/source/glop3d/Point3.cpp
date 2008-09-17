@@ -1,5 +1,5 @@
 // Includes
-#include "../../include/glop3d/Point3.h"
+#include "glop3d/Point3.h"
 #include <cmath>
 
 // Point3

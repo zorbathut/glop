@@ -2,9 +2,9 @@
 
 // Includes
 #include "Os.h"
-#include "../include/Image.h"
-#include "../include/System.h"
-#include "../include/Thread.h"
+#include "Image.h"
+#include "System.h"
+#include "Thread.h"
 #define DIRECTINPUT_VERSION 0x0500	// We do not need a new version
 #include <dinput.h>
 #include <process.h>

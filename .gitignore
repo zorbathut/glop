@@ -5,3 +5,10 @@
 *.pbxuser
 *.mode1v3
 
+# SCons files
+*.sconsign.dblite
+
+build*/
+
+*.o
+*.pyc

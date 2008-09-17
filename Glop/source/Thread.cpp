@@ -1,6 +1,6 @@
 // Includes
-#include "../include/Thread.h"
-#include "../include/System.h"
+#include "Thread.h"
+#include "System.h"
 #include "Os.h"
 
 // Thread

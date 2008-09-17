@@ -2,7 +2,7 @@
 #define GLOP_GLOP_INTERNAL_DATA_H__
 
 // Includes
-#include "../include/List.h"
+#include "List.h"
 
 // Class declarations
 class DisplayList;

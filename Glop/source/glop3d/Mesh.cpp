@@ -1,7 +1,7 @@
 // Includes
-#include "../../include/glop3d/Mesh.h"
-#include "../../include/Base.h"
-#include "../../include/OpenGl.h"
+#include "glop3d/Mesh.h"
+#include "Base.h"
+#include "OpenGl.h"
 
 Mesh::Mesh(int num_points_allocated, int num_triangles_allocated, bool has_normals,
            bool has_colors, bool has_textures)

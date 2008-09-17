@@ -1,7 +1,7 @@
 // Includes
-#include "../include/OpenGl.h"
-#include "../include/GlopWindow.h"
-#include "../include/Image.h"
+#include "OpenGl.h"
+#include "GlopWindow.h"
+#include "Image.h"
 #include "GlopInternalData.h"
 
 // Texture class

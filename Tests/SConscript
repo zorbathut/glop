@@ -1,0 +1,47 @@
+import os
+import scons_utils
+Import('global_env')
+env = global_env.Clone()
+Export('env')
+
+env.Replace(PROJECT_ROOT = os.getcwd())
+env.Replace(PACKAGE_STACK = ['all'])
+env.Replace(LOADED_PACKAGES_MAP = {})
+env.Append(CPPPATH = ['#Tests/'])
+
+
+
+
+# Os specific environment values that are specific to Tests, not all projects under Glop
+os_params = os.uname()
+if os_params[0] not in ['Darwin', 'Win32']:
+  print 'Operating system "' + os_params[0] + '" was unrecognized.'
+  Exit(1)
+
+if os_params[0] == 'Darwin':
+  env.AppendUnique(CCFLAGS = ['-DMACOSX'])
+#  env.AppendUnique(FRAMEWORKPATH = ['build'])
+  env.AppendUnique(FRAMEWORKS = ['OpenGL'])
+
+if os_params[0] == 'Win32':
+  pass
+#  env.Append(CCFLAGS = ['-DWIN32'])
+
+#env.Append(CPPPATH = ['#Glop/source'])  # TODO(jwills): Should be Glop.framework/Includes (for OSX)
+
+Glop = env['Glop']
+
+env.Application(
+    'Test',
+    'Tests.cpp',
+    frameworks = Glop,
+    resources = [
+        'icon.bmp',
+        'ninja.jpg',
+        'thames.ttf',
+        'glop.jpg',
+    ]
+)
+
+#Return('Glop')
+

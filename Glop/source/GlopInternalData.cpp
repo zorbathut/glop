@@ -1,6 +1,6 @@
 // Includes
 #include "GlopInternalData.h"
-#include "../include/OpenGl.h"
+#include "OpenGl.h"
 #include "third_party/freetype/ftglyph.h"
 
 // Globals

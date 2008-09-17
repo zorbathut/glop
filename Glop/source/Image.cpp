@@ -1,6 +1,6 @@
-#include "../include/Image.h"
-#include "../include/BinaryFileManager.h"
-#include "../include/Color.h"
+#include "Image.h"
+#include "BinaryFileManager.h"
+#include "Color.h"
 extern "C" {
 #include "third_party/jpeglib/jpeglib.h"
 }

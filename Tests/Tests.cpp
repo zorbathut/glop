@@ -18,18 +18,18 @@
 //  - Track mouse on click, first click must be on menu to track mouse for double-click menus
 
 // Includes
-#include "../Glop/include/Base.h"
-#include "../Glop/include/BinaryFileManager.h"
-#include "../Glop/include/Font.h"
-#include "../Glop/include/GlopFrame.h"
-#include "../Glop/include/GlopWindow.h"
-#include "../Glop/include/Image.h"
-#include "../Glop/include/Input.h"
-#include "../Glop/include/OpenGl.h"
-#include "../Glop/include/System.h"
-#include "../Glop/include/Thread.h"
-#include "../Glop/include/glop3d/Camera.h"
-#include "../Glop/include/glop3d/Mesh.h"
+#include <Glop/Base.h>
+#include <Glop/BinaryFileManager.h>
+#include <Glop/Font.h>
+#include <Glop/GlopFrame.h>
+#include <Glop/GlopWindow.h>
+#include <Glop/Image.h>
+#include <Glop/Input.h>
+#include <Glop/OpenGl.h>
+#include <Glop/System.h>
+#include <Glop/Thread.h>
+#include <Glop/glop3d/Camera.h>
+#include <Glop/glop3d/Mesh.h>
 
 // Constants
 const string kTitle = "Glop Tests";
@@ -41,7 +41,7 @@ void IntroScreen() {
   GlopFrame *info = new FancyTextFrame("\1BUCff8080\1Glop Test Program\1Cffffff/B/U\1\n\n"
                                        "Select tests to verify that Glop performs as expected.");
   GlopFrame *img = new HollowBoxFrame(new ImageFrame("glop.jpg"), kWhite);
-  window()->AddFrame(new ColFrame(info, new RecHeightFrame(new EmptyFrame(), 0.1f), img));
+	window()->AddFrame(new ColFrame(info, new RecHeightFrame(new EmptyFrame(), 0.1f), img));
   input()->WaitForKeyPress();
   window()->ClearFrames();
 }

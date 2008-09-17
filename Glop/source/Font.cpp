@@ -1,7 +1,7 @@
 // Includes
-#include "../include/Font.h"
-#include "../include/GlopWindow.h"
-#include "../include/OpenGl.h"
+#include "Font.h"
+#include "GlopWindow.h"
+#include "OpenGl.h"
 #include "GlopInternalData.h"
 #include "third_party/freetype/ftglyph.h"
 #include "third_party/freetype/ftoutln.h"

@@ -1,9 +1,9 @@
 // Includes
-#include "../include/System.h"
-#include "../include/GlopWindow.h"
-#include "../include/Image.h"
-#include "../include/Input.h"
-#include "../include/OpenGl.h"
+#include "System.h"
+#include "GlopWindow.h"
+#include "Image.h"
+#include "Input.h"
+#include "OpenGl.h"
 #include "GlopInternalData.h"
 #include "Os.h"
 #include "third_party/freetype/ftglyph.h"
@@ -15,7 +15,7 @@ System *system() {return gSystem;}
 
 // Glop initialization
 void System::Init() {
-  Os::Init();
+  Os::Init(); // Can we not init the system before calling Os::Init().  Otherwise can't log in Init.
   gSystem = new System();
   atexit(System::ShutDown);
   Input::InitDerivedKeys();

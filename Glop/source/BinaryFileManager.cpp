@@ -1,5 +1,5 @@
 // Includes
-#include "../include/BinaryFileManager.h"
+#include "BinaryFileManager.h"
 #include <cstdio>
 
 // Constants

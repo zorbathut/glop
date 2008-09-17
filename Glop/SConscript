@@ -1,0 +1,42 @@
+import SCons.Util
+import scons_utils
+import os
+Import('global_env')
+env = global_env.Clone()
+Export('env')
+
+env.Replace(PROJECT_ROOT = os.path.join(os.getcwd(), 'source/'))
+env.Replace(PACKAGE_STACK = ['all'])
+env.Replace(LOADED_PACKAGES_MAP = {})
+env.Append(CPPPATH = ['#Glop/source/'])
+
+# Os specific environment values that are specific to Glop/Glop, not all projects under Glop
+os_params = os.uname()
+if os_params[0] not in ['Darwin', 'Win32']:
+  print 'Operating system "' + os_params[0] + '" was unrecognized.'
+  Exit(1)
+
+if os_params[0] == 'Darwin':
+  env.AppendUnique(CCFLAGS = ['-DMACOSX'])
+  env.AppendUnique(FRAMEWORKPATH = ['/System/Library/Frameworks'])
+  env.AppendUnique(FRAMEWORKS = [
+      'Carbon',
+      'AGL',
+      'OpenGL',
+      'ApplicationServices',
+      'IOKit'])
+
+if os_params[0] == 'Win32':
+  env.Append(CCFLAGS = ['-DWIN32'])
+
+env.SConscript('source/SConscript')
+package = env.LoadPackage('/glop')
+
+Glop = env.CompleteLibrary(
+    objs = package['objects'],
+    headers = package['headers'],
+    libs = package['libs'],
+    framework_structure = env['GLOBAL_ROOT'] + 'Glop/OSX/framework.framework')
+#print Glop
+Return('Glop')
+

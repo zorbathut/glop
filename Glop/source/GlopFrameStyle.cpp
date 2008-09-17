@@ -1,9 +1,9 @@
 // Includes
-#include "../include/GlopFrameBase.h"
-#include "../include/GlopFrameStyle.h"
-#include "../include/GlopFrameWidgets.h"
-#include "../include/GlopWindow.h"
-#include "../include/OpenGl.h"
+#include "GlopFrameBase.h"
+#include "GlopFrameStyle.h"
+#include "GlopFrameWidgets.h"
+#include "GlopWindow.h"
+#include "OpenGl.h"
 
 // GuiTextStyle
 // ============

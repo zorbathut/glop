@@ -85,6 +85,11 @@ class Point2 {
   }
   inline void Project(const Point2 &axis);
   float Norm() const;
+  inline void Rot90() {
+    float buf = data_[0];
+    data_[0] = data_[1];
+    data_[1] = -buf;
+  }
 
   // Comparators
   bool operator==(const Point2 &rhs) const {

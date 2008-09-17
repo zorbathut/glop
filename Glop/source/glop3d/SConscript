@@ -1,0 +1,30 @@
+import SCons.Util
+import scons_utils
+Import('env')
+Export('env')
+
+objs = []
+
+objs += env.BuildObjects(
+  target_name = 'base',
+  source = [
+    'Point3.cpp',
+    'Camera.cpp',
+    'Mesh.cpp',
+  ],
+  packages = [
+    '/glop2d/base',
+  ],
+  headers = [
+    'Camera.h',
+    'Mesh.h',
+    'Point3.h',  
+  ],
+)
+
+#s = env.Program(objs)
+#env.Alias('foo', s)
+
+objs = SCons.Util.unique(objs)
+objs.sort()
+Return('objs')

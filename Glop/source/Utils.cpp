@@ -1,6 +1,7 @@
 // Includes
-#include "../include/Utils.h"
-#include "../include/Base.h"
+#include "Utils.h"
+#include "Base.h"
+#include "GlopWindow.h"
 #include <stdio.h>
 #include <limits.h>
 

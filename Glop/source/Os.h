@@ -20,8 +20,8 @@
 #define GLOP_OS_H__
 
 // Includes
-#include "../include/Base.h"
-#include "../include/Input.h"
+#include "Base.h"
+#include "Input.h"
 #include <vector>
 using namespace std;
 

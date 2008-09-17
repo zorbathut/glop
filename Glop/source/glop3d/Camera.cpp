@@ -1,7 +1,7 @@
 // Includes
-#include "../../include/glop3d/Camera.h"
-#include "../../include/GlopWindow.h"
-#include "../../include/OpenGl.h"
+#include "glop3d/Camera.h"
+#include "GlopWindow.h"
+#include "OpenGl.h"
 #include <cmath>
 
 void Camera::LookAt(const Point3 &top_left, const Point3 &top_right, const Point3 &bottom_left) {

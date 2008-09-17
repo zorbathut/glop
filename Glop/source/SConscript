@@ -1,0 +1,70 @@
+import SCons.Util
+import scons_utils
+Import('env')
+Export('env')
+
+env.BuildObjects(
+  target_name = 'glop',
+  source = [
+    'Base.cpp',
+    'BinaryFileManager.cpp',
+    'Input.cpp',
+    'GlopFrameBase.cpp',
+    'GlopFrameStyle.cpp',
+    'GlopWindow.cpp',
+    'OsMacOSX.cpp',
+    'OsWin32.cpp',
+    'System.cpp',
+    'Utils.cpp',
+    'GlopInternalData.cpp',
+    'OpenGl.cpp',
+    'Collisions.cpp',
+    'Font.cpp',
+    'GlopFrameWidgets.cpp',
+    'Image.cpp',
+    'Thread.cpp',
+  ],
+  headers = [
+    'Base.h',
+    'BinaryFileManager.h',
+    'Collisions.h',
+    'Color.h',
+    'Font.h',
+    'GlopFrame.h',
+    'GlopFrameBase.h',
+    'GlopFrameStyle.h',
+    'GlopFrameWidgets.h',
+    'GlopWindow.h',
+    'Image.h',
+    'Input.h',
+    'List.h',
+    'MathUtil.h',
+    'OpenGl.h',
+    'System.h',
+    'Thread.h',
+    'Utils.h',
+  ],
+  libs = [
+    'freetype',
+    'jpeg',
+  ],
+  frameworks = [
+    'Carbon',
+    'AGL',
+    'OpenGL',
+    'ApplicationServices',
+    'IOKit',
+  ],
+  packages = [
+    'glop2d/base',
+    'glop3d/base',
+  ]
+)
+
+env.Test(
+  'glop_test',
+  'Glop_test.cpp',
+  packages = [
+    'glop',
+  ]
+)

@@ -1,5 +1,5 @@
-#include "../include/Collisions.h"
-#include "../include/MathUtil.h"
+#include "Collisions.h"
+#include "MathUtil.h"
 
 Box::Box(float x, float y, float width, float height) : _x(x), _y(y), _width(width), _height(height) {
 	_x2 = _x + _width;

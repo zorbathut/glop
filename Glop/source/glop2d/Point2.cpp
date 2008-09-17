@@ -1,5 +1,5 @@
 // Includes
-#include "../../include/glop2d/Point2.h"
+#include "glop2d/Point2.h"
 #include <cmath>
 
 float Point2::Norm() const {
