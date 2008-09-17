@@ -44,7 +44,7 @@ const char *const kKeyNames[] = {
   0, 0, 0, 0, 0,
   "Caps lock", "Num lock", "Scroll lock", "Print screen", "Pause",          // 150
   "Left shift", "Right shift", "Left control", "Right control", "Left alt",
-  "Right alt", 0, 0, 0, 0,
+  "Right alt", "Left gui", "Right gui", 0, 0,
   0, "Right", "Left", "Up", "Down",
   "Key pad /", "Key pad *", "Key pad -", "Key pad +", "Key pad enter",
   "Key pad .", "Key pad =", "Key pad 0", "Key pad 1", "Key pad 2",

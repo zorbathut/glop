@@ -30,9 +30,6 @@
 // Constants
 const string kTitle = "Glop Tests";
 
-// Constants
-const string kTitle = "Glop Tests";
-
 // Globals
 Image *gIcon;
 

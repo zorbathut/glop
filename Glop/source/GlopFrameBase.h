@@ -194,15 +194,9 @@ class GlopFrame {
   
   // Returns whether a point (given in WINDOW coordinates) is over this frame, accounting for both
   // clipping and logical size. This is useful for focus tracking due to mouse clicks for example.
-<<<<<<< HEAD:Glop/source/GlopFrameBase.h
-  // It can be overridden if the frame's visible extent is not the same as its size. The focus frame
-  // variant does the same thing except it uses the focus frame as a basis instead if the focus
-  // frame exists. Otherwise, it is the same as IsPointVisibel.
-=======
   // It can be overridden if the frame's visible extent is not the same as its size. The focus
   // frame variant does the same thing except it uses the focus frame as a basis instead if the
   // focus frame exists. Otherwise, it is the same as IsPointVisibel.
->>>>>>> FETCH_HEAD:Glop/include/GlopFrameBase.h
   virtual bool IsPointVisible(int screen_x, int screen_y) const;
   virtual bool IsPointVisibleInFocusFrame(int screen_x, int screen_y) const;
   
@@ -295,13 +289,6 @@ class GlopFrame {
   // Propogate focus information down to the next focus frame (but not past that).
   virtual void SetFocusFrame(FocusFrame *focus_frame) {focus_frame_ = focus_frame;}
   virtual void NotifyFocusChange() {OnFocusChange();}
-<<<<<<< HEAD:Glop/source/GlopFrameBase.h
-
-  // Changes the current window of this frame and all descendents. This will only be called if
-  // window is indeed different from the current window.
-  virtual void SetWindow(GlopWindow *window) {window_ = window;}
-=======
->>>>>>> FETCH_HEAD:Glop/include/GlopFrameBase.h
 
   // Data
   GlopFrame *parent_;
@@ -337,15 +324,9 @@ class SingleParentFrame: public GlopFrame {
 
   // Child delegation functions
   virtual void Render() const {if (child_ != 0) child_->Render();}
-<<<<<<< HEAD:Glop/source/GlopFrameBase.h
-  virtual bool OnKeyEvent(const KeyEvent &event, int dt, bool gained_focus) {
-    if (child_ != 0 && !child_->IsFocusFrame())
-      return child_->OnKeyEvent(event, dt, gained_focus);
-=======
   virtual bool OnKeyEvent(const KeyEvent &event, bool gained_focus) {
     if (child_ != 0 && !child_->IsFocusFrame())
       return child_->OnKeyEvent(event, gained_focus);
->>>>>>> FETCH_HEAD:Glop/include/GlopFrameBase.h
     else
       return false;
   }
@@ -396,35 +377,8 @@ class SingleParentFrame: public GlopFrame {
   }
   void RegisterFocusFrames() {if (child_ != 0) child_->RegisterFocusFrames();}
   void UnregisterFocusFrames() {if (child_ != 0) child_->UnregisterFocusFrames();}
-<<<<<<< HEAD:Glop/source/GlopFrameBase.h
-  void SetWindow(GlopWindow *window) {
-    GlopFrame::SetWindow(window);
-    if (child_ != 0 && child_->GetWindow() != window) child_->SetWindow(window);
-  } 
-=======
->>>>>>> FETCH_HEAD:Glop/include/GlopFrameBase.h
   GlopFrame *child_;
   DISALLOW_EVIL_CONSTRUCTORS(SingleParentFrame);
-};
-
-// EditableSingleParentFrame
-// =========================
-//
-// A SingleParentFrame with public functions for changing its child. It is used as a dummy wrapper
-// if you want to add a frame to a window but then wish to be able to easily change what that frame
-// is in the future. This is useful, for example, in MenuFrames.
-class EditableSingleParentFrame: public SingleParentFrame {
- public:
-  EditableSingleParentFrame(): SingleParentFrame() {}
-  EditableSingleParentFrame(GlopFrame *child): SingleParentFrame(child) {}
-  string GetType() const {return "PublicSingleParentFrame";}
-
-  const GlopFrame *GetChild() const {return SingleParentFrame::GetChild();}
-  GlopFrame *GetChild() {return SingleParentFrame::GetChild();}
-  GlopFrame *RemoveChildNoDelete() {return SingleParentFrame::RemoveChildNoDelete();}
-  void SetChild(GlopFrame *frame) {SingleParentFrame::SetChild(frame);}
- private:
-  DISALLOW_EVIL_CONSTRUCTORS(EditableSingleParentFrame);
 };
 
 // MultiParentFrame
@@ -445,11 +399,7 @@ class MultiParentFrame: public GlopFrame {
   
   // Child delegation functions
   virtual void Render() const;
-<<<<<<< HEAD:Glop/source/GlopFrameBase.h
-  virtual bool OnKeyEvent(const KeyEvent &event, int dt, bool gained_focus);
-=======
   virtual bool OnKeyEvent(const KeyEvent &event, bool gained_focus);
->>>>>>> FETCH_HEAD:Glop/include/GlopFrameBase.h
   virtual void Think(int dt);
   virtual void SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2);
   virtual bool IsFocusMagnet(const KeyEvent &event) const;
@@ -479,10 +429,6 @@ class MultiParentFrame: public GlopFrame {
   void NotifyFocusChange();
   void RegisterFocusFrames();
   void UnregisterFocusFrames();
-<<<<<<< HEAD:Glop/source/GlopFrameBase.h
-  void SetWindow(GlopWindow *window);
-=======
->>>>>>> FETCH_HEAD:Glop/include/GlopFrameBase.h
   friend class GlopWindow;
   List<GlopFrame*> children_;
   DISALLOW_EVIL_CONSTRUCTORS(MultiParentFrame);
@@ -1207,12 +1153,8 @@ class MaxHeightFrame: public SingleParentFrame {
 
 class MaxSizeFrame: public SingleParentFrame {
  public:
-<<<<<<< HEAD:Glop/source/GlopFrameBase.h
-  MaxSizeFrame(GlopFrame *frame, float max_width = kSizeLimitRec, float max_height = kSizeLimitRec);
-=======
   MaxSizeFrame(GlopFrame *frame, float max_width = kSizeLimitRec,
                float max_height = kSizeLimitRec);
->>>>>>> FETCH_HEAD:Glop/include/GlopFrameBase.h
   string GetType() const {return "MaxSizeFrame";}
   void SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2);
   void AbsoluteMakeVisible(int x1, int y1, int x2, int y2, bool center);
@@ -1254,12 +1196,8 @@ class ExactWidthFrame: public MaxWidthFrame {
 };
 class ExactHeightFrame: public MaxHeightFrame {
  public:
-<<<<<<< HEAD:Glop/source/GlopFrameBase.h
-  ExactHeightFrame(GlopFrame *frame, float height = kSizeLimitRec, float vert_justify = kJustifyTop)
-=======
   ExactHeightFrame(GlopFrame *frame, float height = kSizeLimitRec,
                    float vert_justify = kJustifyTop)
->>>>>>> FETCH_HEAD:Glop/include/GlopFrameBase.h
   : MaxHeightFrame(new MinHeightFrame(frame, height, vert_justify), height) {}
   string GetType() const {return "ExactHeightFrame";}
   void AbsoluteMakeVisible(int y1, int y2, bool center) {

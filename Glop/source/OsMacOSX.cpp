@@ -1177,4 +1177,14 @@ int Os::GetRefreshRate() {
 void Os::EnableVSync(bool is_enable) {
   
 }
+
+
+vector<string> Os::ListFiles(const string &directory) {
+  return vector<string>();
+}
+
+vector<string> Os::ListSubdirectories(const string &directory) {
+  return vector<string>();
+}
+
 #endif // MACOSX

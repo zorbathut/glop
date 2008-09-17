@@ -194,6 +194,8 @@ const GlopKey kKeyLeftControl(157);
 const GlopKey kKeyRightControl(158);
 const GlopKey kKeyLeftAlt(159);
 const GlopKey kKeyRightAlt(160);
+const GlopKey kKeyLeftGui(161);
+const GlopKey kKeyRightGui(162);
 
 const GlopKey kKeyRight(166);
 const GlopKey kKeyLeft(167);

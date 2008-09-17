@@ -495,7 +495,6 @@ class DefaultMenuView: public MenuView {
   void SetSelectionColor(const Color &c) {selection_color_ = c;}
   const Color &GetSelectionColorNoFocus() const {return selection_color_no_focus_;}
   void SetSelectionColorNoFocus(const Color &c) {selection_color_no_focus_ = c;}
-  void SetTextStyle(const GuiTextStyle &style) {text_style_ = style;}
  private:
   GuiTextStyle text_style_;
   const TextPromptView *text_prompt_view_;
