@@ -26,9 +26,8 @@ bool GlopWindow::Create(int width, int height, bool full_screen,
   ChooseValidSize(width, height, &width, &height);
 
   // Make sure the new window settings are different from the current window settings
-  bool same_settings = (memcmp(&settings, &settings_, sizeof(settings)) == 0);
   if (is_created_ && width == width_ && height == height_ &&
-      full_screen == is_full_screen_ && same_settings)
+      full_screen == is_full_screen_ && settings_ == settings)
     return true;
 
   // Destroy the old window and recreate it with the new settings. Note that this will invalidate
@@ -346,9 +345,9 @@ void GlopWindow::UnregisterAllPings(GlopFrame *frame) {
 }
 
 // We wish to handle a ping as an autonomous unit. This ensures that if ping1 was requested before
-// ping2, ping1 finishes propogating before ping2 starts propogating. We need to just store the ping
-// until we enter the ping resolution phase, but from that point onwards, all pings are handled
-// immediately.
+// ping2, ping1 finishes propogating before ping2 starts propogating. We need to just store the
+// ping until we enter the ping resolution phase, but from that point onwards, all pings are
+// handled immediately.
 void GlopWindow::RegisterPing(GlopFrame::Ping *ping) {
   GlopWindow *window = ping->GetFrame()->GetWindow();
   if (window != 0 && window->is_resolving_ping_)
@@ -373,17 +372,21 @@ void GlopWindow::PropogatePing(GlopFrame::Ping *ping) {
 }
 
 // Updates focus for the current layer based on a new key event.
-void GlopWindow::OnKeyEvents(const vector<KeyEvent> &events, int dt) {
+void GlopWindow::OnKeyEvent(const KeyEvent &event) {
   int layer = int(focus_stack_.size()) - 1;
   FocusFrame *focus_frame = focus_stack_[layer], *frame;
   if (focus_frame == 0)
     return;
 
+  // Pass the events to the focus frame and see if it processes them
+  if (SendKeyEventToFrame(focus_frame, event, false))
+    return;
+
   // Handle mouse clicks
   bool is_mouse_click = false;
-  for (int i = 0; i < (int)events.size(); i++)
-  if (events[i].IsNonRepeatPress() &&
-      (events[i].key == kGuiKeyPrimaryClick || events[i].key == kGuiKeySecondaryClick))
+  if (event.IsNonRepeatPress())
+  for (int i = 0; i < (int)event.keys.size(); i++)
+  if (event.keys[i] == kGuiKeyPrimaryClick || event.keys[i] == kGuiKeySecondaryClick)
     is_mouse_click = true;
   if (is_mouse_click) {
     // Figure out our new focus
@@ -399,22 +402,17 @@ void GlopWindow::OnKeyEvents(const vector<KeyEvent> &events, int dt) {
     // Handle the click
     if (new_ff != focus_frame)
       DemandFocus(new_ff, true);
-    SendKeyEventsToFrame(new_ff, events, dt, focus_frame != new_ff);
+    SendKeyEventToFrame(new_ff, event, focus_frame != new_ff);
     return;
   }
-
-  // Pass the events to the focus frame and see if it processes them
-  if (SendKeyEventsToFrame(focus_frame, events, dt, false))
-    return;
-  
+ 
   // Handle focus magnets - note that a frame might still have a key as a focus magnet even if it
   // does not process it. We do not switch focus in this case.
-  if (events.size() > 0 && events[0].IsNonRepeatPress()) {
+  if (event.IsNonRepeatPress()) {
     // Figure out our new focus
     vector<FocusFrame*> options;
     for (frame = focus_frame; ; frame = frame->next_) {
-      for (int i = 0; i < (int)events.size(); i++)
-      if (frame->IsFocusMagnet(events[i]))
+      if (frame->IsFocusMagnet(event))
         options.push_back(frame);
       if (frame == focus_frame->prev_)
         break;
@@ -424,17 +422,18 @@ void GlopWindow::OnKeyEvents(const vector<KeyEvent> &events, int dt) {
     // Handle the event - note that if focus did not change, we have already handled it.
     if (new_ff != focus_frame) {
       DemandFocus(new_ff, true);
-      SendKeyEventsToFrame(new_ff, events, dt, true);
+      SendKeyEventToFrame(new_ff, event, true);
       return;
     }
   }
 
   // Handle tabbing
   bool is_select_next = false, is_select_prev = false;
-  for (int i = 0; i < (int)events.size(); i++)
-  if (events[i].IsPress() && events[i].key == kGuiKeySelectNext)
+  if (event.IsPress())
+  for (int i = 0; i < (int)event.keys.size(); i++)
+  if (event.keys[i] == kGuiKeySelectNext)
     is_select_next = true;
-  else if (events[i].IsPress() && events[i].key == kGuiKeySelectPrev)
+  else if (event.keys[i] == kGuiKeySelectPrev)
     is_select_prev = true;
   FocusFrame *new_ff = focus_frame;
   if (is_select_next && !is_select_prev)
@@ -445,7 +444,7 @@ void GlopWindow::OnKeyEvents(const vector<KeyEvent> &events, int dt) {
   // Handle the event
   if (new_ff != focus_frame) {
     DemandFocus(new_ff, true);
-    SendKeyEventsToFrame(new_ff, events, dt, true);
+    SendKeyEventToFrame(new_ff, event, true);
   }
 }
 
@@ -497,7 +496,7 @@ void GlopWindow::UpdateFramesInFocus() {
   FocusFrame *frame = GetFocusFrame();
   if (frame == 0 || frame->IsInFocus() == is_in_focus_)
     return;
-  while (frame != 0) {
+  while (frame != 0 && frame->layer_ == GetFocusFrame()->layer_) {
     frame->SetIsInFocus(is_in_focus_);
     frame = frame->GetParent()->GetFocusFrame();
   }
@@ -595,15 +594,9 @@ FocusFrame *GlopWindow::GetPrevPossibleFocusFrame(FocusFrame *frame) {
   return frame;
 }
 
-bool GlopWindow::SendKeyEventsToFrame(FocusFrame *frame, const vector<KeyEvent> &events, int dt,
-                                      bool gained_focus) {
+bool GlopWindow::SendKeyEventToFrame(FocusFrame *frame, const KeyEvent &event, bool gained_focus) {
   while (frame != 0 && frame->IsInFocus()) {
-    bool result = false;
-    for (int i = 0; i < (int)events.size(); i++)
-      result |= frame->OnKeyEvent(events[i], dt, gained_focus);
-    if (events.size() == 0 && dt > 0)
-      result |= frame->OnKeyEvent(KeyEvent(kNoKey, KeyEvent::Nothing), dt, gained_focus);
-    if (result)
+    if (frame->OnKeyEvent(event, gained_focus))
       return true;
     frame = frame->GetParent()->GetFocusFrame();
   }

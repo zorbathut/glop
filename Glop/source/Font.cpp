@@ -540,7 +540,8 @@ void GradientFont::GetColors(const FontBitmap *bitmap, int y1, int y2, vector<in
 ShadowFont *ShadowFont::Load(BinaryFileReader reader, float shadow_dx, float shadow_dy,
                              float shadow_brightness) {
   FontOutline *outline = FontOutline::Load(reader);
-  return (outline != 0? new ShadowFont(outline, true, shadow_dx, shadow_dy, shadow_brightness) : 0);
+  return (outline != 0?
+    new ShadowFont(outline, true, shadow_dx, shadow_dy, shadow_brightness) : 0);
 }
 
 void ShadowFont::RenderChar(const FontBitmap *bitmap, const Texture *bitmap_texture,

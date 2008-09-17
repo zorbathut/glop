@@ -132,7 +132,7 @@ class BinaryFileWriter {
   int WriteInt64s(int count, const int64 *data);
   int WriteFloats(int count, const float *data);
   int WriteDoubles(int count, const double *data);
-  int WriteData(int record_Size, int count, const void *data);
+  int WriteData(int record_size, int count, const void *data);
   
   // Single record data writing functions
   bool WriteString(const string &data);

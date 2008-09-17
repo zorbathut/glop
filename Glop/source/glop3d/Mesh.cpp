@@ -2,6 +2,7 @@
 #include "glop3d/Mesh.h"
 #include "Base.h"
 #include "OpenGl.h"
+#include <cmath>
 
 Mesh::Mesh(int num_points_allocated, int num_triangles_allocated, bool has_normals,
            bool has_colors, bool has_textures)
@@ -278,5 +279,43 @@ Mesh *StockMeshes::NewBoxMesh(float width, float height, float depth, const Colo
   result->AddTriangle(20, 21, 22, texture);
   result->AddTriangle(20, 22, 23, texture);
 
+  return result;
+}
+
+Mesh *StockMeshes::NewSphereMesh(float width, float height, float depth, const Color &color,
+                                 int precision, const Texture *texture) {
+  Mesh *result = new Mesh(precision*precision+2, 2*precision*precision, true, true, true);
+  float w = width/2, h = height/2, d = depth/2;
+
+  // Create points
+  result->AddPoint(Point3(0, h, 0), Point3(0, h, 0), color, 0.5f, 0);
+  for (int i = 0; i < precision; i++)
+    for (int j = 0; j < precision; j++) {
+      float v = float(i+1) / (precision+1);
+      float u = float(j) / precision;
+      float r = sin(v*kPi);
+      Point3 p(-cos(2*u*kPi)*w*r, cos(v*kPi)*h, sin(2*u*kPi)*w*d*r);
+      result->AddPoint(p, p, color, u, v);
+    }
+  result->AddPoint(Point3(0, -h, 0), Point3(0, -h, 0), color, 0.5f, 0);
+
+  // Create triangles
+  for (int j = 0; j < precision; j++) {
+    int j2 = (j+1) % precision;
+    result->AddTriangle(0, 1 + j, 1 + j2, texture);
+  }
+  for (int i = 0; i < precision-1; i++)
+    for (int j = 0; j < precision; j++) {
+      int j2 = (j+1) % precision;
+      result->AddTriangle(1 + i*precision + j, 1 + (i+1)*precision + j, 1 + (i+1)*precision + j2,
+                          texture);
+      result->AddTriangle(1 + i*precision + j, 1 + (i+1)*precision + j2, 1 + i*precision + j2,
+                          texture);
+    }
+  for (int j = 0; j < precision; j++) {
+    int j2 = (j+1) % precision;
+    result->AddTriangle(precision*(precision-1) + j + 1, 1 + precision*precision,
+                        precision*(precision-1) + j2 + 1, texture);
+  }
   return result;
 }

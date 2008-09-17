@@ -9,21 +9,28 @@
 // ============
 
 GuiTextStyle::GuiTextStyle()
-: color(gGuiTextStyle->color), size(gGuiTextStyle->size), font(gGuiTextStyle->font),
-  flags(gGuiTextStyle->flags) {}
+: color(gGuiTextStyle.color), size(gGuiTextStyle.size), font(gGuiTextStyle.font),
+  flags(gGuiTextStyle.flags) {}
 
 GuiTextStyle::GuiTextStyle(const Color &_color)
-: color(_color), size(gGuiTextStyle->size), font(gGuiTextStyle->font),
-  flags(gGuiTextStyle->flags) {}
+: color(_color), size(gGuiTextStyle.size), font(gGuiTextStyle.font),
+  flags(gGuiTextStyle.flags) {}
 
 GuiTextStyle::GuiTextStyle(const Color &_color, float _size)
-: color(_color), size(_size), font(gGuiTextStyle->font), flags(gGuiTextStyle->flags) {}
+: color(_color), size(_size), font(gGuiTextStyle.font), flags(gGuiTextStyle.flags) {}
 
 GuiTextStyle::GuiTextStyle(const Color &_color, float _size, Font *_font)
-: color(_color), size(_size), font(_font), flags(gGuiTextStyle->flags) {}
+: color(_color), size(_size), font(_font), flags(gGuiTextStyle.flags) {}
 
 // InputBoxView
 // ============
+
+vector<InputBoxView*> InputBoxView::instances_;
+void InputBoxView::DeleteAll() {
+  for (int i = 0; i < (int)instances_.size(); i++)
+    delete instances_[i];
+  instances_.clear();
+}
 
 void DefaultInputBoxView::OnResize(int rec_width, int rec_height,
                                    int *lp, int *tp, int *rp, int *bp) const {
@@ -40,6 +47,13 @@ void DefaultInputBoxView::Render(int x1, int y1, int x2, int y2,
 // TextPromptView
 // ==============
 
+vector<TextPromptView*> TextPromptView::instances_;
+void TextPromptView::DeleteAll() {
+  for (int i = 0; i < (int)instances_.size(); i++)
+    delete instances_[i];
+  instances_.clear();
+}
+
 void DefaultTextPromptView::OnResize(int rec_width, int rec_height, const TextFrame *text_frame,
                                      int *lp, int *tp, int *rp, int *bp) const {
   *tp = *bp = 0;
@@ -47,9 +61,9 @@ void DefaultTextPromptView::OnResize(int rec_width, int rec_height, const TextFr
   *rp = text_frame->GetRenderer()->GetCharWidth('|', true, true) - 1;
 }
 
-void DefaultTextPromptView::Render(int x1, int y1, int x2, int y2, int cursor_pos, int *cursor_time,
-                                   int selection_start, int selection_end, bool is_in_focus,
-                                   const TextFrame *text_frame) const {
+void DefaultTextPromptView::Render(int x1, int y1, int x2, int y2, int cursor_pos,
+                                   int *cursor_time, int selection_start, int selection_end,
+                                   bool is_in_focus, const TextFrame *text_frame) const {
   const int kCursorCycleTime = 1000, kCursorFadeTime = 100;
 
   // Get interesting x-coordinates
@@ -86,6 +100,13 @@ void DefaultTextPromptView::Render(int x1, int y1, int x2, int y2, int cursor_po
  
 // WindowView
 // ==========
+
+vector<WindowView*> WindowView::instances_;
+void WindowView::DeleteAll() {
+  for (int i = 0; i < (int)instances_.size(); i++)
+    delete instances_[i];
+  instances_.clear();
+}
 
 void DefaultWindowView::OnResize(int rec_width, int rec_height, bool has_title,
                                  int *title_l, int *title_t, int *title_r, int *title_b,
@@ -138,6 +159,13 @@ void DefaultWindowView::Render(int x1, int y1, int x2, int y2,
 
 // ButtonView
 // ==========
+
+vector<ButtonView*> ButtonView::instances_;
+void ButtonView::DeleteAll() {
+  for (int i = 0; i < (int)instances_.size(); i++)
+    delete instances_[i];
+  instances_.clear();
+}
 
 void DefaultButtonView::OnResize(int rec_width, int rec_height, bool is_down,
                                  int *lp, int *tp, int *rp, int *bp) const {
@@ -203,6 +231,13 @@ void DefaultButtonView::Render(int x1, int y1, int x2, int y2, bool is_down, boo
 // ArrowView
 // =========
 
+vector<ArrowView*> ArrowView::instances_;
+void ArrowView::DeleteAll() {
+  for (int i = 0; i < (int)instances_.size(); i++)
+    delete instances_[i];
+  instances_.clear();
+}
+
 void DefaultArrowView::OnResize(int rec_width, int rec_height, Direction direction,
                                 int *width, int *height) const {
   *width = *height = min(rec_width, rec_height);
@@ -241,6 +276,13 @@ void DefaultArrowView::Render(int x1, int y1, int x2, int y2, Direction directio
 
 // SliderView
 // ==========
+
+vector<SliderView*> SliderView::instances_;
+void SliderView::DeleteAll() {
+  for (int i = 0; i < (int)instances_.size(); i++)
+    delete instances_[i];
+  instances_.clear();
+}
 
 int DefaultSliderView::GetWidthOnResize(int rec_width, int rec_height, bool is_horizontal) const {
   return max(int(min(window()->GetWidth(), window()->GetHeight()) * width_), 2);
@@ -311,22 +353,41 @@ void DefaultSliderView::Render(int x1, int y1, int x2, int y2, bool is_horizonta
 // MenuView
 // ========
 
+vector<MenuView*> MenuView::instances_;
+void MenuView::DeleteAll() {
+  for (int i = 0; i < (int)instances_.size(); i++)
+    delete instances_[i];
+  instances_.clear();
+}
+
 void DefaultMenuView::OnResize(int rec_width, int rec_height, int *item_lp, int *item_tp,
                                int *item_rp, int *item_bp) const {
   *item_lp = *item_tp = *item_rp = *item_bp = 1;
 }
 
 void DefaultMenuView::Render(int x1, int y1, int x2, int y2, int sel_x1, int sel_y1, int sel_x2,
-                             int sel_y2, bool is_in_focus, const List<GlopFrame *> &items) const {
+                             int sel_y2, bool is_in_focus,
+                             const List<GlopFrame *> &visible_items) const {
   Color color = (is_in_focus? selection_color_ : selection_color_no_focus_);
   GlUtils2d::FillRectangle(sel_x1, sel_y1, sel_x2, sel_y2, color);
-  for (List<GlopFrame*>::const_iterator it = items.begin(); it != items.end(); ++it)
+  for (List<GlopFrame*>::const_iterator it = visible_items.begin();
+       it != visible_items.end(); ++it)
     (*it)->Render();
+}
+
+// DialogView
+// ==========
+
+vector<DialogView*> DialogView::instances_;
+void DialogView::DeleteAll() {
+  for (int i = 0; i < (int)instances_.size(); i++)
+    delete instances_[i];
+  instances_.clear();
 }
 
 // Globals
 // =======
-GuiTextStyle *gGuiTextStyle = 0;
+GuiTextStyle gGuiTextStyle(kDefaultTextColor, kDefaultTextHeight, 0, 0);
 InputBoxView *gInputBoxView = 0;
 TextPromptView *gTextPromptView = 0;
 ArrowView *gArrowView = 0;
@@ -336,35 +397,32 @@ WindowView *gWindowView = 0;
 MenuView *gMenuView = 0;
 DialogView *gDialogView = 0;
 
-template<class T> static void SafeDelete(T *& data) {
-  if (data != 0) {
-    delete data;
-    data = 0;
-  }
-}
-
 void ClearFrameStyle() {
-  SafeDelete(gGuiTextStyle);
-  SafeDelete(gInputBoxView);
-  SafeDelete(gTextPromptView);
-  SafeDelete(gArrowView);
-  SafeDelete(gButtonView);
-  SafeDelete(gSliderView);
-  SafeDelete(gWindowView);
-  SafeDelete(gMenuView);
-  SafeDelete(gDialogView);
+  InputBoxView::DeleteAll();
+  TextPromptView::DeleteAll();
+  ArrowView::DeleteAll();
+  ButtonView::DeleteAll();
+  SliderView::DeleteAll();
+  WindowView::DeleteAll();
+  MenuView::DeleteAll();
+  DialogView::DeleteAll();
 }
 
 void InitDefaultFrameStyle(Font *font) {
   ClearFrameStyle();
-  gGuiTextStyle = new GuiTextStyle(kDefaultTextColor, kDefaultTextHeight, font, 0);
+  gGuiTextStyle = GuiTextStyle(kDefaultTextColor, kDefaultTextHeight, font, 0);
   gInputBoxView = new DefaultInputBoxView();
   gTextPromptView = new DefaultTextPromptView(font);
   gArrowView = new DefaultArrowView();
   gButtonView = new DefaultButtonView();
   gSliderView = new DefaultSliderView(gArrowView, gButtonView);
   gWindowView = new DefaultWindowView(font);
-  gMenuView = new DefaultMenuView(font);
+  DefaultTextPromptView *menu_text_prompt_view = new DefaultTextPromptView(font);
+  menu_text_prompt_view->SetTextStyle(
+    GuiTextStyle(kDefaultMenuTextPromptColor, kDefaultTextHeight, font, 0));
+  menu_text_prompt_view->SetCursorColor(kDefaultMenuTextPromptCursorColor);
+  menu_text_prompt_view->SetHighlightColor(kDefaultMenuTextPromptHighlightColor);
+  gMenuView = new DefaultMenuView(font, menu_text_prompt_view);
   gDialogView = new DefaultDialogView(gInputBoxView, gTextPromptView, gWindowView, gButtonView,
                                       gSliderView, font);
 }

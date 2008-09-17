@@ -112,7 +112,12 @@ class StockMeshes {
   static Mesh *NewCubeMesh(float size, const Color &color, const Texture *texture = 0) {
     return NewBoxMesh(size, size, size, color, texture);
   }
-
+  static Mesh *NewSphereMesh(float width, float height, float depth, const Color &color,
+                             int precision, const Texture *texture = 0);
+  static Mesh *NewSphereMesh(float radius, const Color &color, int precision,
+                             const Texture *texture = 0) {
+    return NewSphereMesh(radius*2, radius*2, radius*2, color, precision, texture);
+  }
  private:
   DISALLOW_EVIL_CONSTRUCTORS(StockMeshes);
 };

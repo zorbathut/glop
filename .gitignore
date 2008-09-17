@@ -5,10 +5,21 @@
 *.pbxuser
 *.mode1v3
 
-# SCons files
 *.sconsign.dblite
 
 build*/
 
 *.o
 *.pyc
+# Visual Studio working files
+BuildLog.htm
+GlopDbg.lib
+GlopRls.lib
+*.exe
+*.idb
+*.ilk
+*.ncb
+*.obj
+*.pdb
+*.suo
+

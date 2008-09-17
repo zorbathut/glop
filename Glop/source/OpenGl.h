@@ -140,7 +140,8 @@ class GlUtils2d {
   static void FillRectangleTexture(int x1, int y1, int x2, int y2, const Texture *texture);
 
   // Texture rendering without tiling:
-  //  - The first function render the full texture (excluding padding to make its size a power of 2)
+  //  - The first function render the full texture (excluding padding to make its size a power of
+  //    two)
   //  - The second function renders the texture scaled, possibly distorting the aspect ratio
   //  - The subtexture functions are similar but they render any subrectangle of the texture
   // The texture is deactivated when done.
@@ -148,7 +149,8 @@ class GlUtils2d {
     RenderTexture(x1, y1, x1 + texture->GetWidth() - 1, y1 + texture->GetHeight() - 1, texture);
   }
   static void RenderTexture(int x1, int y1, int x2, int y2, const Texture *texture) {
-    RenderSubTexture(x1, y1, x2, y2, 0, 0, float(texture->GetWidth()) / texture->GetInternalWidth(),
+    RenderSubTexture(x1, y1, x2, y2, 0, 0,
+                     float(texture->GetWidth()) / texture->GetInternalWidth(),
                      float(texture->GetHeight()) / texture->GetInternalHeight(), true, texture);
   }
   static void RenderSubTexture(int x1, int y1, float tu1, float tv1, float tu2, float tv2,
@@ -158,7 +160,8 @@ class GlUtils2d {
                      tu1, tv1, tu2, tv2, clamp, texture);
   }
   static void GlUtils2d::RenderSubTexture(int x1, int y1, int x2, int y2, float tu1, float tv1,
-                                          float tu2, float tv2, bool clamp, const Texture *texture);
+                                          float tu2, float tv2, bool clamp,
+                                          const Texture *texture);
 };
 
 #endif // GLOP_OPEN_GL_H__

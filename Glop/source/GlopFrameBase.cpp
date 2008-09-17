@@ -171,11 +171,11 @@ void MultiParentFrame::Render() const {
   }
 }
 
-bool MultiParentFrame::OnKeyEvent(const KeyEvent &event, int dt, bool gained_focus) {
+bool MultiParentFrame::OnKeyEvent(const KeyEvent &event, bool gained_focus) {
   bool result = false;
   for (List<GlopFrame*>::iterator it = children_.begin(); it != children_.end(); ++it)
   if (!(*it)->IsFocusFrame())
-    result |= (*it)->OnKeyEvent(event, dt, gained_focus);
+    result |= (*it)->OnKeyEvent(event, gained_focus);
   return result;
 }
 
@@ -252,6 +252,13 @@ string MultiParentFrame::GetContextStringHelper(bool extend_down, bool extend_up
   return result;
 }
 
+void MultiParentFrame::SetWindow(GlopWindow *window) {
+  GlopFrame::SetWindow(window);
+  for (List<GlopFrame*>::iterator it = children_.begin(); it != children_.end(); ++it)
+  if ((*it)->GetWindow() != window)
+    (*it)->SetWindow(window);
+}
+
 void MultiParentFrame::SetFocusFrame(FocusFrame *focus_frame) {
   GlopFrame::SetFocusFrame(focus_frame);
   for (List<GlopFrame*>::iterator it = children_.begin(); it != children_.end(); ++it)
@@ -272,13 +279,6 @@ void MultiParentFrame::RegisterFocusFrames() {
 void MultiParentFrame::UnregisterFocusFrames() {
   for (List<GlopFrame*>::iterator it = children_.begin(); it != children_.end(); ++it)
     (*it)->UnregisterFocusFrames();
-}
-
-void MultiParentFrame::SetWindow(GlopWindow *window) {
-  GlopFrame::SetWindow(window);
-  for (List<GlopFrame*>::iterator it = children_.begin(); it != children_.end(); ++it)
-  if ((*it)->GetWindow() != window)
-    (*it)->SetWindow(window);
 }
 
 // ClippedFrame
@@ -933,8 +933,8 @@ void MinSizeFrame::RecomputeSize(int rec_width, int rec_height) {
 
 // A helper function used by MaxSizeFrame and ScrollingFrame. This indicates where we should
 // scroll to on a ping.
-static int ScrollToPing(int scroll_pos, int view_size, int total_size, int ping_pos1, int ping_pos2,
-                        bool center) {
+static int ScrollToPing(int scroll_pos, int view_size, int total_size, int ping_pos1,
+                        int ping_pos2, bool center) {
   if (total_size > view_size) {
     if (center) {
       return (ping_pos1 + ping_pos2 - view_size) / 2;
