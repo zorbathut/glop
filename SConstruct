@@ -25,7 +25,7 @@ AddOption(
     metavar='COMPILE_MODE')
 
 global_env = scons_utils.AppendOsParams(Environment())
-global_env.Replace(GLOBAL_ROOT = os.getcwd() + '/')
+global_env.Replace(GLOBAL_ROOT = os.getcwd() + os.sep)
 Export('global_env')
 
 # Compile all projects.  The only requirement here is that Glop be first in the list, since the

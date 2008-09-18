@@ -1,18 +1,19 @@
 import SCons.Util
 import scons_utils
 import os
+import platform
 Import('global_env')
 env = global_env.Clone()
 Export('env')
 
-env.Replace(PROJECT_ROOT = os.path.join(os.getcwd(), 'source/'))
+env.Replace(PROJECT_ROOT = os.path.join(os.getcwd(), 'source' + os.sep))
 env.Replace(PACKAGE_STACK = ['all'])
 env.Replace(LOADED_PACKAGES_MAP = {})
 env.Append(CPPPATH = ['#Glop/source/'])
 
 # Os specific environment values that are specific to Glop/Glop, not all projects under Glop
-os_params = os.uname()
-if os_params[0] not in ['Darwin', 'Win32']:
+os_params = platform.uname()
+if os_params[0] not in ['Darwin', 'Windows']:
   print 'Operating system "' + os_params[0] + '" was unrecognized.'
   Exit(1)
 
@@ -26,8 +27,8 @@ if os_params[0] == 'Darwin':
       'ApplicationServices',
       'IOKit'])
 
-if os_params[0] == 'Win32':
-  env.Append(CCFLAGS = ['-DWIN32'])
+if os_params[0] == 'Windows':
+  env.Append(CCFLAGS = ['/D WIN32'])
 
 env.SConscript('source/SConscript')
 package = env.LoadPackage('/glop')

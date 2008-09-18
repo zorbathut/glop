@@ -1,12 +1,13 @@
 import SCons.Util
 import os
 import re
+import platform
 
 # Takes a name in the form 'foo/bar' or '/math/utils' and turns it into a valid global path for
 # whatever operating system we're on
 def TargetName(env, name):
   if name[0] == '/':
-    full_path = os.path.join(env['PROJECT_ROOT'], reduce(os.path.join, name.split('/')))
+    full_path = os.path.join(env['PROJECT_ROOT'], reduce(os.path.join, name[1:].split('/')))
   else:
     full_path = os.path.join(os.getcwd(), reduce(os.path.join, name.split('/')))
   return full_path
@@ -119,14 +120,14 @@ def AppendOsParams(env):
   env.Append(BUILDERS = {'RunTest' : run_test})
   env.AddMethod(TestProgram, 'Test')
 
-  os_params = os.uname()
-  if os_params[0] not in ['Darwin', 'Win32']:
+  os_params = platform.uname()
+  if os_params[0] not in ['Darwin', 'Windows']:
     print 'Operating system "' + os_params[0] + '" was unrecognized.'
     Exit(1)
 
   if os_params[0] == 'Darwin':
     import osx as operating_system
-  if os_params[0] == 'Win32':
+  if os_params[0] == 'Windows':
     import win32 as operating_system
 
   operating_system.AppendOsParams(env)
