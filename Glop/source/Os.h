@@ -22,6 +22,7 @@
 // Includes
 #include "Base.h"
 #include "Input.h"
+#include <string>
 #include <vector>
 using namespace std;
 
@@ -78,7 +79,7 @@ class Os {
   // Returns whether the given window currently has input focus, and whether it lost input focus
   // at any point since the last call to this function. It is important to track the latter
   // separately so that we can clear the key state even if the window loses and gains focus within
-  // a single frame. In Windows, this could easily happen on a call to DisplayMessage.
+  // a single frame. In Windows, this could easily happen on a call to MessageBox.
   static void GetWindowFocusState(OsWindowData *window, bool *is_in_focus, bool *focus_changed);
 
   // Returns the on-screen position of the given window. Specifically, x and y gives the screen
@@ -204,10 +205,9 @@ class Os {
   // Miscellaneous functions
   // =======================
 
-  // Displays a message in a way that should get the user's attention, as might be suitable for
-  // a fatal error message. This should work even if no window can be initialized.
+  // Displays a modal message box. This should work even if no window can be initialized.
   // The title may or may not be displayed with the message, depending on the operating system.
-  static void DisplayMessage(const string &title, const string &message);
+  static void MessageBox(const string &title, const string &message);
 
   // Returns a list of all 32 bpp fullscreen video modes that are supported by this computer. The
   // modes should be listed in increasing lexicographical order of pixel size: (width, height).

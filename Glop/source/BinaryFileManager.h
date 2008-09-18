@@ -45,7 +45,10 @@ class BinaryFileReader {
   // Each of these chunks will be logically treated as a file of its own.
   bool IsChunky() const {InitChunks(); return num_chunks_ != -1;}
   short GetNumChunks() const {InitChunks(); return num_chunks_;}
-  BinaryFileReader GetNextChunkReader() {return GetChunkReader(last_chunk_read_++);}
+  BinaryFileReader GetNextChunkReader() {
+    InitChunks();
+    return GetChunkReader(last_chunk_read_++);
+  }
   BinaryFileReader GetChunkReader(short chunk);
   
   // Basic file manipulation.

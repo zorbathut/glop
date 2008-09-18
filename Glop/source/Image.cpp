@@ -33,7 +33,7 @@ Image::Image(unsigned char *data, int width, int height, int bpp)
   // the right and down boundaries so GL_LINEAR filter will look nice. All other pixels are black
   // and transparent.
   if (width < internal_width_) {
-    for (int y = 0; y < internal_height_; y++) {
+    for (int y = 0; y < height_; y++) {
       memcpy(data_ + y*row_size, data + y*old_row_size, old_row_size);
       memset(data_ + y*row_size + width_*bpp_/8, 0, row_size - old_row_size);
       memcpy(data_ + y*row_size + width_*bpp_/8, data_ + y*row_size + (width_-1)*bpp_/8, bpp_/8);
@@ -689,8 +689,6 @@ Image *Image::LoadJpg(BinaryFileReader reader) {
     jpeg_read_scanlines(&info, &row, 1);
   }
   jpeg_finish_decompress(&info);
-  if (reader.Tell() > reader.GetLength())
-    goto error;
   result = new Image(pixels, width, height, bpp);
 error:
   if (pixels != 0)

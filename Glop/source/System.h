@@ -3,12 +3,13 @@
 
 // Includes
 #include "Base.h"
-//#include "BinaryFileManager.h"
+#include "BinaryFileManager.h"
 #include <vector>
 
 // Class declarations
 class Color;
 class GlopWindow;
+class SoundManager;
 class System;
 
 // Globals
@@ -17,7 +18,8 @@ System *system();
 // System class definition
 class System {
  public:
-  // Startup. Creates system() and does all setup we want. ShutDown is done automatically.
+  // Startup. Creates system() and does all setup we want. ShutDown is done automatically. Many
+  // Glop functions require this to be called before they are used.
   static void Init();
 
   // Internal logic - Think must be called exactly once per frame. It returns the number of
@@ -25,6 +27,14 @@ class System {
   // KeyHandlers receive OnKeyEvent messages, all GlopFrames perform all their logic, and all
   // rendering is performed. See GlopFrameBase.h for a more detailed pipeline.
   int Think();
+
+  // Message boxes
+  // =============
+
+  // Displays a highly-visible modal (i.e. freezes program execution until the user clicks okay)
+  // dialog box.
+  void MessageBox(const string &title, const string &message);
+  void MessageBoxf(const string &title, const char *message, ...);
 
   // Time-keeping
   // ============
@@ -57,6 +67,13 @@ class System {
   // function (see GlopWindow.h).
   GlopWindow *window() {return window_;}
   
+  // Sound
+  // =====
+
+  // Returns the sound manager for this Glop program. This can also be gotten via the
+  // sound_manager() global function (see Sound.h).
+  SoundManager *sound_manager() {return sound_manager_;}
+
   // File system
   // ===========
 
@@ -77,6 +94,7 @@ private:
   
   // General data
   GlopWindow *window_;
+  SoundManager *sound_manager_;
   int frame_count_;
   int refresh_rate_query_delay_, refresh_rate_;
   int vsync_time_;             // Time spent waiting for vsync last frame

@@ -1109,7 +1109,7 @@ void Os::ReleaseMutex(OsMutex* mutex) {
 // Miscellaneous functions
 // =======================
 
-void Os::DisplayMessage(const string& title, const string& message) {
+void Os::MessageBox(const string& title, const string& message) {
   DialogRef the_item;
   DialogItemIndex item_index;
 

@@ -92,7 +92,7 @@ BinaryFileReader BinaryFileReader::GetChunkReader(short chunk) {
     next_chunk_start = data_length_;
   else
     next_chunk_start = ReadInt();
-  if (chunk_start < 0 || next_chunk_start < chunk_start || next_chunk_start >= data_length_)
+  if (chunk_start < 0 || next_chunk_start < chunk_start || next_chunk_start > data_length_)
     return BinaryFileReader();
   
   // Seek to the beginning of the chunk and return it
@@ -254,8 +254,11 @@ void BinaryFileReader::InitChunks() const {
   BinaryFileReader *mutable_this = (BinaryFileReader*)this;
   mutable_this->Seek(0);
   if (mutable_this->ReadInts(1, &id) < 1 || id != kChunkListId ||
-      mutable_this->ReadShorts(1, &num_chunks_) < 0 || data_length_ < 6 + 4*num_chunks_)
+      mutable_this->ReadShorts(1, &num_chunks_) < 0 || data_length_ < 6 + 4*num_chunks_) {
     num_chunks_ = -1;
+  } else {
+    last_chunk_read_ = 0;
+  }
   mutable_this->Seek(old_position);
 }
 
@@ -308,6 +311,7 @@ void BinaryFileWriter::BeginChunk(int num_sub_chunks) {
     Seek(chunk_stack_.top().list_location + 6 + 4 * chunk_stack_.top().cur_chunk);
     int diff_position = position - chunk_stack_.top().list_location;
     ASSERT(WriteInt(diff_position));
+    Seek(position);
   }
   
   // Create the next chunk list entry

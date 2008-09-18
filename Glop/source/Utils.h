@@ -6,12 +6,7 @@
 
 // Includes
 #include "Base.h"
-#include <stdarg.h>
 #include <vector>
-
-// Format function that takes a variable argument parameter. Functions that wish to use an
-// interface similar to printf should use this.
-string Format(const char *text, va_list arglist);
 
 // String parsing utilities. The ToX functions return whether the string is validly formatted
 // in the given form if the first option is used. If the second option is used, the string is
@@ -41,9 +36,6 @@ template<class T> int BSFindMatch(const vector<T> &v, const T &target) {
   else
     return i;
 }
-
-// TODO(jwills): This binary search can screw up with overflow (lb+ub+1) can go over MAX_INT, when
-// 64-bit compiles are set up this should be fixed and have a test.  Not really an issue until then.
 template<class T> int BSFindLowerBound(const vector<T> &v, const T &target) {
   int lb = 0, ub = (int)v.size() - 1;
   if (v[lb] > target)

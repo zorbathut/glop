@@ -1,31 +1,7 @@
 // Includes
 #include "Utils.h"
 #include "Base.h"
-#include "GlopWindow.h"
-#include <stdio.h>
 #include <limits.h>
-
-// Internal function that does a string printf from a vararg.
-string Format(const char *text, va_list arglist) {
-  // We do not know how much space is required, so first try with an estimated amount of space.
-  char buffer[1024];
-#ifdef WIN32  // Thank you Visual C++. It is GOOD that you changed the name of this function.
-  int length = _vscprintf(text, arglist);
-  if (length < sizeof(buffer))
-    vsprintf(buffer, text, arglist);
-#else
-  int length = vsnprintf(buffer, sizeof(buffer), text, arglist);
-#endif
-  if (length >= 0 && length < sizeof(buffer))
-    return string(buffer);
-
-  // Otherwise, allocate the necessary space and then do it
-  char *var_buffer = new char[length + 1];
-  vsprintf(var_buffer, text, arglist);
-  string result = string(var_buffer);
-  delete[] var_buffer;
-  return result;
-}
 
 // String parsing
 // ==============
@@ -72,7 +48,7 @@ bool ToChar(const string &s, char *result, bool leading_zeroes_ok) {
   // Handle ASCII codes
   else {
     int temp;
-    if (ToInt(s, &temp, leading_zeroes_ok) && temp >= 0 && temp < 256) {
+    if (ToInt(s, &temp, 10, leading_zeroes_ok) && temp >= 0 && temp < 256) {
       *result = (char)temp;
       return true;
     }

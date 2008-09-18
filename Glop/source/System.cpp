@@ -1,10 +1,10 @@
 // Includes
 #include "System.h"
+#include "GlopInternalData.h"
 #include "GlopWindow.h"
-#include "Image.h"
 #include "Input.h"
 #include "OpenGl.h"
-#include "GlopInternalData.h"
+#include "Sound.h"
 #include "Os.h"
 #include "third_party/freetype/ftglyph.h"
 #include <algorithm>
@@ -13,13 +13,24 @@
 static System *gSystem = 0;
 System *system() {return gSystem;}
 
+// System-dependent logging formatter and display message handler for use in Base.cpp.
+static string SystemDependentLogFormatter(const char *filename, int line, const string &message) {
+  return Format("[f%d %.3fs %s:%d] %s\n", system()->GetFrameCount(), system()->GetTime() / 1000.0f,
+                filename, line, message.c_str());
+}
+static void SystemDependentFatalErrorHandler(const string &message) {
+  system()->MessageBox("Fatal Error", message);
+}
+
 // Glop initialization
 void System::Init() {
-  Os::Init(); // Can we not init the system before calling Os::Init().  Otherwise can't log in Init.
+  Os::Init();
   gSystem = new System();
   atexit(System::ShutDown);
   Input::InitDerivedKeys();
   InitDefaultFrameStyle(0);
+  SetLogFormatter(SystemDependentLogFormatter);
+  SetFatalErrorHandler(SystemDependentFatalErrorHandler);
 }
 
 // Internal logic - see System.h.
@@ -64,13 +75,28 @@ int System::Think() {
     fps_history_filled_ |= (fps_array_index_ == 0);
   }
 
-  // Perform all Os and window logic
+  // Perform all subsystem logic
   Os::Think();
+  sound_manager_->Think();
   vsync_time_ = window_->Think(dt);
 
   // Update our frame and time counts
   frame_count_++;
   return dt;
+}
+
+// Message boxes
+// =============
+
+void System::MessageBox(const string &title, const string &message) {
+  Os::MessageBox(title, message);
+}
+
+void System::MessageBoxf(const string &title, const char *message, ...) {
+  va_list arglist;
+  va_start(arglist, message);
+  MessageBox(title, Format(message, arglist));
+  va_end(arglist);
 }
 
 // Time-keeping
@@ -122,6 +148,7 @@ vector<string> System::ListSubdirectories(const string &directory) {
 
 System::System()
 : window_(new GlopWindow()),
+  sound_manager_(new SoundManager()),
   frame_count_(0),
   refresh_rate_query_delay_(0),
   refresh_rate_(0),
@@ -135,6 +162,7 @@ System::System()
 }
 
 System::~System() {
+  delete sound_manager_;
   delete window_;
   if (free_type_library_ != 0)
     FT_Done_FreeType((FT_Library)free_type_library_);

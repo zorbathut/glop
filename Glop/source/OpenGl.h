@@ -12,6 +12,7 @@
 #include <gl/glu.h>
 #undef CreateWindow  // Stupid Microsoft and its stupid macros
 #undef GetCharWidth
+#undef MessageBox
 #endif
 
 // Mac OSX includes

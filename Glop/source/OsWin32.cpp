@@ -22,6 +22,7 @@ using namespace std;
 
 // Undefines, because Windows sucks
 #undef CreateWindow
+#undef MessageBox
 
 // OsMutex struct definition
 struct OsMutex {
@@ -873,8 +874,8 @@ void Os::ReleaseMutex(OsMutex *mutex) {
 // Miscellaneous functions
 // =======================
 
-void Os::DisplayMessage(const string &title, const string &message) {
-  MessageBox(NULL, message.c_str(), title.c_str(), MB_OK | MB_ICONINFORMATION);
+void Os::MessageBox(const string &title, const string &message) {
+  MessageBoxA(NULL, message.c_str(), title.c_str(), MB_OK | MB_ICONINFORMATION);
 }
 
 vector<pair<int, int> > Os::GetFullScreenModes() {

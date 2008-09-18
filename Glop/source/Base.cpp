@@ -1,19 +1,26 @@
 // Includes
 #include "Base.h"
-#include "System.h"
-#include "Utils.h"
-#include "Os.h"
 #include <ctime>
 #include <stdarg.h>
 
-#include <stdio.h>
+// Zero-dependency logging formatter and display message handler. These are used before
+// System::Init is called.
+static string ZeroDependencyLogFormatter(const char *filename, int line, const string &message) {
+  return Format("[%s:%d] %s\n", filename, line, message.c_str());
+}
+static void ZeroDependencyFatalErrorHandler(const string &message) {
+  printf("%s\n", message.c_str());
+}
 
-// Logging globals
-bool gLoggingStarted = false;
-bool gLogToStdErr = true;
-time_t gLogStartTime = time(0);
-string gLogFilename;
-FILE *gLogFile = 0;
+// Globals
+static string (*gLogFormatter)(const char *filename, int line, const string &message) =
+  ZeroDependencyLogFormatter;
+static bool gLoggingStarted = false;
+static bool gLogToStdErr = true;
+static time_t gLogStartTime = time(0);
+static string gLogFilename;
+static FILE *gLogFile = 0;
+static void (*gFatalErrorHandler)(const string &message) = ZeroDependencyFatalErrorHandler;
 
 // Returns an STL string using printf style formatting.
 string Format(const char *text, ...) {
@@ -24,8 +31,33 @@ string Format(const char *text, ...) {
   return result;
 }
 
+string Format(const char *text, va_list arglist) {
+  // We do not know how much space is required, so first try with an estimated amount of space.
+  char buffer[1024];
+#ifdef WIN32  // Thank you Visual C++. It is GOOD that you changed the name of this function.
+  int length = _vscprintf(text, arglist);
+  if (length < sizeof(buffer))
+    vsprintf(buffer, text, arglist);
+#else
+  int length = vsnprintf(buffer, sizeof(buffer), text, arglist);
+#endif
+  if (length >= 0 && length < sizeof(buffer))
+    return string(buffer);
+
+  // Otherwise, allocate the necessary space and then do it
+  char *var_buffer = new char[length + 1];
+  vsprintf(var_buffer, text, arglist);
+  string result = string(var_buffer);
+  delete[] var_buffer;
+  return result;
+}
+
 // Logging utilities
 // =================
+
+void SetLogFormatter(string (*formatter)(const char *filename, int line, const string &message)) {
+  gLogFormatter = formatter;
+}
 
 void LogToFile(const string &filename, bool also_log_to_std_err) {
   ASSERT(gLoggingStarted == false);
@@ -35,12 +67,10 @@ void LogToFile(const string &filename, bool also_log_to_std_err) {
 
 void __Log(const char *filename, int line, const string &message) {
   // Open the log file if this is our first call
-  printf("here\n");
   if (!gLoggingStarted && gLogFilename != "") {
     gLogFile = fopen(gLogFilename.c_str(), "wt");
     ASSERT(gLogFile != 0);
   }
-  printf("2\n");
   if (!gLoggingStarted) {
     string clock_time = ctime(&gLogStartTime);
     string temp = Format("Program started at: %s", clock_time.c_str());
@@ -49,25 +79,20 @@ void __Log(const char *filename, int line, const string &message) {
     if (gLogToStdErr)
       fputs(temp.c_str(), stderr);
   }
-  printf("3\n");
   gLoggingStarted = true;
 
-  // Output the log message
-  int frame_count = 0;//system()->GetFrameCount();
-  int ticks = system()->GetTime();
+  // Prune off the directory of the filename
   int index = (int)strlen(filename);
-  printf("4\n");
-  const char *temp_filename = filename + strlen(filename) - 1;
   while (index > 0 && filename[index-1] != '/' && filename[index-1] != '\\')
     index--;
-  string temp = Format("[f%d %.3fs %s:%d] %s\n", frame_count, ticks / 1000.0f,
-                       filename+index, line, message.c_str());
-  printf("5\n");
+  const char *pruned_filename = filename + index;
+
+  // Output the log message
+  string formatted_message = gLogFormatter(pruned_filename, line, message);
   if (gLogFile != 0)
-    fputs(temp.c_str(), gLogFile);
+    fputs(formatted_message.c_str(), gLogFile);
   if (gLogToStdErr)
-    fputs(temp.c_str(), stderr);
-  printf("6\n");
+    fputs(formatted_message.c_str(), stderr);
   fflush(gLogFile);
 }
 
@@ -81,20 +106,20 @@ void __LogfObject::__Logf(const char *message, ...) {
 // Error-handling utilities
 // ========================
 
-void DisplayMessage(const string &title, const string &message) {
-  Os::DisplayMessage(title, message);
-}
-
-void DisplayMessagef(const string &title, const char *message, ...) {
-  va_list arglist;
-  va_start(arglist, message);
-  DisplayMessage(title, Format(message, arglist));
-  va_end(arglist);
+void SetFatalErrorHandler(void (*handler)(const string &message)) {
+  gFatalErrorHandler = handler;
 }
 
 void FatalError(const string &error) {
-  Os::DisplayMessage("Fatal Error", error);
+  gFatalErrorHandler(error);
   exit(-1);
+}
+
+void FatalErrorf(const char *error, ...) {
+  va_list arglist;
+  va_start(arglist, error);
+  FatalError(Format(error, arglist));
+  va_end(arglist);
 }
 
 // Handles a failed assertion. It returns an integer so that the ASSERT macro can be done with a ?:
