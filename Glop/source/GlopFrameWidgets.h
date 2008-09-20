@@ -31,6 +31,7 @@
 // InputBoxFrame: Similar to SolidBoxFrame, but based on an InputBoxView. Used as background for
 //                text boxes, etc.
 // ImageFrame: Renders an image, magnified as much as possible.
+// TiledTextureFrame: Renders a tiled texture
 // ArrowFrame: Renders an arrow in some direction. Used for slider buttons.
 // WindowFrame: A decorative, unmovable window, optionally with a title.
 // TextFrame, FancyTextFrame: Text output. TextFrame is faster but requires a uniform text style
@@ -113,6 +114,7 @@ class EmptyFrame: public GlopFrame {
  public:
   EmptyFrame(): GlopFrame() {}
   string GetType() const {return "EmptyFrame";}
+  void Render() const {}
  private:
   DISALLOW_EVIL_CONSTRUCTORS(EmptyFrame);
 };
@@ -131,6 +133,24 @@ class SolidBoxFrame: public SingleParentFrame {
   : SingleParentFrame(0), has_outer_part_(false), inner_color_(inner_color) {}
   string GetType() const {return "SolidBoxFrame";}
 
+  // Mutators
+  bool HasOuterPart() const {return has_outer_part_;}
+  const Color &GetInnerColor() const {return inner_color_;}
+  const Color &GetOuterColor() const {return outer_color_;}
+  void SetColor(const Color &inner_color) {
+    if (has_outer_part_)
+      DirtySize();
+    has_outer_part_ = false;
+    inner_color_ = inner_color;
+  }
+  void SetColor(const Color &outer_color, const Color &inner_color) {
+    if (!has_outer_part_)
+      DirtySize();
+    has_outer_part_ = true;
+    outer_color_ = outer_color;
+    inner_color_ = inner_color;
+  }
+
   void Render() const;
   void SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2);
  protected:
@@ -146,6 +166,9 @@ class HollowBoxFrame: public SingleParentFrame {
  public:
   HollowBoxFrame(GlopFrame *frame, const Color &color): SingleParentFrame(frame), color_(color) {}
   HollowBoxFrame(const Color &color): SingleParentFrame(0), color_(color) {}
+
+  const Color &GetColor() const {return color_;}
+  void SetColor(const Color &color) {color_ = color;}
 
   void Render() const;
   void SetPosition(int screen_x, int screen_y, int cx1, int cy1, int cx2, int cy2);
@@ -182,16 +205,45 @@ class ImageFrame: public GlopFrame {
   ~ImageFrame();
   string GetType() const {return "ImageFrame";}
 
+  // Mutators and accessors
+  const Color &GetColor() const {return color_;}
+  void SetColor(const Color &color) {color_ = color;}
+  const Texture *GetImage() const {return texture_;}
+
   void Render() const;
  protected:
   void RecomputeSize(int rec_width, int rec_height);
-
  private:
   void Init(const Texture *texture, bool is_texture_owned, const Color &color);
   bool is_texture_owned_;
   const Texture *texture_;
   Color color_;
   DISALLOW_EVIL_CONSTRUCTORS(ImageFrame);
+};
+
+class TiledTextureFrame: public GlopFrame {
+ public:
+  // Constructors - see ImageFrame
+  TiledTextureFrame(BinaryFileReader reader, const Color &bg_color, int bg_tolerance,
+                    const Color &color = kWhite);
+  TiledTextureFrame(BinaryFileReader reader, const Color &color = kWhite);
+  TiledTextureFrame(const Image *image, const Color &color = kWhite);
+  TiledTextureFrame(const Texture *texture, const Color &color = kWhite);
+  ~TiledTextureFrame();
+  string GetType() const {return "TiledTextureFrame";}
+
+  // Mutators and accessors
+  const Color &GetColor() const {return color_;}
+  void SetColor(const Color &color) {color_ = color;}
+  const Texture *GetTexture() const {return texture_;}
+
+  void Render() const;
+ private:
+  void Init(const Texture *texture, bool is_texture_owned, const Color &color);
+  bool is_texture_owned_;
+  const Texture *texture_;
+  Color color_;
+  DISALLOW_EVIL_CONSTRUCTORS(TiledTextureFrame);
 };
 
 class ArrowFrame: public GlopFrame {
@@ -239,6 +291,20 @@ class TextFrame: public GlopFrame {
     }
   }
   const GuiTextStyle &GetStyle() const {return text_style_;}
+  void SetColor(const Color &c) {
+    text_style_.color = c;
+  }
+  void SetTextSize(float size) {
+    text_style_.size = size;
+    DirtySize();
+  }
+  void SetFont(const Font *font) {
+    text_style_.font = font;
+    DirtySize();
+  }
+  void SetTextFlags(int flags) {
+    text_style_.flags = flags;
+  }
   void SetStyle(const GuiTextStyle &style) {
     text_style_ = style;
     DirtySize();

@@ -56,8 +56,8 @@ class FontOutline {
 
   // Allocate or free a FontBitmap for the given size and flags. Note a user does not delete
   // FontBitmaps. Instead, he calls FontOutline::FreeRef.
-  FontBitmap *AddRef(int size, unsigned int flags);
-  void FreeRef(int size, unsigned int flags);
+  FontBitmap *AddRef(int size, unsigned int flags) const;
+  void FreeRef(int size, unsigned int flags) const;
 
  private:
   FontOutline(unsigned char *data, void *face);
@@ -129,8 +129,8 @@ class Font {
 
   // TextRenderer creation, deletion. Note a user does not delete TextRenderers. Instead, he calls
   // Font::FreeRef or TextRenderer::FreeRef.
-  TextRenderer *AddRef(int size, unsigned int flags);
-  void FreeRef(int size, unsigned int flags);
+  TextRenderer *AddRef(int size, unsigned int flags) const;
+  void FreeRef(int size, unsigned int flags) const;
 
  protected:
   Font(FontOutline *outline, bool is_outline_owned);
@@ -203,12 +203,12 @@ class TextRenderer {
  private:
   // Font interface
   friend class Font;
-  TextRenderer(Font *font, FontBitmap *bitmap, int size, unsigned int flags);
+  TextRenderer(const Font *font, FontBitmap *bitmap, int size, unsigned int flags);
   ~TextRenderer();
   int ref_count_;
 
   DisplayLists *display_lists_;
-  Font *font_;
+  const Font *font_;
   FontBitmap *bitmap_;
   int size_;
   unsigned int flags_;

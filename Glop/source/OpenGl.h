@@ -12,6 +12,7 @@
 #include <gl/glu.h>
 #undef CreateWindow  // Stupid Microsoft and its stupid macros
 #undef GetCharWidth
+#undef GetMessage
 #undef MessageBox
 #endif
 
@@ -112,57 +113,82 @@ class GlUtils {
   }
 };
 
-// GlUtils2d class definition
+// GlUtils2d class definition. This class contains a variety of pixel-accurate rendering tools in
+// 2 dimensions. For example: DrawLine(50, 50, 100, 100) is guaranteed to go between pixels (50,50)
+// and (100,100). This is essentially implemented by artificially increasing the size of all
+// rectangles by 1, and by artificially translating all lines by 0.5.
 class GlUtils2d {
  public:
-  // Draws a line between the two given points in the current color. Texturing should be disabled.
-  // A color may be optionally set before the rectangle is drawn.
+  // Draws a line between the two given point. All textures should be deactivated.
   static void DrawLine(int x1, int y1, int x2, int y2);
   static void DrawLine(int x1, int y1, int x2, int y2, const Color &color) {
     GlUtils::SetColor(color);
     DrawLine(x1, y1, x2, y2);
   }
 
-  // Draws a hollow rectangle between the two given points in the current color. Texturing should
-  // be disabled. A color may be optionally set before the rectangle is drawn.
+  // Draws a rectangle between the two given point. All textures should be deactivated.
   static void DrawRectangle(int x1, int y1, int x2, int y2);
   static void DrawRectangle(int x1, int y1, int x2, int y2, const Color &color) {
     GlUtils::SetColor(color);
     DrawRectangle(x1, y1, x2, y2);
   }
 
-  // Draws a filled rectangle between the two given points in the current color. Texturing should
-  // be disabled. A color may be optionally set before the rectangle is drawn.
+  // Draws a filled rectangle between the two given points in the current color. All textures
+  // should be deactivated.
   static void FillRectangle(int x1, int y1, int x2, int y2);
   static void FillRectangle(int x1, int y1, int x2, int y2, const Color &color) {
     GlUtils::SetColor(color);
     FillRectangle(x1, y1, x2, y2);
   }
-  static void FillRectangleTexture(int x1, int y1, int x2, int y2, const Texture *texture);
 
-  // Texture rendering without tiling:
-  //  - The first function render the full texture (excluding padding to make its size a power of
-  //    two)
-  //  - The second function renders the texture scaled, possibly distorting the aspect ratio
-  //  - The subtexture functions are similar but they render any subrectangle of the texture
-  // The texture is deactivated when done.
-  static void RenderTexture(int x1, int y1, const Texture *texture) {
-    RenderTexture(x1, y1, x1 + texture->GetWidth() - 1, y1 + texture->GetHeight() - 1, texture);
+  // Draws a rectangle in the given color, tiled with the given texture. The texture is
+  // deactivated when done. Since this is tiled, the texture should have width and height a power
+  // of 2 or the result will look wrong.
+  static void TileRectangle(int x1, int y1, int x2, int y2, const Texture *texture,
+                            const Color &color = kWhite) {
+    RenderTexture(x1, y1, x2, y2, 0, 0,
+                  (x2 - x1 + 1.0f) / texture->GetWidth(),
+                  (y2 - y1 + 1.0f) / texture->GetHeight(),
+                  false, texture, color);
   }
-  static void RenderTexture(int x1, int y1, int x2, int y2, const Texture *texture) {
-    RenderSubTexture(x1, y1, x2, y2, 0, 0,
-                     float(texture->GetWidth()) / texture->GetInternalWidth(),
-                     float(texture->GetHeight()) / texture->GetInternalHeight(), true, texture);
+
+  // Texture rendering. Render a full texture in the current color, optionally scaling it to fit
+  // within the given rectangle. Works even if the texture does not have width and height a power
+  // of 2.
+  static void RenderTexture(int x1, int y1, const Texture *texture, const Color &color = kWhite) {
+    RenderTexture(x1, y1, x1 + texture->GetWidth() - 1, y1 + texture->GetHeight() - 1,
+                  texture, color);
   }
-  static void RenderSubTexture(int x1, int y1, float tu1, float tv1, float tu2, float tv2,
-                               bool clamp, const Texture *texture) {
-    RenderSubTexture(x1, y1, int(x1 + (tu2-tu1)*texture->GetInternalWidth() - 1),
-                     int(y1 + (tv2-tv1)*texture->GetInternalHeight() - 1),
-                     tu1, tv1, tu2, tv2, clamp, texture);
+  static void RenderTexture(int x1, int y1, int x2, int y2, const Texture *texture,
+                            const Color &color = kWhite) {
+    RenderTexture(x1, y1, x2, y2, 0, 0,
+                  float(texture->GetWidth()) / texture->GetInternalWidth(),
+                  float(texture->GetHeight()) / texture->GetInternalHeight(),
+                  true, texture, color);
   }
-  static void GlUtils2d::RenderSubTexture(int x1, int y1, int x2, int y2, float tu1, float tv1,
-                                          float tu2, float tv2, bool clamp,
-                                          const Texture *texture);
+
+  // Partial or tiled texture rendering. Render some part of a texture in the current color,
+  // scaling it to fit within the given rectangle. The texture coordinates can optionally be
+  // clamped to [0,1]. If the texture is not tiled, it is important to do this. Otherwise, the
+  // border pixels will blend with the border pixels from the opposite side.
+  static void RenderTexture(int x1, int y1, int x2, int y2,
+                            float tu1, float tv1, float tu2, float tv2, bool clamp,
+                            const Texture *texture, const Color &color = kWhite);
+
+  // Rotated texture rendering. Renders an entire texture (TODO: rotated sub-texture support) at
+  // an angle. The base coordinates specify the rectangle that the texture should occupy when there
+  // is no rotation and horz_flip can be used to flip the texture horizontally being rotating. (A
+  // vertical flip can be accomplished by a horizontal flip and an extra 180 degree rotation.)
+  //
+  // The rotation itself can be specified in two ways. First of all, a clockwise rotation angle can
+  // be specified. Secondly, the up-direction can be specified as a 2d vector. This way is faster
+  // but the user should ensure that up has length 1.
+  static void RenderRotatedTexture(int base_x1, int base_y1, int base_x2, int base_y2,
+                                   float degrees, bool horz_flip, const Texture *texture,
+                                   const Color &color = kWhite);
+  static void RenderRotatedTexture(int base_x1, int base_y1, int base_x2, int base_y2,
+                                   float up_x, float up_y, bool horz_flip, const Texture *texture,
+                                   const Color &color = kWhite);
 };
 
 #endif // GLOP_OPEN_GL_H__

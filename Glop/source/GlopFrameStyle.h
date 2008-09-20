@@ -95,14 +95,14 @@ struct GuiTextStyle {
   GuiTextStyle();
   GuiTextStyle(const Color &_color);
   GuiTextStyle(const Color &_color, float _size);
-  GuiTextStyle(const Color &_color, float _size, Font *_font);
-  GuiTextStyle(const Color &_color, float _size, Font *_font, unsigned int _flags)
+  GuiTextStyle(const Color &_color, float _size, const Font *_font);
+  GuiTextStyle(const Color &_color, float _size, const Font *_font, unsigned int _flags)
   : color(_color), size(_size), font(_font), flags(_flags) {}
 
   // Data
   Color color;
   float size;
-  Font *font;
+  const Font *font;
   unsigned int flags;
 };
 

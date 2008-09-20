@@ -13,6 +13,8 @@
 //  - Make a ScrollingInputBoxFrame so that we don't have have extra pixel nastiness with scroll
 //    bars
 //  - Check gui key change in input
+//  - Figure out why camera frame movement is too fast when vsync is off
+//  - Directly closing the console can crash?
 
 // Includes
 #include <Glop/source/Base.h>

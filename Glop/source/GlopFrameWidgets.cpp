@@ -179,14 +179,41 @@ void ImageFrame::Init(const Texture *texture, bool is_texture_owned, const Color
 }
 
 void ImageFrame::Render() const {
-  GlUtils::SetColor(color_);
-  GlUtils::SetTexture(texture_);
-  GlUtils2d::RenderTexture(GetX(), GetY(), GetX2(), GetY2(), texture_);
-  GlUtils::SetNoTexture();
+  GlUtils2d::RenderTexture(GetX(), GetY(), GetX2(), GetY2(), texture_, color_);
 }
 
 void ImageFrame::RecomputeSize(int rec_width, int rec_height) {
   SetToMaxSize(rec_width, rec_height, float(texture_->GetWidth()) / texture_->GetHeight());
+}
+
+TiledTextureFrame::TiledTextureFrame(BinaryFileReader reader, const Color &bg_color,
+                                     int bg_tolerance, const Color &color) {
+  Init(Texture::Load(reader, bg_color, bg_tolerance), true, color);
+}
+TiledTextureFrame::TiledTextureFrame(BinaryFileReader reader, const Color &color) {
+  Init(Texture::Load(reader), true, color);
+}
+TiledTextureFrame::TiledTextureFrame(const Image *image, const Color &color) {
+  Init(new Texture(image), true, color);
+}
+TiledTextureFrame::TiledTextureFrame(const Texture *texture, const Color &color) {
+  Init(texture, false, color);
+}
+
+TiledTextureFrame::~TiledTextureFrame() {
+  if (is_texture_owned_)
+    delete texture_;
+}
+
+void TiledTextureFrame::Init(const Texture *texture, bool is_texture_owned, const Color &color) {
+  ASSERT(texture != 0);
+  texture_ = texture;
+  is_texture_owned_ = is_texture_owned;
+  color_ = color;
+}
+
+void TiledTextureFrame::Render() const {
+  GlUtils2d::TileRectangle(GetX(), GetY(), GetX2(), GetY2(), texture_, color_);
 }
 
 void ArrowFrame::Render() const {

@@ -41,7 +41,7 @@ FontOutline::~FontOutline() {
   delete[] data_;
 }
 
-FontBitmap *FontOutline::AddRef(int size, unsigned int flags) {
+FontBitmap *FontOutline::AddRef(int size, unsigned int flags) const {
   const int kScale = 80;
 
   // Check if the bitmap is already loaded. Note that underline is ignored by the FontBitmap, so
@@ -138,7 +138,7 @@ FontBitmap *FontOutline::AddRef(int size, unsigned int flags) {
   return result;
 }
 
-void FontOutline::FreeRef(int size, unsigned int flags) {
+void FontOutline::FreeRef(int size, unsigned int flags) const {
   map<pair<int, unsigned int>, FontBitmap*> *bm_map =
     (map<pair<int, unsigned int>, FontBitmap*>*)bitmaps_;
   pair<int, unsigned int> key = make_pair(size, flags & (~kFontUnderline));
@@ -264,7 +264,7 @@ Font::~Font() {
   delete rend_map;
 }
 
-TextRenderer *Font::AddRef(int size, unsigned int flags) {
+TextRenderer *Font::AddRef(int size, unsigned int flags) const {
   map<pair<int, unsigned int>, TextRenderer*> *rend_map =
     (map<pair<int, unsigned int>, TextRenderer*>*)renderers_;
   pair<int, unsigned int> key = make_pair(size, flags);
@@ -275,7 +275,7 @@ TextRenderer *Font::AddRef(int size, unsigned int flags) {
   return (*rend_map)[key];
 }
 
-void Font::FreeRef(int size, unsigned int flags) {
+void Font::FreeRef(int size, unsigned int flags) const {
   map<pair<int, unsigned int>, TextRenderer*> *rend_map =
     (map<pair<int, unsigned int>, TextRenderer*>*)renderers_;
   pair<int, unsigned int> key = make_pair(size, flags);
@@ -375,7 +375,6 @@ void TextRenderer::Print(int x, int y, const string &text, const Color &color) c
   }
 
   // Render the text
-  glEnable(GL_BLEND);
   GlUtils::SetTexture(bitmap_->texture_);
   glPushMatrix();
   glTranslatef(float(x), float(y), 0);
@@ -384,7 +383,6 @@ void TextRenderer::Print(int x, int y, const string &text, const Color &color) c
 
   // Clear the settings
   GlUtils::SetNoTexture();
-  glDisable(GL_BLEND);
   glDisable(GL_FOG);
   if (is_fog_enabled) {
     glFogfv(GL_FOG_COLOR, fog_color);
@@ -413,7 +411,7 @@ int TextRenderer::GetTextWidth(const string &s, bool is_first_text, bool is_last
   return total_width;
 }
 
-TextRenderer::TextRenderer(Font *font, FontBitmap *bitmap, int size, unsigned int flags)
+TextRenderer::TextRenderer(const Font *font, FontBitmap *bitmap, int size, unsigned int flags)
 : font_(font), bitmap_(bitmap), size_(size), flags_(flags), ref_count_(1) {
   display_lists_ = new TextRendererDisplayLists(font, bitmap, bitmap->texture_);
 }

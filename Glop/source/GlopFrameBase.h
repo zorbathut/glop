@@ -126,7 +126,7 @@ class GlopFrame {
   // discussion in Input.h). Think will be called after all OnKeyEvent calls, and it is suitable
   // for all other logic. Here, gained_focus is true if this exact event caused the frame to gain
   // focus.
-  virtual void Render() const {}
+  virtual void Render() const = 0;
   virtual bool OnKeyEvent(const KeyEvent &event, bool gained_focus) {return false;}
   virtual void Think(int dt) {}
   
@@ -1024,28 +1024,34 @@ class ColFrame: public SingleParentFrame {
 // ============
 //
 // This overrides the recommended size for its child frame to be the given fraction of the window
-// size. RecWidthFrame and RecHeightFrame override the recommended width and height only.
+// width and height. RecWidthFrame and RecHeightFrame override the recommended width and height
+// only. RecWidthFrames and RecHeightFrames can also optionally set aspect ratios that will be
+// used for setting the other recommended dimensions. Note RecHeightFrame(1.0f, 1.0f) sets
+// width and height both to window height, as opposed to RecSizeFrame(1.0f, 1.0f), which sets
+// width and height to window width and window height.
 class RecWidthFrame: public SingleParentFrame {
  public:
-  RecWidthFrame(GlopFrame *frame, float rec_width)
+  RecWidthFrame(GlopFrame *frame, float rec_width, float aspect_ratio = -1)
   : SingleParentFrame(frame), rec_width_override_(rec_width) {}
   string GetType() const {return "RecWidthFrame";}
  protected:
   void RecomputeSize(int rec_width, int rec_height);
  private:
   float rec_width_override_;
+  float aspect_ratio_;
   DISALLOW_EVIL_CONSTRUCTORS(RecWidthFrame);
 };
 
 class RecHeightFrame: public SingleParentFrame {
  public:
-  RecHeightFrame(GlopFrame *frame, float rec_height)
-  : SingleParentFrame(frame), rec_height_override_(rec_height) {}
+  RecHeightFrame(GlopFrame *frame, float rec_height, float aspect_ratio = -1)
+  : SingleParentFrame(frame), rec_height_override_(rec_height), aspect_ratio_(aspect_ratio) {}
   string GetType() const {return "RecHeightFrame";}
  protected:
   void RecomputeSize(int rec_width, int rec_height);
  private:
   float rec_height_override_;
+  float aspect_ratio_;
   DISALLOW_EVIL_CONSTRUCTORS(RecHeightFrame);
 };
 

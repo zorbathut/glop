@@ -19,7 +19,7 @@ GuiTextStyle::GuiTextStyle(const Color &_color)
 GuiTextStyle::GuiTextStyle(const Color &_color, float _size)
 : color(_color), size(_size), font(gGuiTextStyle.font), flags(gGuiTextStyle.flags) {}
 
-GuiTextStyle::GuiTextStyle(const Color &_color, float _size, Font *_font)
+GuiTextStyle::GuiTextStyle(const Color &_color, float _size, const Font *_font)
 : color(_color), size(_size), font(_font), flags(gGuiTextStyle.flags) {}
 
 // InputBoxView

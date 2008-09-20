@@ -467,7 +467,6 @@ void TableauFrame::Render() const {
       child_pos_[ordered_children_[i]].order_pos = i;
     order_dirty_ = false;
   }
-  GlopFrame::Render();
   for (int i = 0; i < (int)ordered_children_.size(); i++)
     GetChild(ordered_children_[i])->Render();
 }
@@ -728,8 +727,8 @@ void TableFrame::SetPosition(int screen_x, int screen_y, int cx1, int cy1, int c
 void TableFrame::RecomputeSize(int rec_width, int rec_height) {
   int x, y;
 
-  // Calculate the padding sizes
-  int hpad = int(GetWindow()->GetWidth() * horz_padding_ + 0.5f);
+  // Calculate the padding sizes (note that we do paddings relative to window height)
+  int hpad = int(GetWindow()->GetHeight() * horz_padding_ + 0.5f);
   int vpad = int(GetWindow()->GetHeight() * vert_padding_ + 0.5f);
   rec_width -= hpad * (GetNumCols() - 1);
   rec_height -= vpad * (GetNumRows() - 1);
@@ -776,77 +775,91 @@ void TableFrame::RecomputeSize(int rec_width, int rec_height) {
     cum_size = new_cum_size;
   }
 
+  // Track the total width and height
+  int new_width = (num_cols_ - 1) * hpad;
+  int new_height = (num_rows_ - 1) * vpad;
+
   // All sizing is done in four passes. In each pass, we handle cells with a different kind of
   // CellSize. See CellSize in GlopFrameBase.h.
   for (int pass = 0; pass < 4; pass++) {
     // Compute the size of each square
     for (y = 0; y < num_rows_; y++)
-      for (x = 0; x < num_cols_; x++) {
-        int index = y * num_cols_ + x;
-        if (cell_info_[index].child_id == 0)
+    for (x = 0; x < num_cols_; x++) {
+      int index = y * num_cols_ + x;
+      if (cell_info_[index].child_id == 0)
+        continue;
+      
+      // Make sure this is the right pass for this cell
+      if (pass == 3) {
+        if (cell_info_[index].width.type != CellSize::kMaxDoublePass &&
+            cell_info_[index].height.type != CellSize::kMaxDoublePass)
           continue;
-        
-        // Make sure this is the right pass for this cell
-        if (pass == 3) {
-          if (cell_info_[index].width.type != CellSize::kMaxDoublePass &&
-              cell_info_[index].height.type != CellSize::kMaxDoublePass)
-            continue;
-        } else {
-          int real_pass;
-          if (cell_info_[index].width.type == CellSize::kMatch ||
-              cell_info_[index].height.type == CellSize::kMatch)
-            real_pass = 2;
-          else if (cell_info_[index].width.type == CellSize::kMax ||
-                   cell_info_[index].height.type == CellSize::kMax)
-            real_pass = 1;
-          else
-            real_pass = 0;
-          if (real_pass != pass)
-            continue;
-        }
-
-        // Compute the recommended size for this cell
-        int w, h;
-        CellSize::Type wtype = cell_info_[index].width.type,
-                       htype = cell_info_[index].height.type;
-        if (wtype == CellSize::kMatch) {
-          w = col_info_[x].size;
-        } else if (wtype == CellSize::kMax || wtype == CellSize::kMaxDoublePass) {
-          w = rec_width - GetWidth() + col_info_[x].size;
-        } else {
-          double mult = (wtype == CellSize::kDefault? 1.0 / num_cols_ :
-                         cell_info_[index].width.fraction);
-          w = int(mult * rec_width + (col_round_up[x]? 1-1e-6 : 0));
-        }
-        if (htype == CellSize::kMatch) {
-          h = row_info_[y].size;
-        } else if (htype == CellSize::kMax || htype == CellSize::kMaxDoublePass) {
-          h = rec_height - GetHeight() + row_info_[y].size;
-        } else {
-          double mult = (htype == CellSize::kDefault? 1.0 / num_rows_ :
-                         cell_info_[index].height.fraction);
-          h = int(mult * rec_height + (row_round_up[y]? 1-1e-6 : 0));
-        }
-
-        // Resize the cell and its row, column
-        ListId child_id = cell_info_[index].child_id;
-        GetChild(child_id)->UpdateSize(w, h);
-        row_info_[y].size = max(row_info_[y].size, GetChild(child_id)->GetHeight());
-        col_info_[x].size = max(col_info_[x].size, GetChild(child_id)->GetWidth());
+      } else {
+        int real_pass;
+        if (cell_info_[index].width.type == CellSize::kMatch ||
+            cell_info_[index].height.type == CellSize::kMatch)
+          real_pass = 2;
+        else if (cell_info_[index].width.type == CellSize::kMax ||
+                  cell_info_[index].height.type == CellSize::kMax)
+          real_pass = 1;
+        else
+          real_pass = 0;
+        if (real_pass != pass)
+          continue;
       }
 
-    // Compute the size left over and row/column positions
-    int width = 0, height = 0;
-    for (x = 0; x < num_cols_; x++) {
-      col_info_[x].pos = width;
-      width += col_info_[x].size + hpad;
+      // Compute the recommended size for this cell
+      int w, h;
+      CellSize::Type wtype = cell_info_[index].width.type,
+                     htype = cell_info_[index].height.type;
+      if (wtype == CellSize::kMatch) {
+        w = col_info_[x].size;
+      } else if (wtype == CellSize::kMax || wtype == CellSize::kMaxDoublePass) {
+        w = rec_width - new_width + col_info_[x].size;
+      } else {
+        double mult = (wtype == CellSize::kDefault? 1.0 / num_cols_ :
+                       cell_info_[index].width.fraction);
+        w = int(mult * rec_width + (col_round_up[x]? 1-1e-6 : 0));
+      }
+      if (htype == CellSize::kMatch) {
+        h = row_info_[y].size;
+      } else if (htype == CellSize::kMax || htype == CellSize::kMaxDoublePass) {
+        h = rec_height - new_height + row_info_[y].size;
+      } else {
+        double mult = (htype == CellSize::kDefault? 1.0 / num_rows_ :
+                       cell_info_[index].height.fraction);
+        h = int(mult * rec_height + (row_round_up[y]? 1-1e-6 : 0));
+      }
+
+      // Resize the cell and its row, column
+      ListId child_id = cell_info_[index].child_id;
+      GetChild(child_id)->UpdateSize(w, h);
+      int dh = GetChild(child_id)->GetHeight() - row_info_[y].size,
+          dw = GetChild(child_id)->GetWidth() - col_info_[x].size;
+      if (dh > 0) {
+        row_info_[y].size += dh;
+        new_height += dh;
+      }
+      if (dw > 0) {
+        col_info_[x].size += dw;
+        new_width += dw;
+      }
     }
-    for (y = 0; y < num_rows_; y++) {
-      row_info_[y].pos = height;
-      height += row_info_[y].size + vpad;
-    }
-    SetSize(width - hpad, height - vpad);
   }
+
+  // Compute the row/column positions
+  int width = 0, height = 0;
+  for (x = 0; x < num_cols_; x++) {
+    col_info_[x].pos = width;
+    width += col_info_[x].size + hpad;
+  }
+  for (y = 0; y < num_rows_; y++) {
+    row_info_[y].pos = height;
+    height += row_info_[y].size + vpad;
+  }
+  SetSize(new_width, new_height);
+
+  // Clean up
   delete[] col_round_up;
   delete[] row_round_up;
 }
@@ -855,11 +868,19 @@ void TableFrame::RecomputeSize(int rec_width, int rec_height) {
 // ============
 
 void RecWidthFrame::RecomputeSize(int rec_width, int rec_height) {
-  SingleParentFrame::RecomputeSize(int(GetWindow()->GetWidth() * rec_width_override_), rec_height);
+  float w = GetWindow()->GetWidth() / rec_width_override_;
+  if (aspect_ratio_ != -1)
+    SingleParentFrame::RecomputeSize(int(w), int(w / aspect_ratio_));
+  else
+    SingleParentFrame::RecomputeSize(int(w), rec_width);
 }
 
 void RecHeightFrame::RecomputeSize(int rec_width, int rec_height) {
-  SingleParentFrame::RecomputeSize(rec_width, int(GetWindow()->GetWidth() * rec_height_override_));
+  float h = GetWindow()->GetHeight() * rec_height_override_;
+  if (aspect_ratio_ != -1)
+    SingleParentFrame::RecomputeSize(int(h * aspect_ratio_), int(h));
+  else
+    SingleParentFrame::RecomputeSize(rec_width, int(h));
 }
 
 void RecSizeFrame::RecomputeSize(int rec_width, int rec_height) {

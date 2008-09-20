@@ -59,6 +59,7 @@ bool GlopWindow::Create(int width, int height, bool full_screen,
   glClearDepth(1.0f);
   glDepthFunc(GL_LEQUAL);
   glDepthMask(false);
+  glEnable(GL_BLEND);
   glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
   glDisable(GL_LIGHTING);
   glShadeModel(GL_SMOOTH);
