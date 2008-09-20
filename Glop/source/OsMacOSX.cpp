@@ -7,6 +7,7 @@
 #include <set>
 #include <map>
 #include <algorithm>
+#include <mach-o/dyld.h>
 using namespace std;
 
 #include <Carbon/Carbon.h>
@@ -85,6 +86,13 @@ struct OsWindowData {
   string title;
   bool full_screen;
 };
+
+string GetExecutablePath() {
+  char path[1024];
+  uint32_t path_size = 1024;
+  _NSGetExecutablePath(path, &path_size);
+  return string(path);
+}
 
 void GlopToggleFullScreen();
 
@@ -566,6 +574,14 @@ static void GlopUpdateDevices(void* context, IOReturn result, void* sender, IOHI
 static UnsignedWide glop_start_time;
 void Os::Init() {
   Microseconds(&glop_start_time);
+
+  string path = GetExecutablePath();
+  // Perhaps it is more appropriate to assert on this condition?
+  if (path.find("/MacOS") != string::npos) {
+    path = path.substr(0, path.find("/MacOS")) + "/Resources";
+    chdir(path.c_str());
+  }
+
   EventHandlerUPP handler_upp = NewEventHandlerUPP(GlopEventHandler);
   EventTypeSpec event_types[11];
   event_types[0].eventClass = kEventClassGlop;
@@ -1175,7 +1191,11 @@ int Os::GetRefreshRate() {
 }
 
 void Os::EnableVSync(bool is_enable) {
-  
+  set<OsWindowData*>::iterator it;
+  GLint enable = (is_enable ? 1 : 0);
+  for (it = all_windows.begin(); it != all_windows.end(); it++) {
+    aglSetInteger((*it)->agl_context, AGL_SWAP_INTERVAL, &enable);
+  }
 }
 
 
