@@ -74,11 +74,14 @@ def LoadPackage(env, package_path):
 
 
 def RunTest(env, target, source):
+  old_cwd = os.getcwd()
   for test in source:
+    os.chdir(os.path.dirname(test.get_abspath()))
     exit_status = os.system(test.get_abspath())
     if exit_status != 0 and exit_status != 25:
       print 'Test %s exited with exit status %d.' % (test.get_abspath(), exit_status)
       env.Exit(1)
+  os.chdir(old_cwd)
 
 # Emits the name of a file that never gets created and doesn't already exist, so that it always gets
 # 'built' and never conflicts with an existing target
@@ -95,13 +98,26 @@ def TestProgram(env, test_name, test_file, packages):
     'headers' : [],
   }
 
-  env.AppendToPackage(pkg, packages)  
+  env.AppendToPackage(pkg, packages)
 
   test = env.Program(
       test_name,
       [test_file] + pkg['objects'],
       LIBS = ['gtest', 'gtest_main'] + pkg['libs'],
       FRAMEWORKS = pkg['frameworks'])
+
+  # Must copy dylibs to the same directory as the test binaries.  Will also have to chdir to those
+  # directories to run the binaries.
+  # TODO(jwills): Maybe it would be better make the path to the dylib relative to the root directory
+  # since that is where people will normally be?
+  for lib in pkg['libs']:
+    dylib_path = os.path.join(env['LIBPATH'][-1], 'lib' + lib + '.dylib')
+    if os.path.exists(dylib_path):
+      env.Command(
+          os.path.join(os.path.dirname(str(test)), 'lib' + lib + '.dylib'),
+          dylib_path,
+          SCons.Defaults.Copy('$TARGET', '$SOURCE'))
+
   if env.GetOption('runtests') != None:
     env.Alias(env.LocalTargetName(test_name), env.RunTest(test))
   else:

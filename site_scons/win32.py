@@ -40,13 +40,13 @@ def Application(env, target, source, resources = [], frameworks = []):
 #    app_env.Command(rpath, resource, SCons.Defaults.Copy('$TARGET','$SOURCE'))
     
 def AppendOsParams(env):
-  env.Append(LIBPATH = ['#Glop/Win32/lib'])
+  env.Append(LIBPATH = [os.path.join(env['GLOBAL_ROOT'], 'Glop', 'Win32', 'lib')])
   env.AddMethod(CompileFramework, 'CompleteLibrary')  
   env.AddMethod(Application, 'Application')
   env.Append(CPPFLAGS = ['/W3', '/Od', '/Ob2', '/Gm', '/EHsc', '/RTC1', '/MD', '/GS', '/c' , '/Wp64', '/Zi'])
-  env.Append(CPPDEFINES = ['WIN32', '_DEBUG', '_LIB', '_MBCS'])
-
+  env.Append(CPPDEFINES = ['WIN32', '_LIB', '_MBCS'])
   if env.GetOption('compile-mode') == 'dbg':
-    pass
+    env.Append(CPPDEFINES = ['_DEBUG'])
   if env.GetOption('compile-mode') == 'opt':
+    env.Append(CPPDEFINES = ['_RELEASE'])
     env.Append(CCFLAGS = ['-O2'])

@@ -23,6 +23,7 @@ env.BuildObjects(
     'GlopFrameWidgets.cpp',
     'Image.cpp',
     'Thread.cpp',
+    'Sound.cpp',
   ],
   headers = [
     'Base.h',
@@ -43,10 +44,13 @@ env.BuildObjects(
     'System.h',
     'Thread.h',
     'Utils.h',
+    'Sound.h',
   ],
   libs = [
-    'freetype',
-    'jpeg',
+    'freetype235',
+    'jpeg6b',
+    'fmodex',
+    'z',
   ],
   frameworks = [
     'Carbon',

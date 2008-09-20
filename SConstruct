@@ -24,13 +24,14 @@ AddOption(
     default='dbg',
     metavar='COMPILE_MODE')
 
-global_env = scons_utils.AppendOsParams(Environment())
+global_env = Environment()
 global_env.Replace(GLOBAL_ROOT = os.getcwd() + os.sep)
+global_env = scons_utils.AppendOsParams(global_env)
 Export('global_env')
 
 # Compile all projects.  The only requirement here is that Glop be first in the list, since the
 # other projects reference it.
-for project in ['Glop', 'Tests']:# 'FactoryFun']:
+for project in ['Glop', 'Tests', 'CloneChu']:# 'FactoryFun']:
   global_env[project] = \
       global_env.SConscript(
           os.path.join(project, 'SConscript'),

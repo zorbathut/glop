@@ -39,24 +39,6 @@ def SymlinkBuilder(env, target, source):
   except OSError, e:
     pass
 
-def CopyBuilder(env, target, source):
-  print "asdfASDFASDF"
-  assert len(target) == 1 and len(source) == 1
-  target = str(target[0])
-  source = str(source[0])[len(os.path.dirname(target)) + 1:]
-  try:
-    os.makedirs(os.path.dirname(target))
-  except OSError, e:
-    pass
-  try:
-    os.remove(target)
-  except OSError, e:
-    pass
-  try:
-    shutil.copy(target, source)
-  except OSError, e:
-    pass
-
 def CopyDirectory(env, target, source):
   base_dir = os.path.join(env['GLOBAL_ROOT'], source)
   source = ListAllChildren(base_dir)
@@ -66,19 +48,37 @@ def CopyDirectory(env, target, source):
       target_dir = env.Dir(os.path.join(target, source_path))
       source_dir = env.Dir(os.path.join(os.path.dirname(str(target_dir)), os.readlink(s)))
       env.Symlink(target_dir, source_dir)
-#      env.Command(os.path.join(target, source_path), os.readlink(s), source_path, Symlink)
     elif not os.path.isdir(s):
-#      env.MyCopy(env.File(os.path.join(target, source_path)), env.File(s))
       env.Command(
           os.path.join(target, source_path),
           s,
           SCons.Defaults.Copy('$TARGET', '$SOURCE'))
   return [env.Dir(target)]
-#  for p in l:
-#    print 'target: ', p
-#  l = ListAllChildren(source)
-#  for p in l:
-#    print 'source: ', p
+
+# Copies a binary source to target, and for every library in libs, changes the binary's expected
+# path for that library from source_lib_path to target_lib_path.
+def InstallNameTool(env, target, source, target_lib_path, source_lib_path, libs):
+  if SCons.Util.is_List(target):
+    assert len(target) == 1
+    target = target[0]
+  if SCons.Util.is_List(source):
+    assert len(source) == 1
+    source = source[0]
+  cmd = [
+    'install_name_tool -change %s %s %s' % (
+      source_lib_path + name,
+      target_lib_path + name,
+      target.get_abspath()
+    )
+    for name in libs
+  ]
+  for lib in libs:
+    env.Command(
+        os.path.join(os.path.dirname(target.get_abspath()), lib),
+        os.path.join('OSX', 'lib', lib),
+        SCons.Defaults.Copy('$TARGET', '$SOURCE'))
+  env.Command(target, source, [SCons.Defaults.Copy('$TARGET', '$SOURCE')] + cmd)
+  return [target]
 
 # Note: This is obviously hacked to work for a framework named Glop, and nothing else
 def CompileFramework(env, objs, headers, libs, framework_structure):
@@ -99,15 +99,22 @@ def CompileFramework(env, objs, headers, libs, framework_structure):
   assert len(Glop) == 1
   Glop = Glop[0]
   framework_path = Glop.get_abspath() + '.framework'
-  binary = os.path.join(framework_path, 'Versions', 'A', 'Glop')
+  binary = os.path.join(framework_path, 'Versions', 'A', 'Glop_raw')
 
-  a = env.Dir(framework_path)
-  b = env.Dir(framework_structure)
+  # Assume that any dylibs in our os lib path need to be copied to a location that the executable
+  # will be able to find at runtime.
+  dylib_names = ['lib' + lib + '.dylib' for lib in libs]
+  dylibs = [x for x in dylib_names if os.path.exists(os.path.join(env['LIBPATH'][-1], x))]
+  framework_binary = \
+      framework_env.InstallNameTool(
+          env.File(os.path.join(framework_path, 'Versions', 'A', 'Glop')),
+          Glop,
+          '@executable_path/../Frameworks/Glop.Framework/Versions/A/',
+          './',
+          dylibs)
+  # TODO(jwills): checking if the path begins with './' might not always work?
 
-  print 'copy dir: ', framework_path, framework_structure
   framework_directory = env.CopyDirectory(framework_path, framework_structure)
-  framework_binary = env.Command(binary, Glop, SCons.Defaults.Copy('$TARGET', '$SOURCE'))
-
   env.Symlink(
       os.path.join(str(framework_directory[0]), os.path.basename(str(framework_binary[0]))),
       str(framework_binary[0]))
@@ -128,6 +135,11 @@ def Application(env, target, source, resources = [], frameworks = []):
 
   if not SCons.Util.is_List(frameworks):
     frameworks = [frameworks]
+
+  for s in source:
+    for f in frameworks:
+      env.Depends(s, f)
+
   for framework in frameworks:
     framework_name = re.findall('[^/]+\.framework', framework)[0]
     target_framework = target_directory + 'Contents/Frameworks/' + framework_name
@@ -160,21 +172,29 @@ def Application(env, target, source, resources = [], frameworks = []):
 
 
 def AppendOsParams(env):
-  env.Append(LIBPATH = ['#Glop/OSX/lib'])
+  env.Append(LIBPATH = [os.path.join(env['GLOBAL_ROOT'], 'Glop', 'OSX', 'lib')])
 #  build_framework = env.Builder(action = RunTest, emitter = TestEmitter)
 #  env.Append(BUILDERS = {'RunTest' : run_test})
 
   symlink_builder = env.Builder(action = SymlinkBuilder)
   env.Append(BUILDERS = {'Symlink' : symlink_builder})
 
-  copy_builder = env.Builder(action = CopyBuilder)
-  env.Append(BUILDERS = {'MyCopy' : copy_builder})
-
+  env.AddMethod(InstallNameTool, 'InstallNameTool')
   env.AddMethod(CompileFramework, 'CompleteLibrary')  
   env.AddMethod(Application, 'Application')
   env.AddMethod(CopyDirectory, 'CopyDirectory')
 
+  env.AppendUnique(CPPDEFINES = ['MACOSX'])
+  env.AppendUnique(FRAMEWORKPATH = ['/System/Library/Frameworks'])
+  env.AppendUnique(FRAMEWORKS = [
+      'Carbon',
+      'AGL',
+      'OpenGL',
+      'ApplicationServices',
+      'IOKit'])
   if env.GetOption('compile-mode') == 'dbg':
-    pass
+    env.AppendUnique(CPPDEFINES = ['_DEBUG'])
+#      env.AppendUnique(FRAMEWORKS = ['OpenGL'])
   if env.GetOption('compile-mode') == 'opt':
+    env.AppendUnique(CPPDEFINES = ['_RELEASE'])
     env.Append(CCFLAGS = ['-O2'])
