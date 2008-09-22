@@ -92,7 +92,8 @@ def CompileFramework(env, objs, headers, libs, framework_structure):
       '-Wl,-single_module ' +
       '-compatibility_version 1 ' +
       '-current_version 1 ' +
-      '-mmacosx-version-min=10.5 '
+      '-mmacosx-version-min=10.5 ' +
+      '-headerpad_max_install_names'
   )
   framework_env.Append(LIBS = libs)
   Glop = framework_env.Program(framework_name, objs)
@@ -129,9 +130,12 @@ def CompileFramework(env, objs, headers, libs, framework_structure):
 #  return framework_env.OrganizeFramework(Glop)
   
 
-def Application(env, target, source, resources = [], frameworks = []):
+def Application(env, target, source, resources = [], frameworks = [], packages = []):
   app_env = env.Clone()
   target_directory = target + '.app/'
+
+  if not SCons.Util.is_List(source):
+    source = [source]
 
   if not SCons.Util.is_List(frameworks):
     frameworks = [frameworks]
@@ -145,11 +149,8 @@ def Application(env, target, source, resources = [], frameworks = []):
     target_framework = target_directory + 'Contents/Frameworks/' + framework_name
     # Execute(Delete), Command(Copy) is a cludge to force SCons to copy a directory
     env.Execute(SCons.Defaults.Delete(target_framework))
-#    print 'copy dir: ', target_framework, framework
-#    env.CopyDirectory(os.path.abspath(target_framework), framework)
     env.Command(target_framework, framework, SCons.Defaults.Copy("$TARGET", "$SOURCE"))
 
-  # TODO(jwills): This probably isn't being tested at all right now
   if not SCons.Util.is_List(resources):
     resources = [resources]
   for resource in resources:
@@ -165,7 +166,13 @@ def Application(env, target, source, resources = [], frameworks = []):
     app_env.AppendUnique(FRAMEWORKPATH = [re.match('#?(.*)/(.*)\.framework.*', framework).group(1)])
     app_env.AppendUnique(FRAMEWORKS = [re.match('(.*)/(.*)\.framework.*', framework).group(2)])
 
-  app = app_env.Program(target, source)
+  # TODO(jwills): Get the protobuffer libs installed properly
+  objects = []
+  for package in packages:
+    pkg = app_env.LoadPackage(package)
+    app_env.Append(LIBS = pkg['libs'])
+    objects.append(pkg['objects'])
+  app = app_env.Program(target, source + objects)
   cmd = SCons.Defaults.Copy("$TARGET", "$SOURCE")
   app_env.Command(target_directory + 'Contents/MacOS/' + target, app, cmd)
   return app

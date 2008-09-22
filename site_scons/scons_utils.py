@@ -1,5 +1,7 @@
 import SCons.Util
 import os
+import sys
+import subprocess
 import re
 import platform
 
@@ -56,6 +58,29 @@ def BuildObjects(env, target_name, source, packages = [], frameworks = [], libs 
   env['LOADED_PACKAGES_MAP'][env.TargetName(target_name)] = pkg
   return objects
 
+# Calls the proto builder and creates a package out of the resulting files that can be included as
+# a package by other packages, just like BuildObjects
+def BuildProtos(env, target_name, source):
+  if env['PACKAGE_STACK'][-1] != 'all' and env['PACKAGE_STACK'] != target_name:
+    print 'Error loading packages.  Ignoring...'
+    return []
+  if not SCons.Util.is_List(source):
+    source = [source]
+  protos = []
+  for s in source:
+    protos += env.Proto(s)
+  objects = env.Object([proto for proto in protos if str(proto).endswith('.pb.cc')])
+  env.Alias(env.LocalTargetName(target_name), objects)
+  pkg = {
+    'objects' : objects,
+    'frameworks' : [],
+    'libs' : ['protobuf'],
+    'headers' : [],
+  }
+
+  env['LOADED_PACKAGES_MAP'][env.TargetName(target_name)] = pkg
+  return objects
+
 
 # Loads the package named by package_path and returns the relevant data
 # If the package has already been loaded once the data is already cached, and so isn't reloaded
@@ -88,7 +113,7 @@ def RunTest(env, target, source):
 def TestEmitter(target, source, env):
   return [str(x) + '.test' for x in target], source
 
-def TestProgram(env, test_name, test_file, packages):
+def TestProgram(env, target_name, source, packages):
   if env.GetOption('buildtests') == None and env.GetOption('runtests') == None:
     return
   pkg = {
@@ -101,8 +126,8 @@ def TestProgram(env, test_name, test_file, packages):
   env.AppendToPackage(pkg, packages)
 
   test = env.Program(
-      test_name,
-      [test_file] + pkg['objects'],
+      target_name,
+      [source] + pkg['objects'],
       LIBS = ['gtest', 'gtest_main'] + pkg['libs'],
       FRAMEWORKS = pkg['frameworks'])
 
@@ -119,22 +144,71 @@ def TestProgram(env, test_name, test_file, packages):
           SCons.Defaults.Copy('$TARGET', '$SOURCE'))
 
   if env.GetOption('runtests') != None:
-    env.Alias(env.LocalTargetName(test_name), env.RunTest(test))
+    env.Alias(env.LocalTargetName(target_name), env.RunTest(test))
   else:
-    env.Alias(env.LocalTargetName(test_name), test)
+    env.Alias(env.LocalTargetName(target_name), test)
   return test
+
+def ProtoEmitter(target, source, env):
+  target = []
+  for s in source:
+    target.append(s.get_abspath()[:-6] + '.pb.cc')
+    target.append(s.get_abspath()[:-6] + '.pb.h')
+  return target, source
+
+# TODO(jwills): Test this out on windows
+def ProtoBuilder(target, source, env):
+  assert len(target) == 2
+  assert len(source) == 1
+  target_path = target[0].get_abspath()
+  target_directory = os.path.dirname(target_path)
+  source_path = source[0].get_abspath()
+  source_directory = os.path.dirname(source_path)
+  cmd = 'protoc --cpp_out=%s --proto_path=%s %s' % \
+      (target_directory, source_directory, source[0].get_abspath())
+  try:
+    os.makedirs('.build')
+  except:
+    pass
+  temp_file = open('.build/tmp','w')
+  cmd_array = [
+    'protoc',
+    '--cpp_out=%s' % target_directory,
+    '--proto_path=%s' % source_directory,
+    source[0].get_abspath(),
+  ]
+  p = subprocess.Popen(
+    cmd_array,
+    stdout = subprocess.PIPE,
+    stderr = temp_file,
+  )
+  p.wait()
+  temp_file.close()
+  temp_file = open('.build/tmp','r')
+  errors = temp_file.read()
+  errors = errors.split('\n')
+  errors = [os.path.join(os.path.dirname(str(source[0])), error) for error in errors]
+  for error in errors:
+    sys.stderr.write(error + '\n')
+#  sys.stderr.write('\n'.join(errors))
+#  sys.stderr.write('\n')
 
 def AppendOsParams(env):
   # Adding in useful tools
   env.AddMethod(TargetName, 'TargetName')
   env.AddMethod(LocalTargetName, 'LocalTargetName')
   env.AddMethod(BuildObjects, 'BuildObjects')
+  env.AddMethod(BuildProtos, 'BuildProtos')
   env.AddMethod(LoadPackage, 'LoadPackage')
   env.AddMethod(AppendToPackage, 'AppendToPackage')
 
   run_test = env.Builder(action = RunTest, emitter = TestEmitter)
   env.Append(BUILDERS = {'RunTest' : run_test})
   env.AddMethod(TestProgram, 'Test')
+
+  proto_builder = env.Builder(action = ProtoBuilder, emitter = ProtoEmitter)
+  env.Append(BUILDERS = {'Proto' : proto_builder})
+
 
   os_params = platform.uname()
   if os_params[0] not in ['Darwin', 'Windows']:
