@@ -31,7 +31,7 @@ Export('global_env')
 
 # Compile all projects.  The only requirement here is that Glop be first in the list, since the
 # other projects reference it.
-for project in ['Glop', 'Tests', 'CloneChu']:# 'FactoryFun']:
+for project in ['Glop', 'Tests', 'CloneChu', 'Maze']:# 'FactoryFun']:
   global_env[project] = \
       global_env.SConscript(
           os.path.join(project, 'SConscript'),
