@@ -12,6 +12,7 @@ def TargetName(env, name):
     full_path = os.path.join(env['PROJECT_ROOT'], reduce(os.path.join, name[1:].split('/')))
   else:
     full_path = os.path.join(os.getcwd(), reduce(os.path.join, name.split('/')))
+    full_path = full_path.replace(env['BUILD_ROOT'], env['PROJECT_ROOT'])
   return full_path
 
 # Takes a name in the form 'foo/bar' or '/math/utils' and turns it into a valid local path for
@@ -19,6 +20,19 @@ def TargetName(env, name):
 def LocalTargetName(env, name):
   name = env.TargetName(name)
   return name[len(env['PROJECT_ROOT']):]
+
+# Takes a name in the form 'foo/bar' or '/math/utils' and returns the path to the SConscript file
+# that contains this target
+def TargetSConscriptPath(env, name):
+  name = env.TargetName(name)
+  sconscript_path = os.path.join(os.path.dirname(name), 'SConscript')
+  return sconscript_path
+
+# Takes a name in the form 'foo/bar' or '/math/utils' and returns the varaint directory that the
+# target output should be placed in
+def TargetVariantDir(env, name):
+  return os.path.dirname(env.TargetSConscriptPath(name).replace(env['PROJECT_ROOT'], env['BUILD_ROOT']))
+
 
 # The sub-packages included with this one are loaded and bundled together so that tests can
 # include the one package necessary and nothing else.
@@ -91,9 +105,9 @@ def LoadPackage(env, package_path):
   temp_env = env.Clone()
   temp_env.Append(PACKAGE_STACK = package_path)
 
-  sconscript_file = os.path.join(temp_env['PROJECT_ROOT'], package_directory, 'SConscript')
-  temp_env.SConscript(sconscript_file)
-
+  sconscript_file    = temp_env.TargetSConscriptPath(package_path)
+  sconscript_variant = temp_env.TargetVariantDir(package_path)
+  temp_env.SConscript(sconscript_file, variant_dir=sconscript_variant)
   return env['LOADED_PACKAGES_MAP'][env.TargetName(package_path)]
 
 
@@ -101,6 +115,7 @@ def LoadPackage(env, package_path):
 def RunTest(env, target, source):
   old_cwd = os.getcwd()
   for test in source:
+    print 'chdir to ',os.path.dirname(test.get_abspath())
     os.chdir(os.path.dirname(test.get_abspath()))
     exit_status = os.system(test.get_abspath())
     if exit_status != 0 and exit_status != 25:
@@ -130,6 +145,10 @@ def TestProgram(env, target_name, source, packages):
       [source] + pkg['objects'],
       LIBS = ['gtest', 'gtest_main'] + pkg['libs'],
       FRAMEWORKS = pkg['frameworks'])
+  for t in test:
+    print t, len(test)
+  assert len(test) == 1
+  test = test[0]
 
   # Must copy dylibs to the same directory as the test binaries.  Will also have to chdir to those
   # directories to run the binaries.
@@ -138,10 +157,12 @@ def TestProgram(env, target_name, source, packages):
   for lib in pkg['libs']:
     dylib_path = os.path.join(env['LIBPATH'][-1], 'lib' + lib + '.dylib')
     if os.path.exists(dylib_path):
-      env.Command(
-          os.path.join(os.path.dirname(str(test)), 'lib' + lib + '.dylib'),
+      target_path = os.path.join(os.path.dirname(test.get_abspath()), 'lib' + lib + '.dylib')
+      # TODO(jwills): Figure out why I all of the sudden need AlwaysBuild here.
+      env.AlwaysBuild(env.Command(
+          target_path,
           dylib_path,
-          SCons.Defaults.Copy('$TARGET', '$SOURCE'))
+          SCons.Defaults.Copy('$TARGET', '$SOURCE')))
 
   if env.GetOption('runtests') != None:
     env.Alias(env.LocalTargetName(target_name), env.RunTest(test))
@@ -197,6 +218,8 @@ def AppendOsParams(env):
   # Adding in useful tools
   env.AddMethod(TargetName, 'TargetName')
   env.AddMethod(LocalTargetName, 'LocalTargetName')
+  env.AddMethod(TargetSConscriptPath, 'TargetSConscriptPath')
+  env.AddMethod(TargetVariantDir, 'TargetVariantDir')
   env.AddMethod(BuildObjects, 'BuildObjects')
   env.AddMethod(BuildProtos, 'BuildProtos')
   env.AddMethod(LoadPackage, 'LoadPackage')

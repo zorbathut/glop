@@ -103,16 +103,17 @@ TEST(WindowTest, TestCreateDestroyCreate) {
   ASSERT_NE((void*)NULL, window());
   vector<pair<int,int> > modes = system()->GetFullScreenModes();
 
-  // TODO(jwills): If I recall correctly, switching to fullscreen on windows is a bit slow.  This
-  // test can just test maybe two different modes, it doesn't actually have to be exhaustive if it
-  // is painfully slow.
-  for (int i = 0; i < modes.size(); i++) {
-    ASSERT_TRUE(window()->Create(1024, 768, false));
-    window()->Destroy();
-    ASSERT_TRUE(window()->Create(modes[i].first, modes[i].second, true))
-        << "Failed to create full-screen window with dimensions "
-        << modes[i].first << 'x' << modes[i].second;
-    window()->Destroy();
-  }
+  ASSERT_TRUE(window()->Create(1024, 768, false));
+  window()->Destroy();
+  ASSERT_TRUE(window()->Create(modes[0].first, modes[0].second, true))
+      << "Failed to create full-screen window with dimensions "
+      << modes[0].first << 'x' << modes[0].second;
+  window()->Destroy();
 
+  ASSERT_TRUE(window()->Create(1024, 768, false));
+  window()->Destroy();
+  ASSERT_TRUE(window()->Create(modes.back().first, modes.back().second, true))
+      << "Failed to create full-screen window with dimensions "
+      << modes.back().first << 'x' << modes.back().second;
+  window()->Destroy();
 }

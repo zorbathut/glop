@@ -1,24 +1,13 @@
-# BEGIN PROJCT HEADER
-# This code should be at the start of any Glop project
-import os
-import platform
-import scons_utils
-Import('global_env')
-env = global_env.Clone()
+Import('env')
 Export('env')
-env.Replace(PROJECT_ROOT = os.getcwd())
-env.Replace(PACKAGE_STACK = ['all'])
-env.Replace(LOADED_PACKAGES_MAP = {})
-env.Append(CPPPATH = [os.getcwd()])
-# END PROJECT HEADER
-
 Glop = env['Glop']
+
 env.Application(
     target = 'Test',
     source = 'Tests.cpp',
     frameworks = Glop,
     resources = [
-        'icon.bmp',
+        'Icon.bmp',
         'ninja.jpg',
         'thames.ttf',
         'glop.jpg',

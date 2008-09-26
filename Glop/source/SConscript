@@ -1,5 +1,3 @@
-import SCons.Util
-import scons_utils
 Import('env')
 Export('env')
 

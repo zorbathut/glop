@@ -123,7 +123,7 @@ def CompileFramework(env, objs, headers, libs, framework_structure):
   headers_directory = os.path.join(framework_path, 'Versions', 'A', 'Headers')
   for header in headers:
     header_directory = os.path.join(framework_path, 'Versions', 'A', 'Headers')
-    header_path = os.path.join(header_directory, header.get_abspath()[len(env['PROJECT_ROOT']):])
+    header_path = os.path.join(header_directory, header.get_abspath()[len(env['BUILD_ROOT']):])
     env.Command(header_path, header, SCons.Defaults.Copy('$TARGET', '$SOURCE'))
 
   return framework_path
