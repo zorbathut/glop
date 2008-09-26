@@ -166,10 +166,11 @@ def Application(env, target, source, resources = [], frameworks = [], packages =
     app_env.AppendUnique(FRAMEWORKPATH = [re.match('#?(.*)/(.*)\.framework.*', framework).group(1)])
     app_env.AppendUnique(FRAMEWORKS = [re.match('(.*)/(.*)\.framework.*', framework).group(2)])
 
-  # TODO(jwills): Get the protobuffer libs installed properly
   objects = []
   for package in packages:
-    pkg = app_env.LoadPackage(package)
+    # TODO(jwills): Not entirely sure why we have to load the packages into env and not app_env, but
+    # if we don't we get problems with packages not being loaded
+    pkg = env.LoadPackage(package)
     app_env.Append(LIBS = pkg['libs'])
     objects.append(pkg['objects'])
   app = app_env.Program(target, source + objects)

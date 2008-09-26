@@ -4,8 +4,6 @@ Export('env')
 
 env.Replace(PROJECT_ROOT = os.path.join(env['PROJECT_ROOT'], 'source' + os.sep))
 env.Replace(BUILD_ROOT   = os.path.join(env['BUILD_ROOT']  , 'source' + os.sep))
-#env.Replace(PACKAGE_STACK = ['all'])
-#env.Replace(LOADED_PACKAGES_MAP = {})
 env.Append(CPPPATH = ['#Glop/source/'])
 
 package = env.LoadPackage('/glop')
