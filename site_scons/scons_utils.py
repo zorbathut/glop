@@ -144,7 +144,7 @@ def TestProgram(env, target_name, source, packages):
       target_name,
       [source] + pkg['objects'],
       LIBS = ['gtest', 'gtest_main'] + pkg['libs'],
-      FRAMEWORKS = pkg['frameworks'])
+      FRAMEWORKS = [x + '_test' for x in pkg['frameworks']])
   for t in test:
     print t, len(test)
   assert len(test) == 1
@@ -153,7 +153,7 @@ def TestProgram(env, target_name, source, packages):
   # Must copy dylibs to the same directory as the test binaries.  Will also have to chdir to those
   # directories to run the binaries.
   # TODO(jwills): Maybe it would be better make the path to the dylib relative to the root directory
-  # since that is where people will normally be?
+  # since that is where people will normally be?  Or maybe give the absolute path to the dylibs?
   for lib in pkg['libs']:
     dylib_path = os.path.join(env['LIBPATH'][-1], 'lib' + lib + '.dylib')
     if os.path.exists(dylib_path):

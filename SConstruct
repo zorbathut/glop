@@ -40,6 +40,8 @@ for project in ['Glop', 'Tests', 'CloneChu', 'Maze']:# 'FactoryFun']:
   env.Replace(LOADED_PACKAGES_MAP = {})
   env.Append(CPPPATH = [env['PROJECT_ROOT']])
   env.Append(CPPPATH = [env['BUILD_ROOT']])
+  if project != 'Glop':
+    env.Append(FRAMEWORKPATH = [os.path.dirname(global_env['Glop'])])
   global_env[project] = \
       env.SConscript(
           os.path.join(project, 'SConscript'),

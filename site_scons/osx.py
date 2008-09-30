@@ -80,14 +80,13 @@ def InstallNameTool(env, target, source, target_lib_path, source_lib_path, libs)
   env.Command(target, source, [SCons.Defaults.Copy('$TARGET', '$SOURCE')] + cmd)
   return [target]
 
-# Note: This is obviously hacked to work for a framework named Glop, and nothing else
-def CompileFramework(env, objs, headers, libs, framework_structure):
-  framework_name = 'Glop'
+# Note: This is obviously hacked
+def CompileFramework(env, objs, headers, libs, framework_structure, install_path, framework_name):
   framework_env = env.Clone()
   framework_env.Append(LINKFLAGS =
       '-dynamiclib ' +
       '-arch i386 ' +
-      '-install_name @executable_path/../Frameworks/' + framework_name +
+      '-install_name ' + os.path.join(install_path, framework_name) +
       '.framework/Versions/A/' + framework_name + ' ' +
       '-Wl,-single_module ' +
       '-compatibility_version 1 ' +
@@ -100,7 +99,7 @@ def CompileFramework(env, objs, headers, libs, framework_structure):
   assert len(Glop) == 1
   Glop = Glop[0]
   framework_path = Glop.get_abspath() + '.framework'
-  binary = os.path.join(framework_path, 'Versions', 'A', 'Glop_raw')
+  binary = os.path.join(framework_path, 'Versions', 'A', framework_name + '_raw')
 
   # Assume that any dylibs in our os lib path need to be copied to a location that the executable
   # will be able to find at runtime.
@@ -108,9 +107,9 @@ def CompileFramework(env, objs, headers, libs, framework_structure):
   dylibs = [x for x in dylib_names if os.path.exists(os.path.join(env['LIBPATH'][-1], x))]
   framework_binary = \
       framework_env.InstallNameTool(
-          env.File(os.path.join(framework_path, 'Versions', 'A', 'Glop')),
+          env.File(os.path.join(framework_path, 'Versions', 'A', framework_name)),
           Glop,
-          '@executable_path/../Frameworks/Glop.Framework/Versions/A/',
+          install_path + framework_name + '.Framework/Versions/A/',
           './',
           dylibs)
   # TODO(jwills): checking if the path begins with './' might not always work?
@@ -128,7 +127,26 @@ def CompileFramework(env, objs, headers, libs, framework_structure):
 
   return framework_path
 #  return framework_env.OrganizeFramework(Glop)
-  
+
+def CompileFrameworks(env, objs, headers, libs, framework_structure):
+  g = CompileFramework(
+      env,
+      objs,
+      headers,
+      libs,
+      framework_structure,
+      '/Users/jwills/Glop/build-dbg-Glop/',
+      'Glop_test')
+  g = CompileFramework(
+      env,
+      objs,
+      headers,
+      libs,
+      framework_structure,
+      '@executable_path/../Frameworks/',
+      'Glop')
+  print g
+  return g
 
 def Application(env, target, source, resources = [], frameworks = [], packages = []):
   app_env = env.Clone()
@@ -188,7 +206,7 @@ def AppendOsParams(env):
   env.Append(BUILDERS = {'Symlink' : symlink_builder})
 
   env.AddMethod(InstallNameTool, 'InstallNameTool')
-  env.AddMethod(CompileFramework, 'CompleteLibrary')  
+  env.AddMethod(CompileFrameworks, 'CompleteLibrary')
   env.AddMethod(Application, 'Application')
   env.AddMethod(CopyDirectory, 'CopyDirectory')
 
