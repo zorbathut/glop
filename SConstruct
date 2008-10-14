@@ -37,6 +37,7 @@ for project in ['Glop', 'Tests', 'CloneChu', 'Maze']:# 'FactoryFun']:
   env.Replace(PROJECT_ROOT = os.path.join(os.getcwd(), project + os.sep))
   env.Replace(BUILD_ROOT = variant)
   env.Replace(PACKAGE_STACK = ['all'])
+  env.Replace(TESTS = [])
   env.Replace(LOADED_PACKAGES_MAP = {})
   env.Append(CPPPATH = [env['PROJECT_ROOT']])
   env.Append(CPPPATH = [env['BUILD_ROOT']])

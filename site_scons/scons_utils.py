@@ -56,8 +56,7 @@ def AppendToPackage(env, pkg, sub_packages):
       
 
 def BuildObjects(env, target_name, source, packages = [], frameworks = [], libs = [], headers = []):
-  if env['PACKAGE_STACK'][-1] != 'all' and env['PACKAGE_STACK'] != target_name:
-    print 'Error loading packages.  Ignoring...'
+  if env['PACKAGE_STACK'][-1] != 'all' and env['PACKAGE_STACK'][-1] != env.TargetName(target_name):
     return []
   objects = env.Object(source)
   env.Alias(env.LocalTargetName(target_name), objects)
@@ -75,8 +74,7 @@ def BuildObjects(env, target_name, source, packages = [], frameworks = [], libs 
 # Calls the proto builder and creates a package out of the resulting files that can be included as
 # a package by other packages, just like BuildObjects
 def BuildProtos(env, target_name, source):
-  if env['PACKAGE_STACK'][-1] != 'all' and env['PACKAGE_STACK'] != target_name:
-    print 'Error loading packages.  Ignoring...'
+  if env['PACKAGE_STACK'][-1] != 'all' and env['PACKAGE_STACK'][-1] != env.TargetName(target_name):
     return []
   if not SCons.Util.is_List(source):
     source = [source]
@@ -91,7 +89,6 @@ def BuildProtos(env, target_name, source):
     'libs' : ['protobuf'],
     'headers' : [],
   }
-
   env['LOADED_PACKAGES_MAP'][env.TargetName(target_name)] = pkg
   return objects
 
@@ -102,14 +99,15 @@ def LoadPackage(env, package_path):
   if env['LOADED_PACKAGES_MAP'].has_key(env.TargetName(package_path)):
     return env['LOADED_PACKAGES_MAP'][env.TargetName(package_path)]
   package_directory, package_name = os.path.split(os.path.normpath(package_path))
-  temp_env = env.Clone()
-  temp_env.Append(PACKAGE_STACK = package_path)
+  env.Append(PACKAGE_STACK = [env.TargetName(package_path)])
 
-  sconscript_file    = temp_env.TargetSConscriptPath(package_path)
-  sconscript_variant = temp_env.TargetVariantDir(package_path)
-  temp_env.SConscript(sconscript_file, variant_dir=sconscript_variant)
-  return env['LOADED_PACKAGES_MAP'][env.TargetName(package_path)]
+  sconscript_file    = env.TargetSConscriptPath(package_path)
+  sconscript_variant = env.TargetVariantDir(package_path)
+  env.SConscript(sconscript_file, variant_dir=sconscript_variant)
+  loaded_package = env['LOADED_PACKAGES_MAP'][env.TargetName(package_path)]
 
+  env['PACKAGE_STACK'] = env['PACKAGE_STACK'][:-1]
+  return loaded_package
 
 
 def RunTest(env, target, source):
@@ -131,6 +129,9 @@ def TestEmitter(target, source, env):
 def TestProgram(env, target_name, source, packages):
   if env.GetOption('buildtests') == None and env.GetOption('runtests') == None:
     return
+  if target_name in env['TESTS']:
+    return
+  env['TESTS'].append(target_name)
   pkg = {
     'objects' : [],
     'frameworks' : [],
@@ -145,8 +146,6 @@ def TestProgram(env, target_name, source, packages):
       [source] + pkg['objects'],
       LIBS = ['gtest', 'gtest_main'] + pkg['libs'],
       FRAMEWORKS = [x + '_test' for x in pkg['frameworks']])
-  for t in test:
-    print t, len(test)
   assert len(test) == 1
   test = test[0]
 
