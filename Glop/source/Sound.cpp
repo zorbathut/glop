@@ -101,6 +101,7 @@ void SoundManager::SetVolume(float volume) {
 SoundManager::SoundManager()
 : system_(0), volume_(1) {
   // Create the system object and check versions
+  const int kNumChannels = 128;
   if (FMOD::System_Create(&system_) != FMOD_OK)
     return;
   unsigned int version;
@@ -120,9 +121,7 @@ SoundManager::SoundManager()
   }
 
   // Initialize
-  {
-    const int kNumChannels = 128;
-    if (system_->init(kNumChannels, FMOD_INIT_NORMAL, 0) != FMOD_OK) {
+  if (system_->init(kNumChannels, FMOD_INIT_NORMAL, 0) != FMOD_OK) {
     if (system_->setSpeakerMode(FMOD_SPEAKERMODE_STEREO) != FMOD_OK)
       goto error;
     if (system_->init(kNumChannels, FMOD_INIT_NORMAL, 0) != FMOD_OK)

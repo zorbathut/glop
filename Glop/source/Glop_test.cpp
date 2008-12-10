@@ -98,6 +98,8 @@ TEST(UtilsTest, TestBinarySearchFunctionsOnFlatDistributions) {
   EXPECT_EQ( -1, BSFindMatch(v,100));
 }
 
+/*
+Commenting this test out because it is really quite annoying when running tests.
 TEST(WindowTest, TestCreateDestroyCreate) {
   ASSERT_NE((void*)NULL, system());
   ASSERT_NE((void*)NULL, window());
@@ -117,3 +119,4 @@ TEST(WindowTest, TestCreateDestroyCreate) {
       << modes.back().first << 'x' << modes.back().second;
   window()->Destroy();
 }
+*/
