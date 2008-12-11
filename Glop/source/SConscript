@@ -60,6 +60,8 @@ env.BuildObjects(
   packages = [
     'glop2d/base',
     'glop3d/base',
+    'net/base',
+    'net2/base',
   ]
 )
 
