@@ -18,6 +18,9 @@ def CompileFramework(env, objs, headers, libs, framework_structure):
   app_env.Append(LINKFLAGS = ['-mno-cygwin'])
   app_env.Append(CXXFLAGS = ['-mno-cygwin'])
   
+  app_env.Append(CXXFLAGS = ['-g'])
+  app_env.Append(LINKFLAGS = ['-g'])
+  
   for header in headers:
     h = os.path.join(header_directory, header.get_abspath()[len(env['PROJECT_ROOT']):])
     app_env.Command(h, header, SCons.Defaults.Copy('$TARGET','$SOURCE'))
@@ -41,6 +44,9 @@ def Application(env, target, source, resources = [], frameworks = []):
   app_env.Append(CPPPATH = [os.path.dirname(Glop.get_abspath())])
   app_env.Append(CPPPATH = ['.'])
   
+  app_env.Append(CXXFLAGS = ['-g'])
+  app_env.Append(LINKFLAGS = ['-g'])
+  
   app = app_env.Program(source)
 
 #  resource_directory = os.path.dirname(app[0].get_abspath()[len(env['PROJECT_ROOT']):])
@@ -62,6 +68,8 @@ def AppendOsParams(env):
   env.Append(CPPPATH = ['../../Glop/cygwin/include'])
   env.Append(CPPPATH = ['..'])
   
+  env.Append(CXXFLAGS = ['-g'])
+  env.Append(LINKFLAGS = ['-g'])
   """
   env.Append(LIBPATH = [os.path.join(env['GLOBAL_ROOT'], 'Glop', 'Win32', 'lib')])
   env.Append(CPPFLAGS = ['/W3', '/Od', '/Ob2', '/Gm', '/EHsc', '/RTC1', '/MD', '/GS', '/c' , '/Wp64', '/Zi'])
