@@ -220,6 +220,7 @@ def AppendOsParams(env):
       'OpenGL',
       'ApplicationServices',
       'IOKit'])
+  env.Append(CPPPATH = ['#Glop/OSX'])
   if env.GetOption('compile-mode') == 'dbg':
     env.AppendUnique(CPPDEFINES = ['_DEBUG'])
 #      env.AppendUnique(FRAMEWORKS = ['OpenGL'])
