@@ -42,6 +42,7 @@ def AppendToPackage(env, pkg, sub_packages):
     for component in ['objects', 'headers']:
       pkg[component] += package[component]
       pkg[component] = [x.get_abspath() for x in pkg[component]]
+      pkg[component] = SCons.Util.flatten(pkg[component])
       pkg[component] = SCons.Util.unique(pkg[component])
       pkg[component].sort()
       for i in range(len(pkg[component])):
@@ -58,6 +59,11 @@ def AppendToPackage(env, pkg, sub_packages):
 def BuildObjects(env, target_name, source, packages = [], frameworks = [], libs = [], headers = []):
   if env['PACKAGE_STACK'][-1] != 'all' and env['PACKAGE_STACK'][-1] != env.TargetName(target_name):
     return []
+
+  for f in [x for x in frameworks if 'Glop' in x]:
+    env.AppendUnique(FRAMEWORKPATH = [re.match('#?(.*)/(.*)\.framework.*', f).group(1)])
+    env.AppendUnique(FRAMEWORKS = [re.match('(.*)/(.*)\.framework.*', f).group(2)])
+
   objects = env.Object(source)
   env.Alias(env.LocalTargetName(target_name), objects)
   pkg = {
@@ -136,9 +142,12 @@ def TestProgram(env, target_name, source, packages):
   }
 
   env.AppendToPackage(pkg, packages)
-  if 'Glop' in pkg['frameworks']:
-    pkg['frameworks'].remove('Glop')
+  # TODO(jwills): this is removing a global path and replacing it with a framework name.  This
+  # shouldn't ever even have this global path as a framework
+  for fw in [x for x in pkg['frameworks'] if 'Glop' in x]:
+    pkg['frameworks'].remove(fw)
     pkg['frameworks'].append('Glop_test')
+
   test = env.Program(
       target_name,
       [source] + pkg['objects'],

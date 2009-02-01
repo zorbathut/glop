@@ -193,6 +193,7 @@ def Application(env, target, source, resources = [], frameworks = [], packages =
     pkg = env.LoadPackage(package)
     app_env.Append(LIBS = pkg['libs'])
     objects.append(pkg['objects'])
+  objects = SCons.Util.flatten(objects)
   app = app_env.Program(target, source + objects)
   cmd = SCons.Defaults.Copy("$TARGET", "$SOURCE")
   app_env.Command(target_directory + 'Contents/MacOS/' + target, app, cmd)
