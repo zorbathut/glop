@@ -1,3 +1,9 @@
+// TODO(jwills): Sometimes joysticks can be left generating axis events even though it's centered
+// TODO(jwills): Fill out the file system functions
+// TODO(jwills): Either figure out a new model for joysticks, or make the joysticks not update
+//               automatically
+// TODO(jwills): Mouse wheel events aren't working for some reason.
+// TODO(jwills): Event times, if the double value is more than an int32 can handle, asplode.
 #ifdef MACOSX
 
 #include "Os.h"
@@ -698,7 +704,7 @@ void Os::Think() {
       printf("value: %d\n", event->value);
       printf("queue: %d\n", event->queue);
       if (event->value < 127) {
-        printf("Making neg axis event\n");
+        LOGF("Negative axis event %d", event->usage);
         raw_events.push_back(
             GlopOSXEvent(
                 event->timestamp,
@@ -706,14 +712,14 @@ void Os::Think() {
                 1.f - (event->value/128.f)));
       } else
       if (event->value > 128) {
-        printf("Making pos axis event\n");
+        LOGF("Positive axis event %d", event->usage);
         raw_events.push_back(
             GlopOSXEvent(
                 event->timestamp,
                 GetJoystickAxisPos(event->usage - 0x30, event->queue),
                 (event->value - 127) / 128.f));
       } else {
-        printf("Making 0 axis event\n");
+        LOGF("Zero axis event %d", event->usage);
         raw_events.push_back(
             GlopOSXEvent(
                 event->timestamp,
@@ -1028,7 +1034,7 @@ vector<Os::KeyEvent> Os::GetInputEvents(OsWindowData *window) {
   vector<Os::KeyEvent> ret;
   printf("RawEvents: %d\n", raw_events.size());
   for (int i = 0; i < raw_events.size(); i++) {
-    printf("Event: %s : %f (%d)\n", raw_events[i].event.key.GetName().c_str(), raw_events[i].event.press_amount, raw_events[i].event.timestamp);
+    LOGF("Event: %s : %f (%d)\n", raw_events[i].event.key.GetName().c_str(), raw_events[i].event.press_amount, raw_events[i].event.timestamp);
   }
   stable_sort(raw_events.begin(), raw_events.end());
   ret.reserve(raw_events.size());

@@ -111,15 +111,11 @@ def LoadPackage(env, package_path):
 
 
 def RunTest(env, target, source):
-  old_cwd = os.getcwd()
   for test in source:
-    print 'chdir to ',os.path.dirname(test.get_abspath())
-    os.chdir(os.path.dirname(test.get_abspath()))
     exit_status = os.system(test.get_abspath())
     if exit_status != 0 and exit_status != 25:
       print 'Test %s exited with exit status %d.' % (test.get_abspath(), exit_status)
       env.Exit(1)
-  os.chdir(old_cwd)
 
 # Emits the name of a file that never gets created and doesn't already exist, so that it always gets
 # 'built' and never conflicts with an existing target
@@ -140,28 +136,28 @@ def TestProgram(env, target_name, source, packages):
   }
 
   env.AppendToPackage(pkg, packages)
-
+  if 'Glop' in pkg['frameworks']:
+    pkg['frameworks'].remove('Glop')
+    pkg['frameworks'].append('Glop_test')
   test = env.Program(
       target_name,
       [source] + pkg['objects'],
       LIBS = ['gtest', 'gtest_main'] + pkg['libs'],
-      FRAMEWORKS = [x + '_test' for x in pkg['frameworks']])
+      FRAMEWORKS = pkg['frameworks'])
   assert len(test) == 1
   test = test[0]
 
-  # Must copy dylibs to the same directory as the test binaries.  Will also have to chdir to those
-  # directories to run the binaries.
-  # TODO(jwills): Maybe it would be better make the path to the dylib relative to the root directory
-  # since that is where people will normally be?  Or maybe give the absolute path to the dylibs?
-  for lib in pkg['libs']:
-    dylib_path = os.path.join(env['LIBPATH'][-1], 'lib' + lib + '.dylib')
-    if os.path.exists(dylib_path):
-      target_path = os.path.join(os.path.dirname(test.get_abspath()), 'lib' + lib + '.dylib')
-      # TODO(jwills): Figure out why I all of the sudden need AlwaysBuild here.
-      env.AlwaysBuild(env.Command(
-          target_path,
-          dylib_path,
-          SCons.Defaults.Copy('$TARGET', '$SOURCE')))
+  # Assume that any dylibs in our os lib path need to be copied to a location that the executable
+  # will be able to find at runtime.
+  dylib_names = ['lib' + lib + '.dylib' for lib in pkg['libs']]
+  dylibs = [x for x in dylib_names if os.path.exists(os.path.join(env['LIBPATH'][-1], x))]
+  test = \
+      env.InstallNameTool(
+          env.File(str(test) + '_installed'),
+          test,
+          env['LIBPATH'][-1],
+          './',
+          dylibs)
 
   if env.GetOption('runtests') != None:
     env.Alias(env.LocalTargetName(target_name), env.RunTest(test))

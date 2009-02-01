@@ -66,33 +66,29 @@ def InstallNameTool(env, target, source, target_lib_path, source_lib_path, libs)
     source = source[0]
   cmd = [
     'install_name_tool -change %s %s %s' % (
-      source_lib_path + name,
-      target_lib_path + name,
+      os.path.join(source_lib_path, name),
+      os.path.join(target_lib_path,   name),
       target.get_abspath()
     )
     for name in libs
   ]
-  for lib in libs:
-    env.Command(
-        os.path.join(os.path.dirname(target.get_abspath()), lib),
-        os.path.join('OSX', 'lib', lib),
-        SCons.Defaults.Copy('$TARGET', '$SOURCE'))
   env.Command(target, source, [SCons.Defaults.Copy('$TARGET', '$SOURCE')] + cmd)
   return [target]
 
 # Note: This is obviously hacked
 def CompileFramework(env, objs, headers, libs, framework_structure, install_path, framework_name):
   framework_env = env.Clone()
-  framework_env.Append(LINKFLAGS =
-      '-dynamiclib ' +
-      '-arch i386 ' +
-      '-install_name ' + os.path.join(install_path, framework_name) +
-      '.framework/Versions/A/' + framework_name + ' ' +
-      '-Wl,-single_module ' +
-      '-compatibility_version 1 ' +
-      '-current_version 1 ' +
-      '-mmacosx-version-min=10.5 ' +
-      '-headerpad_max_install_names'
+  framework_env.Append(LINKFLAGS = [
+      '-dynamiclib',
+      '-arch', 'i386',
+      '-install_name', os.path.join(install_path, framework_name) +
+          '.framework/Versions/A/' + framework_name,
+      '-Wl,-single_module',
+      '-compatibility_version', '1',
+      '-current_version', '1',
+      '-mmacosx-version-min=10.5',
+      '-headerpad_max_install_names',
+    ]
   )
   framework_env.Append(LIBS = libs)
   Glop = framework_env.Program(framework_name, objs)
@@ -112,6 +108,10 @@ def CompileFramework(env, objs, headers, libs, framework_structure, install_path
           install_path + framework_name + '.Framework/Versions/A/',
           './',
           dylibs)
+  for dylib in dylibs:
+    source_dylib = os.path.join(env['LIBPATH'][-1], dylib)
+    target_dylib = os.path.join(framework_path, 'Versions', 'A', dylib)
+    env.Command(target_dylib, source_dylib, SCons.Defaults.Copy('$TARGET', '$SOURCE'))
   # TODO(jwills): checking if the path begins with './' might not always work?
 
   framework_directory = env.CopyDirectory(framework_path, framework_structure)
@@ -129,6 +129,9 @@ def CompileFramework(env, objs, headers, libs, framework_structure, install_path
 #  return framework_env.OrganizeFramework(Glop)
 
 def CompileFrameworks(env, objs, headers, libs, framework_structure):
+  # This is sad, but we have to compile a separate framework just for tests because we don't want to
+  # have to make an application bundle for each test.  Tests expect to find the test framework at a
+  # global path, rather than the @executable_path... path used in a normal embedded framework.
   g = CompileFramework(
       env,
       objs,
@@ -145,7 +148,6 @@ def CompileFrameworks(env, objs, headers, libs, framework_structure):
       framework_structure,
       '@executable_path/../Frameworks/',
       'Glop')
-  print g
   return g
 
 def Application(env, target, source, resources = [], frameworks = [], packages = []):
@@ -179,7 +181,7 @@ def Application(env, target, source, resources = [], frameworks = [], packages =
       env.Execute(SCons.Defaults.Delete(target_resource))
     env.Command(target_resource, resource, SCons.Defaults.Copy("$TARGET", "$SOURCE"))
 
-  app_env.Append(LINKFLAGS = ' -arch i386 ')
+  app_env.Append(LINKFLAGS = ['-arch i386'])
   for framework in frameworks:
     app_env.AppendUnique(FRAMEWORKPATH = [re.match('#?(.*)/(.*)\.framework.*', framework).group(1)])
     app_env.AppendUnique(FRAMEWORKS = [re.match('(.*)/(.*)\.framework.*', framework).group(2)])
@@ -218,6 +220,7 @@ def AppendOsParams(env):
       'OpenGL',
       'ApplicationServices',
       'IOKit'])
+  env.Append(CPPPATH = ['#Glop/OSX'])
   if env.GetOption('compile-mode') == 'dbg':
     env.AppendUnique(CPPDEFINES = ['_DEBUG'])
 #      env.AppendUnique(FRAMEWORKS = ['OpenGL'])
