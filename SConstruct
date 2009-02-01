@@ -30,7 +30,7 @@ global_env = scons_utils.AppendOsParams(global_env)
 
 # Compile all projects.  The only requirement here is that Glop be first in the list, since the
 # other projects reference it.
-for project in ['Glop', 'Tests', 'CloneChu', 'Maze']:# 'FactoryFun']:
+for project in ['Glop', 'Tests']: #, 'CloneChu', 'Maze']:# 'FactoryFun']:
   variant = os.path.join(os.getcwd(), 'build-%s-%s' % (GetOption('compile-mode'), project) + os.sep)
   env = global_env.Clone()
   Export('env')
@@ -41,8 +41,8 @@ for project in ['Glop', 'Tests', 'CloneChu', 'Maze']:# 'FactoryFun']:
   env.Replace(LOADED_PACKAGES_MAP = {})
   env.Append(CPPPATH = [env['PROJECT_ROOT']])
   env.Append(CPPPATH = [env['BUILD_ROOT']])
-  if project != 'Glop':
-    env.Append(FRAMEWORKPATH = [os.path.dirname(global_env['Glop'])])
+  #if project != 'Glop':
+    #env.Append(FRAMEWORKPATH = [os.path.dirname(global_env['Glop'])])
   global_env[project] = \
       env.SConscript(
           os.path.join(project, 'SConscript'),

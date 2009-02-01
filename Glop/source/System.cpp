@@ -6,7 +6,7 @@
 #include "OpenGl.h"
 #include "Sound.h"
 #include "Os.h"
-#include "third_party/freetype/ftglyph.h"
+#include "freetype/ftglyph.h"
 #include <algorithm>
 
 // Globals

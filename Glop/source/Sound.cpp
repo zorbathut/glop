@@ -1,8 +1,9 @@
 // Includes
 #include "Sound.h"
 #include "System.h"
-#include "third_party/fmod/fmod.hpp"
+#include "fmod/fmod.hpp"
 
+/*
 // Globals
 static SoundManager *gSoundManager = 0;
 SoundManager *sound_manager() {return system()->sound_manager();}
@@ -119,12 +120,14 @@ SoundManager::SoundManager()
   }
 
   // Initialize
-  const int kNumChannels = 128;
-  if (system_->init(kNumChannels, FMOD_INIT_NORMAL, 0) != FMOD_OK) {
+  {
+    const int kNumChannels = 128;
+    if (system_->init(kNumChannels, FMOD_INIT_NORMAL, 0) != FMOD_OK) {
     if (system_->setSpeakerMode(FMOD_SPEAKERMODE_STEREO) != FMOD_OK)
       goto error;
     if (system_->init(kNumChannels, FMOD_INIT_NORMAL, 0) != FMOD_OK)
       goto error;
+    }
   }
 
   // Success
@@ -175,3 +178,8 @@ void SoundManager::StopAllSources() {
     }
   }
 }
+*/
+
+void SoundManager::Think() { }
+SoundManager::SoundManager() { }
+SoundManager::~SoundManager() { }

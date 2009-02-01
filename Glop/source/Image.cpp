@@ -2,7 +2,7 @@
 #include "BinaryFileManager.h"
 #include "Color.h"
 extern "C" {
-#include "third_party/jpeglib/jpeglib.h"
+#include "jpeglib/jpeglib.h"
 }
 #include <setjmp.h>  // For LoadJpg error handling
 

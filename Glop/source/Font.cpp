@@ -3,8 +3,8 @@
 #include "GlopInternalData.h"
 #include "GlopWindow.h"
 #include "OpenGl.h"
-#include "third_party/freetype/ftglyph.h"
-#include "third_party/freetype/ftoutln.h"
+#include "freetype/ftglyph.h"
+#include "freetype/ftoutln.h"
 #include <map>
 using namespace std;
 

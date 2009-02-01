@@ -15,7 +15,7 @@
 using namespace std;
 
 // Type definitions
-#ifdef WIN32
+#ifdef MSVC
 typedef __int64 int64;
 typedef unsigned __int64 uint64;
 #else

@@ -10,10 +10,14 @@ import platform
 def CompileFramework(env, objs, headers, libs, framework_structure):
   app_env = env.Clone()
   libs = ['opengl32','glu32','dinput','dxguid','winmm','freetype235','jpeg6b']
-  app_env.Append(ARFLAGS = [x + '.lib' for x in libs])
-  app_env.Append(ARFLAGS = ['/LIBPATH:Glop/Win32/lib'])
-  lib = app_env.Library('GlopDbg.lib', objs)
+  app_env.Append(LIBS = libs, LIBPATH = ['Glop/cygwin/lib'])
+  lib = app_env.Library('GlopDbg.a', objs)
   header_directory = os.path.join(os.path.dirname(lib[0].get_abspath()[len(env['PROJECT_ROOT']):]), 'Glop')
+  
+  app_env.Append(CPPFLAGS = ['-mno-cygwin'])
+  app_env.Append(LINKFLAGS = ['-mno-cygwin'])
+  app_env.Append(CXXFLAGS = ['-mno-cygwin'])
+  
   for header in headers:
     h = os.path.join(header_directory, header.get_abspath()[len(env['PROJECT_ROOT']):])
     app_env.Command(h, header, SCons.Defaults.Copy('$TARGET','$SOURCE'))
@@ -24,11 +28,19 @@ def Application(env, target, source, resources = [], frameworks = []):
   print frameworks
   Glop = frameworks[0]
   print Glop.get_abspath()
-  l = ['kernel32','user32','gdi32','winspool','comdlg32','advapi32','shell32','ole32','oleaut32','uuid','odbc32','odbccp32']
-  l = [x + '.lib' for x in l]
-  app_env.Append(LIBS = [Glop.get_abspath()] + l)
+  
+  app_env.Append(CPPFLAGS = ['-mno-cygwin'])
+  app_env.Append(LINKFLAGS = ['-mno-cygwin'])
+  app_env.Append(CXXFLAGS = ['-mno-cygwin'])
+  
+  l = ['kernel32','user32','gdi32','winspool','comdlg32','advapi32','shell32','ole32','oleaut32','uuid','odbc32','odbccp32', 'opengl32', 'freetype', 'jpeg', 'glu32', 'msvcrt', 'dinput', 'dxguid', 'fmodex', 'winmm']
+  app_env.Append(LIBS = ["GlopDbg"] + l)
   app_env.Append(LIBPATH = [os.path.dirname(Glop.get_abspath())])
+  app_env.Append(LIBPATH = ["../Glop/cygwin/lib"])
+  app_env.Append(LIBPATH = ["/lib/mingw"])
   app_env.Append(CPPPATH = [os.path.dirname(Glop.get_abspath())])
+  app_env.Append(CPPPATH = ['.'])
+  
   app = app_env.Program(source)
 
 #  resource_directory = os.path.dirname(app[0].get_abspath()[len(env['PROJECT_ROOT']):])
@@ -40,13 +52,21 @@ def Application(env, target, source, resources = [], frameworks = []):
 #    app_env.Command(rpath, resource, SCons.Defaults.Copy('$TARGET','$SOURCE'))
     
 def AppendOsParams(env):
-  env.Append(LIBPATH = [os.path.join(env['GLOBAL_ROOT'], 'Glop', 'Win32', 'lib')])
   env.AddMethod(CompileFramework, 'CompleteLibrary')  
   env.AddMethod(Application, 'Application')
+  env.Append(CPPDEFINES = ['WIN32', '_LIB', '_MBCS'])
+  env.Append(CPPFLAGS = ['-mno-cygwin'])
+  env.Append(LINKFLAGS = ['-mno-cygwin'])
+  env.Append(CXXFLAGS = ['-mno-cygwin'])
+  
+  env.Append(CPPPATH = ['../../Glop/cygwin/include'])
+  env.Append(CPPPATH = ['..'])
+  
+  """
+  env.Append(LIBPATH = [os.path.join(env['GLOBAL_ROOT'], 'Glop', 'Win32', 'lib')])
   env.Append(CPPFLAGS = ['/W3', '/Od', '/Ob2', '/Gm', '/EHsc', '/RTC1', '/MD', '/GS', '/c' , '/Wp64', '/Zi'])
-  env.Append(CPPDEFINES = ['WIN32', '_LIB', '_MBCS', 'MSVC'])
   if env.GetOption('compile-mode') == 'dbg':
     env.Append(CPPDEFINES = ['_DEBUG'])
   if env.GetOption('compile-mode') == 'opt':
     env.Append(CPPDEFINES = ['_RELEASE'])
-    env.Append(CCFLAGS = ['-O2'])
+    env.Append(CCFLAGS = ['-O2'])"""

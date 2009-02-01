@@ -1,7 +1,7 @@
 // Includes
 #include "GlopInternalData.h"
 #include "OpenGl.h"
-#include "third_party/freetype/ftglyph.h"
+#include "freetype/ftglyph.h"
 
 // Globals
 void *FreeTypeLibrary::library_ = 0;

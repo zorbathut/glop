@@ -34,7 +34,7 @@ string Format(const char *text, ...) {
 string Format(const char *text, va_list arglist) {
   // We do not know how much space is required, so first try with an estimated amount of space.
   char buffer[1024];
-#ifdef WIN32  // Thank you Visual C++. It is GOOD that you changed the name of this function.
+#ifdef MSVC  // Thank you Visual C++. It is GOOD that you changed the name of this function.
   int length = _vscprintf(text, arglist);
   if (length < sizeof(buffer))
     vsprintf(buffer, text, arglist);
