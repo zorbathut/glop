@@ -6,7 +6,7 @@
 #include "System.h"
 #include "Thread.h"
 #define DIRECTINPUT_VERSION 0x0700
-#include <dinput.h>
+#include "dinput.h"
 #include <process.h>
 #include <map>
 #include <set>
@@ -179,7 +179,7 @@ class InputPollingThread: public Thread {
       }
 
       // Read the mouse state
-      DIMOUSESTATE mouse_state;
+      DIMOUSESTATE2 mouse_state;
       hr = window_->mouse_device->GetDeviceState(sizeof(mouse_state), &mouse_state);
       if (hr == DIERR_INPUTLOST || hr == DIERR_NOTACQUIRED) {
         window_->mouse_device->Acquire(); 
@@ -625,7 +625,7 @@ OsWindowData *Os::CreateWindow(const string &title, int x, int y,
   result->direct_input->CreateDevice(GUID_SysMouse, &result->mouse_device, NULL);
   result->mouse_device->SetCooperativeLevel(result->window_handle,
                                             DISCL_NONEXCLUSIVE | DISCL_FOREGROUND);
-  result->mouse_device->SetDataFormat(&c_dfDIMouse);
+  result->mouse_device->SetDataFormat(&c_dfDIMouse2);
 
   // Set the DirectInput buffer size - this is the number of events it can store at a single time
   DIPROPDWORD prop_buffer_size;
