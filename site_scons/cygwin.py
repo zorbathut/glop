@@ -14,18 +14,17 @@ def CompileFramework(env, objs, headers, libs, framework_structure):
   libs = ['opengl32','glu32','dinput','dxguid','winmm','freetype235','jpeg6b']
   app_env.Append(LIBS = libs, LIBPATH = ['Glop/cygwin/lib'])
   lib = app_env.Library('GlopDbg.a', objs)
-  header_directory = os.path.join(os.path.dirname(lib[0].get_abspath()[len(env['PROJECT_ROOT']):]), 'Glop')
-  
+  header_directory = os.path.join(os.path.dirname(lib[0].get_abspath()), 'Glop')
+ 
   app_env.Append(CPPFLAGS = ['-mno-cygwin'])
   app_env.Append(LINKFLAGS = ['-mno-cygwin'])
   app_env.Append(CXXFLAGS = ['-mno-cygwin'])
   
   if cyg_debug:
     app_env.Append(CXXFLAGS = ['-g'], LINKFLAGS = ['-g'])
-  
   for header in headers:
-    h = os.path.join(header_directory, header.get_abspath()[len(env['PROJECT_ROOT']):])
-    app_env.Command(h, header, SCons.Defaults.Copy('$TARGET','$SOURCE'))
+    h = os.path.join(header_directory, str(header)[len('source/'):])
+    app_env.Command(h, str(header), SCons.Defaults.Copy('$TARGET','$SOURCE'))
   return lib
 
 def Application(env, target, source, resources = [], frameworks = []):
