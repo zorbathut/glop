@@ -868,11 +868,11 @@ void TableFrame::RecomputeSize(int rec_width, int rec_height) {
 // ============
 
 void RecWidthFrame::RecomputeSize(int rec_width, int rec_height) {
-  float w = GetWindow()->GetWidth() / rec_width_override_;
+  float w = GetWindow()->GetWidth() * rec_width_override_;
   if (aspect_ratio_ != -1)
     SingleParentFrame::RecomputeSize(int(w), int(w / aspect_ratio_));
   else
-    SingleParentFrame::RecomputeSize(int(w), rec_width);
+    SingleParentFrame::RecomputeSize(int(w), rec_height);
 }
 
 void RecHeightFrame::RecomputeSize(int rec_width, int rec_height) {
