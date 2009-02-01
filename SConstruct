@@ -30,7 +30,7 @@ global_env = scons_utils.AppendOsParams(global_env)
 
 # Compile all projects.  The only requirement here is that Glop be first in the list, since the
 # other projects reference it.
-for project in ['Glop', 'Tests', 'CloneChu']: #, 'Maze']: #, 'FactoryFun']:
+for project in ['Glop', 'Tests']: # 'CloneChu']: #, 'Maze']: #, 'FactoryFun']:
   variant = os.path.join(os.getcwd(), 'build-%s-%s' % (GetOption('compile-mode'), project) + os.sep)
   env = global_env.Clone()
   Export('env')
