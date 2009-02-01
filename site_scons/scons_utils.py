@@ -229,16 +229,16 @@ def AppendOsParams(env):
 
 
   os_params = platform.uname()
-  if os_params[0] not in ['Darwin', 'Windows', 'CYGWIN_NT-5.2-WOW64']: # BAM
-    print 'Operating system "' + os_params[0] + '" was unrecognized.'
-    Exit(1)
 
   if os_params[0] == 'Darwin':
     import osx as operating_system
-  if os_params[0] == 'Windows':
+  elif os_params[0] == 'Windows':
     import win32 as operating_system
-  if os_params[0] == 'CYGWIN_NT-5.2-WOW64':
+  elif os_params[0].startswith('CYGWIN'):
     import cygwin as operating_system
+  else:
+    print 'Operating system "' + os_params[0] + '" was unrecognized.'
+    Exit(1)
 
   operating_system.AppendOsParams(env)
 
