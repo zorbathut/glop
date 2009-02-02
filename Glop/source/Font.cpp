@@ -11,21 +11,19 @@ using namespace std;
 // FontOutline
 // ===========
 
-FontOutline *FontOutline::Load(BinaryFileReader reader) {
-  // First make sure the file is valid
-  if (!reader.IsOpen())
+FontOutline *FontOutline::Load(InputStream input) {
+  if (!input.IsValid())
     return 0;
 
   // Load the font face, and make sure it is a scalable font
-  int data_length = reader.GetLength();
-  unsigned char *data = new unsigned char[data_length];
+  unsigned char *data;
+  int data_length = input.ReadAllData((void**)&data);
   FT_Face face = 0;
-  if (reader.ReadChars(data_length, data) < data_length ||
-      FT_New_Memory_Face((FT_Library)FreeTypeLibrary::Get(), data, data_length, 0, &face) ||
+  if (FT_New_Memory_Face((FT_Library)FreeTypeLibrary::Get(), data, data_length, 0, &face) ||
       !FT_IS_SCALABLE(face)) {
     if (face != 0)
       FT_Done_Face(face);
-    delete[] data;
+    free(data);
     return 0;
   } else {
     return new FontOutline(data, face);
@@ -38,7 +36,7 @@ FontOutline::~FontOutline() {
   ASSERT(bm_map->size() == 0);
   delete bm_map;
   FT_Done_Face((FT_Face)face_);
-  delete[] data_;
+  free(data_);
 }
 
 FontBitmap *FontOutline::AddRef(int size, unsigned int flags) const {
@@ -242,8 +240,8 @@ FontBitmap::~FontBitmap() {
 // Font
 // ====
 
-Font *Font::Load(BinaryFileReader reader) {
-  FontOutline *outline = FontOutline::Load(reader);
+Font *Font::Load(InputStream input) {
+  FontOutline *outline = FontOutline::Load(input);
   return (outline != 0? new Font(outline, true) : 0);
 }
 
@@ -423,10 +421,10 @@ TextRenderer::~TextRenderer() {
 // GradientFont
 // ============
 
-GradientFont *GradientFont::Load(BinaryFileReader reader, float top_brightness,
-                                 float bottom_brightness, const vector<float> &mid_pos,
+GradientFont *GradientFont::Load(InputStream input, float top_brightness, float bottom_brightness,
+                                 const vector<float> &mid_pos,
                                  const vector<float> &mid_brightness) {
-  FontOutline *outline = FontOutline::Load(reader);
+  FontOutline *outline = FontOutline::Load(input);
   return (outline != 0? new GradientFont(outline, true, top_brightness, bottom_brightness,
                                          mid_pos, mid_brightness) : 0);
 }
@@ -535,9 +533,9 @@ void GradientFont::GetColors(const FontBitmap *bitmap, int y1, int y2, vector<in
 // ShadowFont
 // ==========
 
-ShadowFont *ShadowFont::Load(BinaryFileReader reader, float shadow_dx, float shadow_dy,
+ShadowFont *ShadowFont::Load(InputStream input, float shadow_dx, float shadow_dy,
                              float shadow_brightness) {
-  FontOutline *outline = FontOutline::Load(reader);
+  FontOutline *outline = FontOutline::Load(input);
   return (outline != 0?
     new ShadowFont(outline, true, shadow_dx, shadow_dy, shadow_brightness) : 0);
 }

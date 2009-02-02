@@ -1,3 +1,6 @@
+// BEING DEPRECATED: This is too specific to stuff I (David) wrote for CloneChu. See Stream.h.
+//                   Once everything is ported to Stream, I will delete this.
+//
 // Utilities for reading and wrriting binary data files, supporting "chunk lists", a recursive
 // mechanism for consolidating multiple files into one.
 //
