@@ -22,6 +22,7 @@ env.BuildObjects(
     'Image.cpp',
     'Thread.cpp',
     'Sound.cpp',
+    'Stream.cpp',
   ],
   headers = [
     'Base.h',
@@ -43,6 +44,7 @@ env.BuildObjects(
     'Thread.h',
     'Utils.h',
     'Sound.h',
+    'Stream.h',
   ],
   libs = [
     'freetype235',
