@@ -37,7 +37,7 @@ def Application(env, target, source, resources = [], frameworks = []):
   app_env.Append(LINKFLAGS = ['-mno-cygwin'])
   app_env.Append(CXXFLAGS = ['-mno-cygwin'])
   
-  l = ['kernel32','user32','gdi32','winspool','comdlg32','advapi32','shell32','ole32','oleaut32','uuid','odbc32','odbccp32', 'opengl32', 'freetype', 'jpeg', 'glu32', 'msvcrt', 'dinput', 'dxguid', 'fmodex', 'winmm']
+  l = ['kernel32','user32','gdi32','winspool','comdlg32','advapi32','shell32','ole32','oleaut32','uuid','odbc32','odbccp32', 'opengl32', 'freetype', 'jpeg', 'glu32', 'dinput', 'dxguid', 'fmodex', 'winmm']
   app_env.Append(LIBS = ["GlopDbg"] + l)
   app_env.Append(LIBPATH = [os.path.dirname(Glop.get_abspath())])
   app_env.Append(LIBPATH = ["../Glop/cygwin/lib"])

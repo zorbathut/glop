@@ -28,8 +28,8 @@
 
 // Includes
 #include "Base.h"
-#include "BinaryFileManager.h"
 #include "Color.h"
+#include "Stream.h"
 #include <vector>
 using namespace std;
 
@@ -51,7 +51,7 @@ const unsigned int kFontUnderline = 4;
 class FontOutline {
  public:
   // Loads a TrueType font from disk. Returns 0 on failure.
-  static FontOutline *Load(BinaryFileReader reader);
+  static FontOutline *Load(InputStream input);
   ~FontOutline();
 
   // Allocate or free a FontBitmap for the given size and flags. Note a user does not delete
@@ -123,7 +123,7 @@ class FontBitmap {
 class Font {
  public:
   // Font creation, deletion
-  static Font *Load(BinaryFileReader reader);
+  static Font *Load(InputStream input);
   Font(FontOutline *outline);
   virtual ~Font();
 
@@ -223,18 +223,16 @@ class GradientFont: public Font {
   // coordinates are between -1 and 1 with -1 representing the bottom, 1 representing the top, and
   // 0 representing the baseline. All positions must be listed from top to bottom (i.e. ordered
   // by increasing value).
-  static GradientFont *Load(BinaryFileReader reader, float top_brightness,
-                            float bottom_brightness) {
-    return Load(reader, top_brightness, bottom_brightness, vector<float>(0), vector<float>(0));
+  static GradientFont *Load(InputStream input, float top_brightness, float bottom_brightness) {
+    return Load(input, top_brightness, bottom_brightness, vector<float>(0), vector<float>(0));
   }
-  static GradientFont *Load(BinaryFileReader reader, float top_brightness,
-                            float bottom_brightness, float mid_pos, float mid_brightness) {
-    return Load(reader, top_brightness, bottom_brightness, vector<float>(1, mid_pos),
+  static GradientFont *Load(InputStream input, float top_brightness, float bottom_brightness,
+                            float mid_pos, float mid_brightness) {
+    return Load(input, top_brightness, bottom_brightness, vector<float>(1, mid_pos),
                 vector<float>(1, mid_brightness));
   }
-  static GradientFont *Load(BinaryFileReader reader, float top_brightness,
-                            float bottom_brightness, const vector<float> &mid_pos,
-                            const vector<float> &mid_brightness);
+  static GradientFont *Load(InputStream input, float top_brightness, float bottom_brightness,
+                            const vector<float> &mid_pos, const vector<float> &mid_brightness);
   GradientFont(FontOutline *outline, float top_brightness, float bottom_brightness);
   GradientFont(FontOutline *outline, float top_brightness, float bottom_brightness, float mid_pos,
                float mid_brightness);
@@ -267,7 +265,7 @@ class ShadowFont: public Font {
   //  shadow_dx, shadow_dy: The location of the shadow with respect to the main character. All
   //                        values are fractions of the font Ascent.
   //  shadow_brightness: How bright the shadow is. Ranges from 0 to 1.
-  static ShadowFont *Load(BinaryFileReader reader, float shadow_dx = 0, float shadow_dy = -0.05f,
+  static ShadowFont *Load(InputStream input, float shadow_dx = 0, float shadow_dy = -0.05f,
                           float shadow_brightness = 0.0f);
   ShadowFont(FontOutline *outline, float shadow_dx = 0, float shadow_dy = -0.05f,
              float shadow_brightness = 0.05f)
