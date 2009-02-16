@@ -77,11 +77,11 @@ class FontBitmap {
   //      the baseline before the next character is rendered. Note this may be both larger or
   //      smaller than x2 (e.g. ' ' or perhaps 'T').
   //  ascent/descent: The largest distance a character goes above/below the base-line.
-  int GetX1(char ch) const {return char_x1_[ch];}
-  int GetY1(char ch) const {return char_y1_[ch];}
-  int GetX2(char ch) const {return char_x2_[ch];}
-  int GetY2(char ch) const {return char_y2_[ch];}
-  int GetDx(char ch) const {return char_dx_[ch];}
+  int GetX1(unsigned char ch) const {return char_x1_[ch];}
+  int GetY1(unsigned char ch) const {return char_y1_[ch];}
+  int GetX2(unsigned char ch) const {return char_x2_[ch];}
+  int GetY2(unsigned char ch) const {return char_y2_[ch];}
+  int GetDx(unsigned char ch) const {return char_dx_[ch];}
   int GetAscent() const {return ascent_;}
   int GetDescent() const {return descent_;}
 

@@ -475,8 +475,8 @@ class MenuView {
 class DefaultMenuView: public MenuView {
  public:
   DefaultMenuView(Font *font, const TextPromptView *text_prompt_view)
-  : text_prompt_view_(text_prompt_view),
-    text_style_(kDefaultTextColor, kDefaultTextHeight, font, 0),
+  : text_style_(kDefaultTextColor, kDefaultTextHeight, font, 0),
+    text_prompt_view_(text_prompt_view),
     selection_color_(kDefaultMenuSelectionColor),
     selection_color_no_focus_(kDefaultMenuSelectionColorNoFocus) {}
 
@@ -541,9 +541,11 @@ class DefaultDialogView: public DialogView {
                     const WindowView *window_view,
                     const ButtonView *button_view,
                     const SliderView *slider_view, Font *font)
-  : input_box_view_(input_box_view), text_prompt_view_(text_prompt_view),
+  : input_box_view_(input_box_view),
+    button_view_(button_view), 
+    slider_view_(slider_view),
+    text_prompt_view_(text_prompt_view),
     window_view_(window_view),
-    button_view_(button_view), slider_view_(slider_view),
     text_style_(kDefaultTextColor, kDefaultTextHeight, font, 0),
     button_text_style_(kDefaultButtonTextColor, kDefaultTextHeight, font, 0),
     vert_justify_(kDefaultDialogVertJustify), rec_width_(kDefaultDialogRecWidth),
