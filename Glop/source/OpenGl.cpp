@@ -8,8 +8,8 @@
 // Texture class
 // =============
 
-Texture *Texture::Load(BinaryFileReader reader, int mag_filter, int min_filter) {
-  Image *image = Image::Load(reader);
+Texture *Texture::Load(InputStream input, int mag_filter, int min_filter) {
+  Image *image = Image::Load(input);
   if (image == 0)
     return 0;
   Texture *texture = new Texture(image, mag_filter, min_filter);
@@ -17,9 +17,9 @@ Texture *Texture::Load(BinaryFileReader reader, int mag_filter, int min_filter) 
   return texture;
 }
 
-Texture *Texture::Load(BinaryFileReader reader, const Color &bg_color, int bg_tolerance,
+Texture *Texture::Load(InputStream input, const Color &bg_color, int bg_tolerance,
                        int mag_filter, int min_filter) {
-  Image *image = Image::Load(reader, bg_color, bg_tolerance);
+  Image *image = Image::Load(input, bg_color, bg_tolerance);
   if (image == 0)
     return 0;
   Texture *texture = new Texture(image, mag_filter, min_filter);

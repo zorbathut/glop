@@ -16,10 +16,9 @@
 
 // Includes
 #include "Base.h"
-#include "BinaryFileManager.h"
+#include "Stream.h"
 
 // Class declarations
-class BinaryFileReader;
 class Color;
 
 // Image class definition
@@ -37,8 +36,8 @@ class Image {
   // Format 5: The image is a rescaled version of the given image.
   Image(int width, int height, int bpp);
   Image(unsigned char *data, int width, int height, int bpp);
-  static Image *Load(BinaryFileReader reader);
-  static Image *Load(BinaryFileReader reader, const Color &bg_color, int bg_tolerance);
+  static Image *Load(InputStream input);
+  static Image *Load(InputStream input, const Color &bg_color, int bg_tolerance);
   static Image *AdjustedImage(const Image *image, int new_width, int new_height, int new_bpp);
   ~Image() {delete[] data_;}
 
@@ -64,14 +63,14 @@ class Image {
   // Image initialization
   static unsigned int NextPow2(unsigned int n);
   void SmoothTransparentColors();
-  static bool IsBmp(BinaryFileReader reader);
-  static Image *LoadBmp(BinaryFileReader reader);
-  static bool IsGif(BinaryFileReader reader);
-  static Image *LoadGif(BinaryFileReader reader);
-  static bool IsJpg(BinaryFileReader reader);
-  static Image *LoadJpg(BinaryFileReader reader);
-  static bool IsTga(BinaryFileReader reader);
-  static Image *LoadTga(BinaryFileReader reader);
+  static bool IsBmp(InputStream input);
+  static Image *LoadBmp(InputStream input);
+  static bool IsGif(InputStream input);
+  static Image *LoadGif(InputStream input);
+  static bool IsJpg(InputStream input);
+  static Image *LoadJpg(InputStream input);
+  static bool IsTga(InputStream input);
+  static Image *LoadTga(InputStream input);
 
   unsigned char *data_;
   int width_, height_;

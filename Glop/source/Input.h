@@ -370,7 +370,7 @@ class KeyListener {
   KeyListener(bool begin_listening = true): listener_id_(0) {
     if (begin_listening) BeginKeyListening();
   }
-  ~KeyListener() {StopKeyListening();}
+  virtual ~KeyListener() {StopKeyListening();}
 
  protected:
   // Overload this function to take action on a KeyEvent.

@@ -1,6 +1,6 @@
-#include "Image.h"
-#include "BinaryFileManager.h"
 #include "Color.h"
+#include "Image.h"
+#include "Stream.h"
 extern "C" {
 #include "jpeglib/jpeglib.h"
 }
@@ -47,23 +47,23 @@ Image::Image(unsigned char *data, int width, int height, int bpp)
   }
 }
 
-Image *Image::Load(BinaryFileReader reader) {
-  if (!reader.IsOpen())
+Image *Image::Load(InputStream input) {
+  if (!input.IsValid())
     return 0;
-  if (IsBmp(reader))
-    return LoadBmp(reader);
-  if (IsGif(reader))
-    return LoadGif(reader);
-  if (IsJpg(reader))
-    return LoadJpg(reader);
-  if (IsTga(reader))
-    return LoadTga(reader);
+  if (IsBmp(input))
+    return LoadBmp(input);
+  if (IsGif(input))
+    return LoadGif(input);
+  if (IsJpg(input))
+    return LoadJpg(input);
+  if (IsTga(input))
+    return LoadTga(input);
   return 0;
 }
 
-Image *Image::Load(BinaryFileReader reader, const Color &bg_color, int bg_tolerance) {
+Image *Image::Load(InputStream input, const Color &bg_color, int bg_tolerance) {
   // First load the image normally (but in 32 bit format)
-  Image *result = Load(reader);
+  Image *result = Load(input);
   if (result == 0)
     return 0;
 
@@ -147,7 +147,7 @@ unsigned int Image::NextPow2(unsigned int n) {
 // lead to borders around the image. To prevent that, we use this function to set transparent pixel
 // colors to be the average of the non-transparent colors around the pixel.
 void Image::SmoothTransparentColors() {
-  ASSERT (bpp_ == 16 || bpp_ == 32);
+  ASSERT(bpp_ == 16 || bpp_ == 32);
   int w = internal_width_, h = internal_height_, ai = (bpp_ / 8) - 1;
   for (int y = 0; y < h; y++)
   for (int x = 0; x < w; x++) {
@@ -170,18 +170,16 @@ void Image::SmoothTransparentColors() {
 // Bmp loading
 // ===========
 
-// Returns whether a reader is pointing to a BMP file. The file pointer location is not changed.
-bool Image::IsBmp(BinaryFileReader reader) {
-  int start_offset = reader.Tell();
+// Returns whether a input is pointing to a BMP file. The file pointer location is not changed.
+bool Image::IsBmp(InputStream input) {
   char tag[2];
-  bool is_bmp = (reader.ReadChars(2, tag) == 2 && tag[0] == 'B' && tag[1] == 'M');
-  reader.Seek(start_offset, BinaryFileReader::Start);
+  bool is_bmp = (input.LookAheadReadChars(0, 2, tag) == 2 && tag[0] == 'B' && tag[1] == 'M');
   return is_bmp;
 }
 
 // Loads a BMP file. Supports 1, 4, 8, 16, 24, and 32 bit uncompressed pixels.
 // Adapted from the SDL image library.
-Image *Image::LoadBmp(BinaryFileReader reader) {
+Image *Image::LoadBmp(InputStream input) {
   const int kRgb = 0;
   const int kRle8 = 1;
   const int kRle4 = 2;
@@ -192,39 +190,38 @@ Image *Image::LoadBmp(BinaryFileReader reader) {
   Image *result = 0;                        // The return value
   unsigned char *palette = 0, *pixels = 0;  // Image data (palette is used if bpp <= 8)
   unsigned char *buffer = 0;                // A location to load a line of data into
-  int start_offset = reader.Tell();         // Where does the file begin?
 
   // Read the header
   char tag[2];
-  if (reader.ReadChars(2, tag) < 2 || tag[0] != 'B' || tag[1] != 'M')
+  if (input.ReadChars(2, tag) < 2 || tag[0] != 'B' || tag[1] != 'M')
     goto error;
-  reader.Seek(8, BinaryFileReader::Current);
+  input.SkipAhead(8);
   int image_start, header_size;
-  if (!reader.ReadInts(1, &image_start) ||
-      !reader.ReadInts(1, &header_size))
+  if (!input.ReadInts(1, &image_start) ||
+      !input.ReadInts(1, &header_size))
     goto error;
   int width, height, compression;
   short bpp;
 	if (header_size == 12) {
     unsigned short short_width, short_height;
-    if (!reader.ReadShorts(1, &short_width) ||
-        !reader.ReadShorts(1, &short_height))
+    if (!input.ReadShorts(1, &short_width) ||
+        !input.ReadShorts(1, &short_height))
       goto error;
     width = short_width;
     height = short_height;
-    reader.Seek(2, BinaryFileReader::Current);
-    if (!reader.ReadShorts(1, &bpp))
+    input.SkipAhead(2);
+    if (!input.ReadShorts(1, &bpp))
       goto error;
     compression = kRgb;
 	} else {
-    if (!reader.ReadInts(1, &width) ||
-        !reader.ReadInts(1, &height))
+    if (!input.ReadInts(1, &width) ||
+        !input.ReadInts(1, &height))
       return 0;
-    reader.Seek(2, BinaryFileReader::Current);
-    if (!reader.ReadShorts(1, &bpp) ||
-        !reader.ReadInts(1, &compression))
+    input.SkipAhead(2);
+    if (!input.ReadShorts(1, &bpp) ||
+        !input.ReadInts(1, &compression))
       return 0;
-    reader.Seek(20, BinaryFileReader::Current);
+    input.SkipAhead(20);
 	}
   if (bpp != 1 && bpp != 4 && bpp != 8 && bpp != 15 && bpp != 16 && bpp != 24 && bpp != 32)
     return 0;
@@ -263,8 +260,8 @@ Image *Image::LoadBmp(BinaryFileReader reader) {
 			// If there are masks or compression is not RGB, read the masks from the file
 		default:
       if (bpp == 15 || bpp == 16 || bpp == 32) {
-        if (!reader.ReadInts(1, &rmask) || !reader.ReadInts(1, &gmask) ||
-            !reader.ReadInts(1, &bmask) || !reader.ReadInts(1, &amask))
+        if (!input.ReadInts(1, &rmask) || !input.ReadInts(1, &gmask) ||
+            !input.ReadInts(1, &bmask) || !input.ReadInts(1, &amask))
           return 0;
       }
 	}
@@ -281,20 +278,20 @@ Image *Image::LoadBmp(BinaryFileReader reader) {
   if (bpp <= 8) {
     int colors_used = 1 << bpp;
     palette = (unsigned char*)malloc(768);
-    reader.Seek(start_offset + 14 + header_size, BinaryFileReader::Start);
+    input.SkipAhead(14 + header_size - input.GetPosition());
 		for (int i = 0; i < colors_used; i++) {
-      if (!reader.ReadChars(1, palette+3*i+2) ||
-          !reader.ReadChars(1, palette+3*i+1) ||
-          !reader.ReadChars(1, palette+3*i+0))
+      if (!input.ReadChars(1, palette+3*i+2) ||
+          !input.ReadChars(1, palette+3*i+1) ||
+          !input.ReadChars(1, palette+3*i+0))
         goto error;
-      if (header_size != 12 && !reader.ReadChars(1, tag)) // Dummy character
+      if (header_size != 12 && !input.ReadChars(1, tag)) // Dummy character
         goto error;
     }
 	}
 
 	// Read the pixel data, and convert it to RGB (or RGBA).
   // Note that the image is stored upside-down.
-  reader.Seek(start_offset + image_start, BinaryFileReader::Start);
+  input.SkipAhead(image_start - input.GetPosition());
   pixels = (unsigned char*)malloc(width * height * new_bpp / 8);
   if (compression == kRle4 || compression == kRle8) {
     int x = 0, y = height - 1;
@@ -302,11 +299,11 @@ Image *Image::LoadBmp(BinaryFileReader reader) {
     unsigned char ch, data, pixel;
     bool is_done = false;
     while (!is_done) {
-      if (!reader.ReadChars(1, &ch))
+      if (!input.ReadChars(1, &ch))
         goto error;
       if (ch > 0) {
         // Handle runs (with RLE4, it is a run of period 2 instead of period 1)
-        if (!reader.ReadChars(1, &data))
+        if (!input.ReadChars(1, &data))
           goto error;
         for (int i = 0; i < ch; i++) {
           if (compression == kRle4)
@@ -315,7 +312,7 @@ Image *Image::LoadBmp(BinaryFileReader reader) {
         }
 		  } else {
         // Handle escape copes
-        if (!reader.ReadChars(1, &ch))
+        if (!input.ReadChars(1, &ch))
           goto error;
 			  switch (ch) {
 			    case 0: // End of line
@@ -326,7 +323,7 @@ Image *Image::LoadBmp(BinaryFileReader reader) {
             is_done = true;
 				    break;
 			    case 2: // Warp
-            if (!reader.ReadChars(1, &dx) || !reader.ReadChars(1, &dy))
+            if (!input.ReadChars(1, &dx) || !input.ReadChars(1, &dy))
               goto error;
             x += dx;
             y -= dy;
@@ -336,19 +333,19 @@ Image *Image::LoadBmp(BinaryFileReader reader) {
 			    default: // Uncompressed data
             if (compression == kRle8) {
               for (int i = 0; i < ch; i++) {
-                if (!reader.ReadChars(1, &data))
+                if (!input.ReadChars(1, &data))
                   goto error;
                 memcpy(pixels + y*width*3 + (x++)*3, palette + data*3, 3);
               }
               if (ch % 2 == 1) {
-                if (!reader.ReadChars(1, &data))
+                if (!input.ReadChars(1, &data))
                   goto error;
               }
             } else {
               unsigned char data;
               for (int i = 0; i < ch; i++) {
                 if (i % 2 == 0) {
-                  if (!reader.ReadChars(1, &data))
+                  if (!input.ReadChars(1, &data))
                     goto error;
                 } else {
                   data *= 16;
@@ -357,7 +354,7 @@ Image *Image::LoadBmp(BinaryFileReader reader) {
                 memcpy(pixels + y*width*3 + (x++)*3, palette + pixel, 3);
               }
               if (((ch+1)/2) % 2 == 1) {
-                if (!reader.ReadChars(1, &data))
+                if (!input.ReadChars(1, &data))
                   goto error;
               }
             }
@@ -374,7 +371,7 @@ Image *Image::LoadBmp(BinaryFileReader reader) {
         int density = 8/bpp;
         int line_length = (width + (8 / bpp) - 1) / (8 / bpp);
         line_length += (4 - line_length % 4) % 4;
-        if (reader.ReadChars(line_length, buffer) < line_length)
+        if (input.ReadChars(line_length, buffer) < line_length)
           goto error;
         for (int x = 0; x < width; x++) {
           int offset = x / density;
@@ -388,7 +385,7 @@ Image *Image::LoadBmp(BinaryFileReader reader) {
         }
       } else {
         // Handle non-palettized RGB data
-        if (reader.ReadChars(width * bpp / 8, buffer) < width * bpp / 8)
+        if (input.ReadChars(width * bpp / 8, buffer) < width * bpp / 8)
           goto error;
         for (int x = 0; x < width; x++) {
           unsigned int *pixel = (unsigned int*)(buffer + x*(bpp/8));
@@ -416,18 +413,16 @@ error:
 // Gif loading
 // ===========
 
-// Returns whether a reader is pointing to a GIF file. The file pointer location is not changed.
-bool Image::IsGif(BinaryFileReader reader) {
-  int start_offset = reader.Tell();
+// Returns whether a input is pointing to a GIF file. The file pointer location is not changed.
+bool Image::IsGif(InputStream input) {
   unsigned char tag[6];
-  bool is_gif = (reader.ReadChars(6, tag) == 6 && memcmp(tag, "GIF", 3) == 0 &&
+  bool is_gif = (input.LookAheadReadChars(0, 6, tag) == 6 && memcmp(tag, "GIF", 3) == 0 &&
                  (memcmp(tag+3, "87a", 3) == 0 || (memcmp(tag+3, "89a", 3) == 0)));
-  reader.Seek(start_offset, BinaryFileReader::Start);
   return is_gif;
 }
 
 // Gif helper function - loads a value with the given number of bits from the file.
-static int LoadGifBits(BinaryFileReader &reader, unsigned char *buffer, int num_bits,
+static int LoadGifBits(InputStream &input, unsigned char *buffer, int num_bits,
                        int *buffer_pos, int *buffer_end) {
   if (*buffer_pos + num_bits >= *buffer_end) {
     if (*buffer_end >= 16)
@@ -435,14 +430,14 @@ static int LoadGifBits(BinaryFileReader &reader, unsigned char *buffer, int num_
     if (*buffer_end >= 8)
       buffer[1] = buffer[*buffer_end/8 - 1];
     unsigned char block_size;
-    if (!reader.ReadChars(1, &block_size))
+    if (!input.ReadChars(1, &block_size))
       return -1;
-    if (reader.ReadChars(block_size, buffer + 2) < block_size)
+    if (input.ReadChars(block_size, buffer + 2) < block_size)
       return -1;
     *buffer_pos = 16 - (*buffer_end - *buffer_pos);
     *buffer_end = 8 * (int(block_size) + 2);
   }
-  int value = 0;
+  unsigned int value = 0;
   for (int i = *buffer_pos, j = 0; j < num_bits; i++, j++)
 	  value |= (((buffer[i / 8] & (1 << (i % 8))) > 0) << j);
   *buffer_pos += num_bits;
@@ -451,7 +446,9 @@ static int LoadGifBits(BinaryFileReader &reader, unsigned char *buffer, int num_
 
 // Loads a GIF file.
 // Adapted from the SDL image library, which is, in turn, taken from XPaint.
-Image *Image::LoadGif(BinaryFileReader reader) {
+//
+// NOT CURRENTLY WORKING!
+Image *Image::LoadGif(InputStream input) {
   const int kMaxLwzBits = 12;
   unsigned char *palette = (unsigned char*)malloc(768), *pixels = 0;
   Image *result = 0;
@@ -461,60 +458,60 @@ Image *Image::LoadGif(BinaryFileReader reader) {
   unsigned char buffer[260];
   int transparent_index = -1;
   unsigned short width, height, bpp;
-  if (reader.ReadChars(6, buffer) < 6)
+  if (input.ReadChars(6, buffer) < 6)
     goto error;
   if (memcmp(buffer, "GIF", 3) != 0)
     goto error;
-  reader.Seek(4, BinaryFileReader::Current);
+  input.SkipAhead(4);
   unsigned char data;
-  if (!reader.ReadChars(1, &data))
+  if (!input.ReadChars(1, &data))
     goto error;
   bpp = 1 + (data % 8);
-  reader.Seek(2, BinaryFileReader::Current);
+  input.SkipAhead(2);
 
   // Read the global palette if it exists
   if ((data & 0x80) > 0) {
-    if (reader.ReadChars(3*(1<<bpp), palette) < 3*(1<<bpp))
+    if (input.ReadChars(3*(1<<bpp), palette) < 3*(1<<bpp))
       goto error;
   }
 
   // Read GIF data
   while (1) {
-    if (!reader.ReadChars(1, &data))
+    if (!input.ReadChars(1, &data))
       goto error;
     if (data == '!') {
       // Extension
-      if (!reader.ReadChars(1, &data))
+      if (!input.ReadChars(1, &data))
         goto error;
       if (data == 0xf9) { // Graphic control extension
-        if (!reader.ReadChars(1, &block_size))
+        if (!input.ReadChars(1, &block_size))
           goto error;
-        if (reader.ReadChars(block_size, buffer) < block_size)
+        if (input.ReadChars(block_size, buffer) < block_size)
           goto error;
         if (buffer[0] % 2 == 1)
           transparent_index = buffer[3];
       }
       do {
-        if (!reader.ReadChars(1, &block_size))
+        if (!input.ReadChars(1, &block_size))
           goto error;
-        if (reader.ReadChars(block_size, buffer) < block_size)
+        if (input.ReadChars(block_size, buffer) < block_size)
           goto error;
       } while (block_size > 0);
     } else if (data == ',') {
       // Image start - read the header and the local palette if it exists
-      reader.Seek(4, BinaryFileReader::Current);
-      if (!reader.ReadShorts(1, &width) || !reader.ReadShorts(1, &height) ||
-          !reader.ReadChars(1, &data))
+      input.SkipAhead(4);
+      if (!input.ReadShorts(1, &width) || !input.ReadShorts(1, &height) ||
+          !input.ReadChars(1, &data))
         goto error;
       if ((data & 0x80) > 0) {
         bpp = 1 + (data % 8);
-        if (reader.ReadChars(3*(1<<bpp), palette) < 3*(1<<bpp))
+        if (input.ReadChars(3*(1<<bpp), palette) < 3*(1<<bpp))
           goto error;
       }
       bool is_interlaced = (data & 0x40) > 0;
       int new_bpp = (transparent_index == -1? 24 : 32);
       unsigned char code_size;
-      if (!reader.ReadChars(1, &code_size))
+      if (!input.ReadChars(1, &code_size))
         return 0;
       pixels = (unsigned char*)malloc(width * height * new_bpp / 8);
       
@@ -529,7 +526,7 @@ Image *Image::LoadGif(BinaryFileReader reader) {
         if (stack_pos == -1) {
           while (1) {
             int code = (first_code == -1? clear_code :
-                        LoadGifBits(reader, buffer, code_size + 1, &buffer_pos, &buffer_end));
+                        LoadGifBits(input, buffer, code_size + 1, &buffer_pos, &buffer_end));
             if (code == -1)
               goto error;
             if (code == clear_code) {
@@ -542,7 +539,7 @@ Image *Image::LoadGif(BinaryFileReader reader) {
                 table[1][i] = (i < clear_code? i : 0);
 	            }
               do {
-                first_code = LoadGifBits(reader, buffer, code_size + 1, &buffer_pos, &buffer_end);
+                first_code = LoadGifBits(input, buffer, code_size + 1, &buffer_pos, &buffer_end);
                 if (first_code == -1)
                   goto error;
               } while (first_code == (1 << code_size));
@@ -635,13 +632,11 @@ error:
 // Jpg loading
 // ===========
 
-// Returns whether a reader is pointing to a JPG file. The file pointer location is not changed.
-bool Image::IsJpg(BinaryFileReader reader) {
-  int start_offset = reader.Tell();
+// Returns whether a input is pointing to a JPG file. The file pointer location is not changed.
+bool Image::IsJpg(InputStream input) {
   unsigned char tag[3];
-  bool is_jpg = (reader.ReadChars(3, tag) == 3 && tag[0] == 0xFF &&
+  bool is_jpg = (input.LookAheadReadChars(0, 3, tag) == 3 && tag[0] == 0xFF &&
                  tag[1] == 0xD8 && tag[2] == 0xFF);
-  reader.Seek(start_offset, BinaryFileReader::Start);
   return is_jpg;
 }
 
@@ -657,10 +652,41 @@ static void OnJpgErrorExit(j_common_ptr info) {
 }
 static void OnJpgErrorMessage(j_common_ptr info) {}
 
+// Called by jpeg_read_header before any data is read.
+void JpegMemoryInitSource(j_decompress_ptr info) {}
+
+// Fills the buffer when it's emptied. This should not happen for valid files in theory, but I
+// think it sometimes does. We just add an end of input marker.
+static unsigned char kEndOfInputBuffer[2] = {0xFF, JPEG_EOI};
+boolean JpegMemoryFillInputBuffer(j_decompress_ptr info) {
+  info->src->next_input_byte = kEndOfInputBuffer;
+  info->src->bytes_in_buffer = 2;
+  return TRUE;
+}
+
+// Skips over data
+void JpegMemorySkipInputData(j_decompress_ptr info, long num_bytes) {
+  if (num_bytes > 0) {
+    while (num_bytes > (long)info->src->bytes_in_buffer) {
+      num_bytes -= (long)info->src->bytes_in_buffer;
+      JpegMemoryFillInputBuffer(info);
+    }
+    info->src->next_input_byte += (size_t)num_bytes;
+    info->src->bytes_in_buffer -= (size_t)num_bytes;
+  }
+}
+
+// Called by jpeg_finish_decompress
+void JpegMemoryTerminateSource(j_decompress_ptr info) {}
+
+void JpegMemorySource(j_decompress_ptr info, const unsigned char *buffer, int buffer_size) {}
+
 // Loads a JPG file using jpeglib.
-Image *Image::LoadJpg(BinaryFileReader reader) {
+Image *Image::LoadJpg(InputStream input) {
   unsigned char *pixels = 0;
   Image *result = 0;
+  unsigned char *compressed_data = 0;
+  int compressed_data_length;
   jpeg_decompress_struct info;
 
   // Set up the error handler. If jpeglib runs into an error at any future point, it will
@@ -672,9 +698,21 @@ Image *Image::LoadJpg(BinaryFileReader reader) {
   if (setjmp(error_manager.jump_location))
     goto error;
 
-  // Load the jpg image
-	jpeg_create_decompress(&info);
-  jpeg_stdio_src(&info, (FILE*)reader.GetFilePointer());
+  // Set up the memory source
+  jpeg_create_decompress(&info);
+  compressed_data_length = input.ReadAllData((void**)&compressed_data);
+  jpeg_source_mgr *source_manager = (jpeg_source_mgr*)
+    (*info.mem->alloc_small) ((j_common_ptr)&info, JPOOL_PERMANENT, sizeof(jpeg_source_mgr));
+  source_manager->init_source = JpegMemoryInitSource;
+  source_manager->fill_input_buffer = JpegMemoryFillInputBuffer;
+  source_manager->skip_input_data = JpegMemorySkipInputData;
+  source_manager->resync_to_restart = jpeg_resync_to_restart;
+  source_manager->term_source = JpegMemoryTerminateSource;
+  source_manager->next_input_byte = compressed_data;
+  source_manager->bytes_in_buffer = compressed_data_length;
+  info.src = source_manager;
+
+  // Decompress the jpg image
 	jpeg_read_header(&info, true);
   jpeg_start_decompress(&info);
 	int width = info.image_width;
@@ -693,39 +731,40 @@ Image *Image::LoadJpg(BinaryFileReader reader) {
 error:
   if (pixels != 0)
     free(pixels);
+  if (compressed_data != 0)
+    free(compressed_data);
   jpeg_destroy_decompress(&info);
   return result;
+  return 0;
 }
 
 // Tga loading
 // ===========
 
-bool Image::IsTga(BinaryFileReader reader) {
-  int start_offset = reader.Tell();
+bool Image::IsTga(InputStream input) {
   unsigned char tag[3];
-  bool is_tga = (reader.ReadChars(3, tag) == 3 && tag[1] == 0 &&
+  bool is_tga = (input.LookAheadReadChars(0, 3, tag) == 3 && tag[1] == 0 &&
                  (tag[2] == 2 || tag[2] == 10));
-  reader.Seek(start_offset, BinaryFileReader::Start);
   return is_tga;
 }
 
-Image *Image::LoadTga(BinaryFileReader reader) {
+Image *Image::LoadTga(InputStream input) {
   // Read header data
-  int header_to_data_offset = reader.ReadChar();
-  reader.Seek(1, BinaryFileReader::Current);
-  bool is_compressed = (reader.ReadChar() == 10);
-  reader.Seek(9, BinaryFileReader::Current);
-  int width = reader.ReadShort();
-  int height = reader.ReadShort();
-  int bpp = reader.ReadChar();
+  int header_to_data_offset = input.ReadChar();
+  input.SkipAhead(1);
+  bool is_compressed = (input.ReadChar() == 10);
+  input.SkipAhead(9);
+  int width = input.ReadShort();
+  int height = input.ReadShort();
+  int bpp = input.ReadChar();
   int bytes_per_row = ((width*(bpp/8)+3)/4)*4;
-  reader.Seek(header_to_data_offset + 1, BinaryFileReader::Current); 
+  input.SkipAhead(header_to_data_offset + 1); 
 
   // Read an uncompressed image
   unsigned char *pixels = new unsigned char[height*bytes_per_row];
   if (!is_compressed) {
     // Read the data
-    if (reader.ReadChars(height * width * bpp/8, pixels) != height*width*bpp/8) {
+    if (input.ReadChars(height * width * bpp/8, pixels) != height*width*bpp/8) {
       delete pixels;
       return 0;
     }
@@ -743,12 +782,12 @@ Image *Image::LoadTga(BinaryFileReader reader) {
     int pos = 0, data;
     char new_color[4];
     while (pos < width*height) {
-      data = reader.ReadChar();
+      data = input.ReadChar();
 
       // Handle non-encoded data
       if (data < 128) {
         for (int i = 0; i <= data; i++) {
-          reader.ReadChars(bpp/8, new_color);
+          input.ReadChars(bpp/8, new_color);
           if (bpp >= 24) {
             char temp = new_color[0];
             new_color[0] = new_color[2];
@@ -761,7 +800,7 @@ Image *Image::LoadTga(BinaryFileReader reader) {
 
       // Handle encoded data
       else {
-        reader.ReadChars(bpp/8, new_color);
+        input.ReadChars(bpp/8, new_color);
         if (bpp >= 24) {
           char temp = new_color[0];
           new_color[0] = new_color[2];

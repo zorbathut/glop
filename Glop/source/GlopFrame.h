@@ -156,7 +156,7 @@
 // especially for GUI controls, to make a GlopFrame react directly to the user or otherwise perform
 // logic.
 //
-// The simplest mechanism for thos is to override Think. This is called once per rendering cycle,
+// The simplest mechanism for this is to override Think. This is called once per rendering cycle,
 // and it is given the number of milliseconds that have elapsed since the last call. For example, we
 // could make TestFrame have pulsating yellow lines by adding this:
 //
