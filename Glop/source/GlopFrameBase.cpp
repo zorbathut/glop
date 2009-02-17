@@ -25,13 +25,25 @@ GlopFrame::GlopFrame()
   clip_y1_(kClipMinusInfinity),
   clip_x2_(kClipInfinity),
   clip_y2_(kClipInfinity),
-  focus_frame_(0) {
+  focus_frame_(0),
+  shown_(true) {
   DirtySize();
 }
 
 GlopFrame::~GlopFrame() {
   ASSERT(GetParent() == 0);
   GlopWindow::UnregisterAllPings(this);
+}
+
+void GlopFrame::Show() {
+  shown_ = true;
+}
+void GlopFrame::Hide() {
+  shown_ = false;
+}
+
+bool GlopFrame::IsShown() const {
+  return shown_;
 }
 
 // Marks that this frame needs its size recomputed. The parent must also recompute its size
@@ -165,9 +177,11 @@ string SingleParentFrame::GetContextStringHelper(bool extend_down, bool extend_u
 // the clipping rectangle.
 void MultiParentFrame::Render() const {
   for (List<GlopFrame*>::const_iterator it = children_.begin(); it != children_.end(); ++it) {
-    int x = (*it)->GetX(), y = (*it)->GetY(), w = (*it)->GetWidth(), h = (*it)->GetHeight();
-    if (x+w > clip_x1_ && y+h > clip_y1_ && x <= clip_x2_ && y <= clip_y2_)
-      (*it)->Render();
+    if ((*it)->IsShown()) {
+      int x = (*it)->GetX(), y = (*it)->GetY(), w = (*it)->GetWidth(), h = (*it)->GetHeight();
+      if (x+w > clip_x1_ && y+h > clip_y1_ && x <= clip_x2_ && y <= clip_y2_)
+        (*it)->Render();
+    }
   }
 }
 
@@ -467,8 +481,11 @@ void TableauFrame::Render() const {
       child_pos_[ordered_children_[i]].order_pos = i;
     order_dirty_ = false;
   }
-  for (int i = 0; i < (int)ordered_children_.size(); i++)
-    GetChild(ordered_children_[i])->Render();
+  for (int i = 0; i < (int)ordered_children_.size(); i++) {
+    const GlopFrame *frame = GetChild(ordered_children_[i]);
+    if (frame->IsShown())
+      frame->Render();
+  }
 }
 
 // Adds a child at the given position. We use the fact that the id obtained by inserting into
