@@ -62,7 +62,9 @@ class InputStreamController {
 // InputStream class definition
 class InputStream {
  public:
-  // Constructors / destructor
+  // Constructors / destructor. If constructed with a controller, that controller will be deleted
+  // should the reference count hit 0. Therefore, a line like new InputStream(new XController()) is
+  // perfectly fine.
   InputStream(const string &filename);
   InputStream(const char *filename);
   InputStream(const InputStream &rhs): controller_(rhs.controller_) {
@@ -217,6 +219,27 @@ class FileInputStreamController: public InputStreamController {
  private:
   FILE *file_pointer_;
   DISALLOW_EVIL_CONSTRUCTORS(FileInputStreamController);
+};
+
+class MemoryInputStreamController: public InputStreamController {
+ public:
+  MemoryInputStreamController(void *data, int num_bytes, bool auto_delete_data);
+  virtual ~MemoryInputStreamController();
+
+  virtual bool IsValid() const {return data_ != 0;}
+
+  virtual int GetPosition() const {return pos_;}
+  virtual int GetLength() const {return num_bytes_;}
+
+  virtual bool SkipAhead(int bytes);
+  virtual int ReadData(int record_size, int count, void *data);
+  virtual int LookAheadReadData(int offset, int record_size, int count, void *data);
+
+ private:
+  unsigned char *data_;
+  int pos_, num_bytes_;
+  bool auto_delete_data_;
+  DISALLOW_EVIL_CONSTRUCTORS(MemoryInputStreamController);
 };
 
 #endif  // INPUT_STREAM_H__

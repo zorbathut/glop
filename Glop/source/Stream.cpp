@@ -248,3 +248,42 @@ int FileInputStreamController::LookAheadReadData(int offset, int record_size, in
   fseek(file_pointer_, pos, SEEK_SET);
   return result;
 }
+
+// MemoryInputStreamController
+// ===========================
+
+MemoryInputStreamController::MemoryInputStreamController(void *data, int num_bytes,
+                                                         bool auto_delete_data)
+: data_((unsigned char*)data), pos_(0), num_bytes_(num_bytes),
+  auto_delete_data_(auto_delete_data) {}
+
+MemoryInputStreamController::~MemoryInputStreamController() {
+  if (auto_delete_data_ && data_ != 0)
+    free(data_);
+}
+
+bool MemoryInputStreamController::SkipAhead(int bytes) {
+  if (pos_ + bytes <= num_bytes_) {
+    pos_ += bytes;
+    return true;
+  } else {
+    pos_ = num_bytes_;
+    return false;
+  }
+}
+
+int MemoryInputStreamController::ReadData(int record_size, int count, void *data) {
+  int records = min((num_bytes_ - pos_ + 1) / record_size, count);
+  memcpy(data, data_ + pos_, record_size * records);
+  pos_ += record_size * records;
+  return records;
+}
+
+int MemoryInputStreamController::LookAheadReadData(int offset, int record_size,
+                                                   int count, void *data) {
+  int old_pos = pos_;
+  SkipAhead(offset);
+  int result = ReadData(record_size, count, data);
+  pos_ = old_pos;
+  return result;
+}

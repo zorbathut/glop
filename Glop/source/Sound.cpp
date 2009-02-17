@@ -3,7 +3,6 @@
 #include "System.h"
 #include "fmod/fmod.hpp"
 
-/*
 // Globals
 static SoundManager *gSoundManager = 0;
 SoundManager *sound_manager() {return system()->sound_manager();}
@@ -43,14 +42,13 @@ bool SoundSource::IsStopped() const {
 // SoundSample
 // ===========
 
-SoundSample *SoundSample::Load(BinaryFileReader reader, bool store_compressed, float base_volume) {
+SoundSample *SoundSample::Load(InputStream in, bool store_compressed, float base_volume) {
   // Load the data into memory - we could eventually switch to using extra_info.fileoffset or
   // FMOD_OPENUSER mode instead but this is good for now.
-  if (!reader.IsOpen() || !sound_manager()->IsInitialized())
+  if (!in.IsValid() || !sound_manager()->IsInitialized())
     return 0;
-  int length = reader.GetLength();
-  char *data = new char[length];
-  reader.ReadChars(length, data);
+  char *data;
+  int length = in.ReadAllData((void**)&data);
 
   // Attempt to create the sound
   FMOD::Sound *sound;
@@ -126,7 +124,6 @@ SoundManager::SoundManager()
       goto error;
     if (system_->init(kNumChannels, FMOD_INIT_NORMAL, 0) != FMOD_OK)
       goto error;
-    }
   }
 
   // Success
@@ -177,8 +174,3 @@ void SoundManager::StopAllSources() {
     }
   }
 }
-*/
-
-void SoundManager::Think() { }
-SoundManager::SoundManager() { }
-SoundManager::~SoundManager() { }
