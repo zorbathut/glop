@@ -3,7 +3,6 @@
 
 // Includes
 #include "Base.h"
-#include "BinaryFileManager.h"
 #include <vector>
 
 // Class declarations
