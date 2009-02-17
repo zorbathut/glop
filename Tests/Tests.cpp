@@ -17,17 +17,17 @@
 //  - Directly closing the console can crash?
 
 // Includes
--#include <Glop/Base.h>
--#include <Glop/Font.h>
--#include <Glop/GlopFrame.h>
--#include <Glop/GlopWindow.h>
--#include <Glop/Image.h>
--#include <Glop/Input.h>
--#include <Glop/OpenGl.h>
--#include <Glop/System.h>
--#include <Glop/Thread.h>
--#include <Glop/glop3d/Camera.h>
--#include <Glop/glop3d/Mesh.h>
+#include <Glop/Base.h>
+#include <Glop/Font.h>
+#include <Glop/GlopFrame.h>
+#include <Glop/GlopWindow.h>
+#include <Glop/Image.h>
+#include <Glop/Input.h>
+#include <Glop/OpenGl.h>
+#include <Glop/System.h>
+#include <Glop/Thread.h>
+#include <Glop/glop3d/Camera.h>
+#include <Glop/glop3d/Mesh.h>
 
 // Constants
 const string kTitle = "Glop Tests";
