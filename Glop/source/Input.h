@@ -97,7 +97,7 @@ const int kMinDevice = -3;
 // To create a GlopKey, use the static methods and constants below.
 struct GlopKey {
   // Constructor
-  GlopKey(int _index = -2, int _device = kDeviceKeyboard): device(_device), index(_index) {}
+  GlopKey(int _index = -2, int _device = kDeviceKeyboard): index(_index), device(_device) {}
   short index, device;
 
   // Comparators

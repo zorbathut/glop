@@ -63,7 +63,9 @@ struct __LogfObject {
 // the file, line, message, and frames/time elapsed since System::Init was called. If System::Init
 // has not been called, the latter two are omitted.
 void SetLogFormatter(string (*formatter)(const char *filename, int line, const string &message));
-void LogToFile(const string &filename, bool also_log_to_std_err);
+void LogToFile(const string &filename, bool also_log_to_std_err = false);
+void LogToFunction(void (*func)(const string &), bool also_log_to_std_err = false);
+
 #define LOG(message) __Log(__FILE__, __LINE__, message)
 #define LOGF __LogfObject(__FILE__, __LINE__).__Logf
 

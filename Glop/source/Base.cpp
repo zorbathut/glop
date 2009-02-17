@@ -19,6 +19,7 @@ static bool gLoggingStarted = false;
 static bool gLogToStdErr = true;
 static time_t gLogStartTime = time(0);
 static string gLogFilename;
+static void (*gLogFunction)(const string &) = NULL;
 static FILE *gLogFile = 0;
 static void (*gFatalErrorHandler)(const string &message) = ZeroDependencyFatalErrorHandler;
 
@@ -65,6 +66,12 @@ void LogToFile(const string &filename, bool also_log_to_std_err) {
   gLogToStdErr = also_log_to_std_err;
 }
 
+void LogToFunction(void (*func)(const string &), bool also_log_to_std_err) {
+  ASSERT(gLoggingStarted == false);
+  gLogFunction = func;
+  gLogToStdErr = also_log_to_std_err;
+}
+
 void __Log(const char *filename, int line, const string &message) {
   // Open the log file if this is our first call
   if (!gLoggingStarted && gLogFilename != "") {
@@ -93,6 +100,8 @@ void __Log(const char *filename, int line, const string &message) {
     fputs(formatted_message.c_str(), gLogFile);
   if (gLogToStdErr)
     fputs(formatted_message.c_str(), stderr);
+  if (gLogFunction)
+    (*gLogFunction)(formatted_message); // We are binary-safe.
   fflush(gLogFile);
 }
 
