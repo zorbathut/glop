@@ -444,6 +444,26 @@ void MenuTest() {
     system()->Think();
 }
 
+// Hide test
+// ---------
+
+void HideTest() {
+  // Create the display mode menu
+  ButtonWidget *done_button = new ButtonWidget("Done", kGuiKeyCancel);
+  RecSizeFrame *rsf = new RecSizeFrame(new SolidBoxFrame(kRed, kBlue), 0.8f, 0.8f);
+  window()->AddFrame(rsf);
+  window()->AddFrame(done_button);
+  
+  while (!done_button->WasPressedFully()) {
+    system()->Think();
+    
+    if (time(NULL) % 2)
+      rsf->Hide();
+    else
+      rsf->Show();
+  }
+}
+
 // Main program
 // ------------
 
@@ -461,7 +481,8 @@ int RunMenu(int selection) {
   menu->AddTextItem("7. Camera frame");
   menu->AddTextItem("8. Dialog box");
   menu->AddTextItem("9. Menu");
-  int result = menu->AddTextItem("10. Quit");
+  menu->AddTextItem("10. Hiding things");
+  int result = menu->AddTextItem("11. Quit");
   menu->SetSelection(selection);
   window()->AddFrame(new RecSizeFrame(new WindowFrame(menu, "Menu"), 0.4f, 0.8f),
                      0.5f, 0.4f, 0.5f, 0.4f);
@@ -529,6 +550,9 @@ int main(int argc, char **argv) {
         MenuTest();
         break;
       case 9:
+        HideTest();
+        break;
+      case 10:
         return 0;
     }
   }

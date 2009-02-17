@@ -130,6 +130,12 @@ class GlopFrame {
   virtual bool OnKeyEvent(const KeyEvent &event, bool gained_focus) {return false;}
   virtual void Think(int dt) {}
   
+  // Toggles rendering of this frame and all subframes. Defaults to Show.
+  void Show();
+  void Hide();
+  
+  bool IsShown() const;
+  
   // Size and position accessors. All values are in pixels, and x, y are relative to the top-left
   // of the screen.
   int GetX() const {return screen_x_;}
@@ -298,6 +304,8 @@ class GlopFrame {
   int screen_x_, screen_y_, clip_x1_, clip_y1_, clip_x2_, clip_y2_;
   FocusFrame *focus_frame_;
   
+  bool shown_;
+  
   friend class GlopWindow;
   friend class SingleParentFrame;
   friend class MultiParentFrame;
@@ -323,7 +331,7 @@ class SingleParentFrame: public GlopFrame {
   string GetType() const {return "SingleParentFrame";}
 
   // Child delegation functions
-  virtual void Render() const {if (child_ != 0) child_->Render();}
+  virtual void Render() const {if (child_ != 0 && child_->IsShown()) child_->Render(); }
   virtual bool OnKeyEvent(const KeyEvent &event, bool gained_focus) {
     if (child_ != 0 && !child_->IsFocusFrame())
       return child_->OnKeyEvent(event, gained_focus);
