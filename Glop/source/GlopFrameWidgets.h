@@ -61,12 +61,12 @@
 #define GLOP_GLOP_FRAME_WIDGETS_H__
 
 // Includes
-#include "BinaryFileManager.h"
 #include "Color.h"
 #include "Font.h"
 #include "GlopFrameBase.h"
 #include "GlopFrameStyle.h"
 #include "Input.h"
+#include "Stream.h"
 
 // Class declarations
 class Image;
@@ -197,9 +197,9 @@ class ImageFrame: public GlopFrame {
  public:
   // Constructors - Either an image, a texture or a file can be specified. Any objects
   // loaded/created here are also deleted here.
-  ImageFrame(BinaryFileReader reader, const Color &bg_color, int bg_tolerance,
+  ImageFrame(InputStream input, const Color &bg_color, int bg_tolerance,
              const Color &color = kWhite);
-  ImageFrame(BinaryFileReader reader, const Color &color = kWhite);
+  ImageFrame(InputStream input, const Color &color = kWhite);
   ImageFrame(const Image *image, const Color &color = kWhite);
   ImageFrame(const Texture *texture, const Color &color = kWhite);
   ~ImageFrame();
@@ -224,9 +224,9 @@ class ImageFrame: public GlopFrame {
 class TiledTextureFrame: public GlopFrame {
  public:
   // Constructors - see ImageFrame
-  TiledTextureFrame(BinaryFileReader reader, const Color &bg_color, int bg_tolerance,
+  TiledTextureFrame(InputStream input, const Color &bg_color, int bg_tolerance,
                     const Color &color = kWhite);
-  TiledTextureFrame(BinaryFileReader reader, const Color &color = kWhite);
+  TiledTextureFrame(InputStream input, const Color &color = kWhite);
   TiledTextureFrame(const Image *image, const Color &color = kWhite);
   TiledTextureFrame(const Texture *texture, const Color &color = kWhite);
   ~TiledTextureFrame();

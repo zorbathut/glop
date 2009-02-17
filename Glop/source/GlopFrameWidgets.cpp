@@ -152,12 +152,12 @@ void InputBoxFrame::RecomputeSize(int rec_width, int rec_height) {
   SingleParentFrame::RecomputeSize(rec_width, rec_height);
 }
 
-ImageFrame::ImageFrame(BinaryFileReader reader, const Color &bg_color, int bg_tolerance,
+ImageFrame::ImageFrame(InputStream input, const Color &bg_color, int bg_tolerance,
                        const Color &color) {
-  Init(Texture::Load(reader, bg_color, bg_tolerance), true, color);
+  Init(Texture::Load(input, bg_color, bg_tolerance), true, color);
 }
-ImageFrame::ImageFrame(BinaryFileReader reader, const Color &color) {
-  Init(Texture::Load(reader), true, color);
+ImageFrame::ImageFrame(InputStream input, const Color &color) {
+  Init(Texture::Load(input), true, color);
 }
 ImageFrame::ImageFrame(const Image *image, const Color &color) {
   Init(new Texture(image), true, color);
@@ -186,12 +186,12 @@ void ImageFrame::RecomputeSize(int rec_width, int rec_height) {
   SetToMaxSize(rec_width, rec_height, float(texture_->GetWidth()) / texture_->GetHeight());
 }
 
-TiledTextureFrame::TiledTextureFrame(BinaryFileReader reader, const Color &bg_color,
+TiledTextureFrame::TiledTextureFrame(InputStream input, const Color &bg_color,
                                      int bg_tolerance, const Color &color) {
-  Init(Texture::Load(reader, bg_color, bg_tolerance), true, color);
+  Init(Texture::Load(input, bg_color, bg_tolerance), true, color);
 }
-TiledTextureFrame::TiledTextureFrame(BinaryFileReader reader, const Color &color) {
-  Init(Texture::Load(reader), true, color);
+TiledTextureFrame::TiledTextureFrame(InputStream input, const Color &color) {
+  Init(Texture::Load(input), true, color);
 }
 TiledTextureFrame::TiledTextureFrame(const Image *image, const Color &color) {
   Init(new Texture(image), true, color);

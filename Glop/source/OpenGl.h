@@ -24,10 +24,10 @@
 
 // Other includes
 #include "Base.h"
-#include "BinaryFileManager.h"
 #include "Color.h"
 #include "Image.h"
 #include "List.h"
+#include "Stream.h"
 
 // OpenGL data objects. Note that switching into and out of fullscreen mode invalidates textures
 // and display lists. To prevent that from happening, these structures can and should be used
@@ -40,9 +40,9 @@ class Texture {
   // Constructors. Load is similar to Image::Load. If this is used, the Image is owned by the
   // Texture and will be deleted automatically when the Texture is deleted. Otherwise, the user is
   // responsible for deleting the image.
-  static Texture *Load(BinaryFileReader reader, int mag_filter = GL_LINEAR,
+  static Texture *Load(InputStream input, int mag_filter = GL_LINEAR,
                        int min_filter = GL_LINEAR);
-  static Texture *Load(BinaryFileReader reader, const Color &bg_color, int bg_tolerance,
+  static Texture *Load(InputStream input, const Color &bg_color, int bg_tolerance,
                        int mag_filter = GL_LINEAR, int min_filter = GL_LINEAR);
   Texture(const Image *image, int mag_filter = GL_LINEAR, int min_filter = GL_LINEAR);
   ~Texture();

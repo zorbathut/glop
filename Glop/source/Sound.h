@@ -5,7 +5,7 @@
 
 // Includes
 #include "Base.h"
-#include "BinaryFileManager.h"
+#include "Stream.h"
 
 // Class declarations
 class SoundManager;
@@ -44,7 +44,7 @@ class SoundSource {
 // SoundSample class definition
 class SoundSample {
  public:
-  static SoundSample *Load(BinaryFileReader reader, bool store_compressed = false,
+  static SoundSample *Load(InputStream input, bool store_compressed = false,
                            float base_volume = 1.0f);
   ~SoundSample();
   SoundSource Play(bool looped = false, bool start_paused = false) const;

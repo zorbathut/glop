@@ -18,7 +18,6 @@
 
 // Includes
 #include <Glop/Base.h>
-#include <Glop/BinaryFileManager.h>
 #include <Glop/Font.h>
 #include <Glop/GlopFrame.h>
 #include <Glop/GlopWindow.h>
