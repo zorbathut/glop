@@ -457,7 +457,7 @@ void HideTest() {
   while (!done_button->WasPressedFully()) {
     system()->Think();
     
-    if (time(NULL) % 2)
+    if ((system()->GetTime()/1000) % 2)
       rsf->Hide();
     else
       rsf->Show();

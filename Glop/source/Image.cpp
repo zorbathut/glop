@@ -421,8 +421,10 @@ bool Image::IsGif(InputStream input) {
   return is_gif;
 }
 
-// Gif helper function - loads a value with the given number of bits from the file.
-static int LoadGifBits(InputStream &input, unsigned char *buffer, int num_bits,
+// Gif helper function - loads the given number of bits from the file. File format: byte indicating
+// block length, followed by a block of that length. All blocks are logically concatenated until
+// a block of length 0 is reached.
+static int LoadGifBits(InputStream input, unsigned char *buffer, int num_bits,
                        int *buffer_pos, int *buffer_end) {
   if (*buffer_pos + num_bits >= *buffer_end) {
     if (*buffer_end >= 16)
@@ -430,7 +432,7 @@ static int LoadGifBits(InputStream &input, unsigned char *buffer, int num_bits,
     if (*buffer_end >= 8)
       buffer[1] = buffer[*buffer_end/8 - 1];
     unsigned char block_size;
-    if (!input.ReadChars(1, &block_size))
+    if (!input.ReadChars(1, &block_size) || block_size == 0)
       return -1;
     if (input.ReadChars(block_size, buffer + 2) < block_size)
       return -1;
@@ -446,8 +448,6 @@ static int LoadGifBits(InputStream &input, unsigned char *buffer, int num_bits,
 
 // Loads a GIF file.
 // Adapted from the SDL image library, which is, in turn, taken from XPaint.
-//
-// NOT CURRENTLY WORKING!
 Image *Image::LoadGif(InputStream input) {
   const int kMaxLwzBits = 12;
   unsigned char *palette = (unsigned char*)malloc(768), *pixels = 0;
@@ -463,11 +463,14 @@ Image *Image::LoadGif(InputStream input) {
   if (memcmp(buffer, "GIF", 3) != 0)
     goto error;
   input.SkipAhead(4);
-  unsigned char data;
+  unsigned char data, data2;
   if (!input.ReadChars(1, &data))
     goto error;
   bpp = 1 + (data % 8);
-  input.SkipAhead(2);
+  if (!input.ReadChars(1, &data2))
+    goto error;
+  transparent_index = data2;
+  input.SkipAhead(1);
 
   // Read the global palette if it exists
   if ((data & 0x80) > 0) {
@@ -510,12 +513,19 @@ Image *Image::LoadGif(InputStream input) {
       }
       bool is_interlaced = (data & 0x40) > 0;
       int new_bpp = (transparent_index == -1? 24 : 32);
-      unsigned char code_size;
-      if (!input.ReadChars(1, &code_size))
+      unsigned char base_code_size, code_size = 0;
+      if (!input.ReadChars(1, &base_code_size) || base_code_size > kMaxLwzBits)
         return 0;
       pixels = (unsigned char*)malloc(width * height * new_bpp / 8);
       
-      // Read a byte
+      // GIF uses LZW compression. We store a string table where
+      //   S[i] = S[table[0][i]] + table[1][i].
+      // This table is initialized to only the base alphabet, but is enlarged implicitly as we go.
+      // After reading i:
+      //  - If i is in the table, we output S[i], and add S[old] + first char of S[i] to S.
+      //  - If i is not in the table, we output S[old] + first char of S[old], and add this to S.
+      //  - The size in bits of each index grows until it hits a certain cap, at which point we
+      //    reset everything.
       int buffer_pos = 0, buffer_end = 0;
       int x = 0, y = 0, pass = 0;
       int table[2][1 << kMaxLwzBits], stack[1 << (kMaxLwzBits + 1)], stack_pos = -1;
@@ -526,12 +536,13 @@ Image *Image::LoadGif(InputStream input) {
         if (stack_pos == -1) {
           while (1) {
             int code = (first_code == -1? clear_code :
-                        LoadGifBits(input, buffer, code_size + 1, &buffer_pos, &buffer_end));
+                        LoadGifBits(input, buffer, code_size, &buffer_pos, &buffer_end));
             if (code == -1)
               goto error;
             if (code == clear_code) {
               // Initialization
-              clear_code = (1 << code_size);
+              code_size = base_code_size + 1;
+              clear_code = (1 << base_code_size);
               max_code = clear_code + 2;
               stack_pos = -1;
     	        for (int i = 0; i < (1 << kMaxLwzBits); ++i) {
@@ -539,10 +550,10 @@ Image *Image::LoadGif(InputStream input) {
                 table[1][i] = (i < clear_code? i : 0);
 	            }
               do {
-                first_code = LoadGifBits(input, buffer, code_size + 1, &buffer_pos, &buffer_end);
+                first_code = LoadGifBits(input, buffer, code_size, &buffer_pos, &buffer_end);
                 if (first_code == -1)
                   goto error;
-              } while (first_code == (1 << code_size));
+              } while (first_code == (1 << base_code_size));
               pixel = old_code = first_code;
               break;
             } else if (code == clear_code + 1) // EOF
@@ -561,7 +572,7 @@ Image *Image::LoadGif(InputStream input) {
               table[0][code] = old_code;
               table[1][code] = first_code;
               max_code++;
-              if (max_code >= (1 << (code_size+1)) && code_size+1 < kMaxLwzBits)
+              if (max_code >= (1 << (code_size)) && code_size < kMaxLwzBits)
                 code_size++;
             }
             old_code = in_code;
@@ -575,6 +586,8 @@ Image *Image::LoadGif(InputStream input) {
         }
 
         // Place a pixel
+        if (pixel < 0 || pixel > 255)
+          goto error;
         memcpy(pixels + (new_bpp/8)*(y*width + x), palette+3*pixel, 3);
         if (transparent_index != -1)
           pixels[(new_bpp/8)*(y*width + x) + 3] = (pixel == transparent_index? 0 : 255);
