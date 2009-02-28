@@ -193,6 +193,7 @@ Image *Image::LoadBmp(InputStream input) {
 
   // Read the header
   char tag[2];
+  int start_pos = input.GetPosition();
   if (input.ReadChars(2, tag) < 2 || tag[0] != 'B' || tag[1] != 'M')
     goto error;
   input.SkipAhead(8);
@@ -278,7 +279,7 @@ Image *Image::LoadBmp(InputStream input) {
   if (bpp <= 8) {
     int colors_used = 1 << bpp;
     palette = (unsigned char*)malloc(768);
-    input.SkipAhead(14 + header_size - input.GetPosition());
+    input.SkipAhead(14 + header_size - (input.GetPosition() - start_pos));
 		for (int i = 0; i < colors_used; i++) {
       if (!input.ReadChars(1, palette+3*i+2) ||
           !input.ReadChars(1, palette+3*i+1) ||
@@ -291,7 +292,7 @@ Image *Image::LoadBmp(InputStream input) {
 
 	// Read the pixel data, and convert it to RGB (or RGBA).
   // Note that the image is stored upside-down.
-  input.SkipAhead(image_start - input.GetPosition());
+  input.SkipAhead(image_start - (input.GetPosition() - start_pos));
   pixels = (unsigned char*)malloc(width * height * new_bpp / 8);
   if (compression == kRle4 || compression == kRle8) {
     int x = 0, y = height - 1;
