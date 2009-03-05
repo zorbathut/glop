@@ -29,7 +29,7 @@ using namespace std;
 class ListId {
  public: 
   ListId(int v = 0): value_(v) {}
-  template<class input_iterator> ListId(input_iterator it): value_(it.index_) {}
+  template<class input_iterator> ListId(input_iterator it): value_(it.index()) {}
   int value() const {return value_;}
   bool operator==(const ListId &rhs) const {return value_ == rhs.value_;}
   bool operator!=(const ListId &rhs) const {return value_ != rhs.value_;}
@@ -59,6 +59,7 @@ template <class T> class List {
     typedef const T *pointer;
 
     const_iterator(): nodes_(0) {}
+    const_iterator(const iterator &it): nodes_(it.nodes_), index_(it.index_) {}
     const T &operator*() const {return (*nodes_)[index_].value;}
     const T *operator->() const {return &(*nodes_)[index_].value;}
     const_iterator& operator++() { // preincrement
@@ -91,6 +92,7 @@ template <class T> class List {
     friend class ListId;
     friend class List;
     const_iterator(Node *const* nodes, int index): nodes_(nodes), index_(index) {}
+    int index() const {return index_;}
     Node *const* nodes_;
     int index_;
   };
@@ -138,6 +140,7 @@ template <class T> class List {
     friend class ListId;
     friend class List;
     iterator(Node **nodes, int index): nodes_(nodes), index_(index) {}
+    int index() const {return index_;}
     Node **nodes_;
     int index_;
   };
@@ -177,8 +180,8 @@ template <class T> class List {
   iterator end() {return iterator(&nodes_, 0);}
   const_iterator next_to_end() const {return const_iterator(&nodes_, nodes_[0].prev);}
   iterator next_to_end() {return iterator(&nodes_, nodes_[0].prev);}
-  const_iterator id_iterator(ListId i) const {return const_iterator(&nodes_, i.value());}
-  iterator id_iterator(ListId i) {return iterator(&nodes_, i.value());}
+  const_iterator iterator_at(ListId i) const {return const_iterator(&nodes_, i.value());}
+  iterator iterator_at(ListId i) {return iterator(&nodes_, i.value());}
 
   // Basic accessors
   bool empty() const {return size_ == 0;}
