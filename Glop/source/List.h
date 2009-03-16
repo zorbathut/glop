@@ -23,7 +23,12 @@
 // Includes
 #include <memory.h>
 #include <iterator>
+#include <string>
 using namespace std;
+
+// g++ is a dumbass compiler.  List won't compile unless there exists some function with this name.
+template <class T>
+void ParseFromString(const string&, T*);
 
 // ListId class definition
 class ListId {
@@ -46,6 +51,54 @@ template <class T> class List {
     int prev, next;
   };
  public:
+  // iterator subclass
+  class iterator {
+   public:
+    // See const_iterator
+		typedef bidirectional_iterator_tag iterator_category;
+    typedef ptrdiff_t difference_type;
+    typedef T value_type;
+    typedef T &reference;
+    typedef T *pointer;
+
+    iterator(): nodes_(0) {}
+    T &operator*() const {return (*nodes_)[index_].value;}
+    T *operator->() const {return &(*nodes_)[index_].value;}
+    iterator& operator++() { // preincrement
+      index_ = (*nodes_)[index_].next;
+			return (*this);
+    }
+    iterator operator++(int) { // postincrement
+			iterator temp = *this;
+			++*this;
+			return temp;
+    }
+
+    iterator& operator--() { // predecrement
+      index_ = (*nodes_)[index_].prev;
+			return (*this);
+    }
+    iterator operator--(int) { // postdecrement
+			iterator temp = *this;
+			--*this;
+			return temp;
+    }
+
+    bool operator==(const iterator &rhs) const {
+      return nodes_ == rhs.nodes_ && index_ == rhs.index_;
+    }
+    bool operator!=(const iterator &rhs) const {
+      return index_ != rhs.index_ || nodes_ != rhs.nodes_;
+    }
+   private:
+    friend class ListId;
+    friend class List;
+    iterator(Node **nodes, int index): nodes_(nodes), index_(index) {}
+    int index() const {return index_;}
+    Node **nodes_;
+    int index_;
+  };
+
   // const_iterator subclass
   class const_iterator {
    public:
@@ -97,72 +150,33 @@ template <class T> class List {
     int index_;
   };
 
-  // iterator subclass
-  class iterator {
-   public:
-    // See const_iterator
-		typedef bidirectional_iterator_tag iterator_category;
-    typedef ptrdiff_t difference_type;
-    typedef T value_type;
-    typedef T &reference;
-    typedef T *pointer;
-
-    iterator(): nodes_(0) {}
-    T &operator*() const {return (*nodes_)[index_].value;}
-    T *operator->() const {return &(*nodes_)[index_].value;}
-    iterator& operator++() { // preincrement
-      index_ = (*nodes_)[index_].next;
-			return (*this);
-    }
-    iterator operator++(int) { // postincrement
-			iterator temp = *this;
-			++*this;
-			return temp;
-    }
-
-    iterator& operator--() { // predecrement
-      index_ = (*nodes_)[index_].prev;
-			return (*this);
-    }
-    iterator operator--(int) { // postdecrement
-			iterator temp = *this;
-			--*this;
-			return temp;
-    }
-
-    bool operator==(const iterator &rhs) const {
-      return nodes_ == rhs.nodes_ && index_ == rhs.index_;
-    }
-    bool operator!=(const iterator &rhs) const {
-      return index_ != rhs.index_ || nodes_ != rhs.nodes_;
-    }
-   private:
-    friend class ListId;
-    friend class List;
-    iterator(Node **nodes, int index): nodes_(nodes), index_(index) {}
-    int index() const {return index_;}
-    Node **nodes_;
-    int index_;
-  };
-
-  // Constructors
+  // Constructors. Note that both the copy constructor and the assignment operator copy the full
+  // state, preserving ids that have been assigned and ids that will be assigned in future insert
+  // calls.
   List<T>() {Init(0);}
   List<T>(int n, const T &value) {
     Init(n);
     insert(begin(), n, value);
   }
   List<T>(const List<T> &rhs) {
-    Init(rhs.size());
-    insert(begin(), rhs.begin(), rhs.end());
+    Init(0);
+    operator=(rhs);
   }
   template<class InputIterator> List<T>(InputIterator first, InputIterator last) {
     Init(0);
     insert(begin(), first, last);
   }
   const List<T> &operator=(const List<T> &rhs) {
-    if (this == &rhs) return *this;
+    if (this == &rhs)
+      return *this;
     clear();
-    insert(begin(), rhs.begin(), rhs.end());
+    free_index_ = rhs.free_index_;
+    size_ = rhs.size_;
+    int capacity = rhs.GetCapacity();
+    nodes_ = (typename List::Node*)realloc((void*)nodes_, capacity * sizeof(nodes_[0]));
+    memcpy(nodes_, rhs.nodes_, capacity*sizeof(nodes_[0]));
+    for (int i = nodes_[0].next; i != 0; i = nodes_[i].next)
+      nodes_[i].value = rhs.nodes_[i].value;
     return *this;
   }
 
@@ -258,7 +272,59 @@ template <class T> class List {
     erase(begin());
   }
 
+  // Serialization. Format = capacity, free_index_, data_.next in array order, data_.value_
+  // sizes in linked list order, data_.value_ serializations in linked list order.
+  void SerializeToString(string *result) const {
+    int capacity = GetCapacity();
+    *result = string((2+capacity+size_)*4, 0);
+    int *header = (int*)result->data();
+    header[0] = capacity;
+    header[1] = free_index_;
+    for (int i = 0; i < capacity; i++)
+      header[i+2] = nodes_[i].next;
+    int j = 0;
+    string temp;
+    for (int i = nodes_[0].next; i != 0; i = nodes_[i].next) {
+      header = (int*)result->data();  // May change after appending data
+      SerializeToString(nodes_[i].value, &temp);
+      header[2+capacity+j] = (int)temp.size();
+      j++;
+      (*result) += temp;
+    }
+  }
+  void ParseFromString(const string &s) {
+    clear();
+    int *data = (int*)s.data();
+    int capacity = data[0];
+    nodes_ = (Node*)realloc((void*)nodes_, capacity*sizeof(nodes_[0]));
+    free_index_ = data[1];
+    for (int i = 0; i < capacity; i++) {
+      nodes_[i].next = data[i+2];
+      nodes_[nodes_[i].next].prev = i;
+    }
+
+    size_ = 0;
+    for (int i = nodes_[0].next; i != 0; i = nodes_[i].next)
+      size_++;
+    int j = 0, s_pos = (2 + capacity + size_)*4;
+    for (int i = nodes_[0].next; i != 0; i = nodes_[i].next) {
+      int len = data[2 + capacity + j];
+      j++;
+      nodes_[i].value = T();
+      ::ParseFromString(s.substr(s_pos, len), &nodes_[i].value);
+      s_pos += len;
+    }
+  }
+
  private:
+  int GetCapacity() const {
+    int capacity = size_ + 1;
+    for (int i = free_index_; i != 0; i = nodes_[i].next)
+      capacity++;
+    return capacity;
+  }
+
+  // Initialize with the given capacity
   void Init(int num_items) {
     nodes_ = (Node*)malloc((num_items+1)*sizeof(Node));
     if (num_items > 0) {
