@@ -1,0 +1,5 @@
+
+message TestProto {
+  required int32 foo = 1;
+  optional int64 bar = 2;
+}

@@ -1,0 +1,19 @@
+import SCons.Util
+import scons_utils
+Import('env')
+Export('env')
+
+env.BuildObjects(
+  target_name = 'base',
+  source = [
+    'Net.cpp',
+  ],
+  headers = [
+    'Net.h',
+  ],
+  libs = [
+    'rakneti386',
+  ],
+)
+
+env.Test('net_test', 'Net_test.cpp', packages = ['base', '/glop'])

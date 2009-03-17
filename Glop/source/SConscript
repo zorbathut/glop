@@ -58,6 +58,7 @@ env.BuildObjects(
     'IOKit',
   ],
   packages = [
+    'net/base',
     'glop2d/base',
     'glop3d/base',
   ]

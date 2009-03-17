@@ -119,9 +119,9 @@ def CompileFramework(env, objs, headers, libs, framework_structure, install_path
       os.path.join(str(framework_directory[0]), os.path.basename(str(framework_binary[0]))),
       str(framework_binary[0]))
 
-  headers_directory = os.path.join(framework_path, 'Versions', 'A', 'Headers')
+  headers_directory = os.path.join(framework_path, 'Versions', 'A', 'Headers', 'source')
   for header in headers:
-    header_directory = os.path.join(framework_path, 'Versions', 'A', 'Headers')
+    header_directory = os.path.join(framework_path, 'Versions', 'A', 'Headers', 'source')
     header_path = os.path.join(header_directory, header.get_abspath()[len(env['BUILD_ROOT']):])
     env.Command(header_path, header, SCons.Defaults.Copy('$TARGET', '$SOURCE'))
 
@@ -138,7 +138,7 @@ def CompileFrameworks(env, objs, headers, libs, framework_structure):
       headers,
       libs,
       framework_structure,
-      '/Users/jwills/Glop/build-dbg-Glop/',
+      '/Users/jonathanwills/Glop/build-dbg-Glop/',
       'Glop_test')
   g = CompileFramework(
       env,

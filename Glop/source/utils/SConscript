@@ -1,0 +1,30 @@
+import SCons.Util
+import scons_utils
+Import('env')
+Export('env')
+
+env.BuildObjects(
+  target_name = 'base',
+  source = [
+    'ProtoUtils.cpp',
+  ],
+  headers = [
+    'ProtoUtils.h',
+  ],
+  libs = [
+    'protobuf',
+  ]
+)
+
+env.BuildProtos(
+  target_name = 'test_protos',
+  source = 'TestProto.proto',
+)
+env.Test(
+  target_name = 'test',
+  source = 'ProtoUtils_test.cpp',
+  packages = [
+    'test_protos',
+    'base',
+  ]
+)
