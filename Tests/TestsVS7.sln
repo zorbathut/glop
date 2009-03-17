@@ -1,9 +1,9 @@
 Microsoft Visual Studio Solution File, Format Version 8.00
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Glop", "..\Glop\Win32\Glop.vcproj", "{E1C26B67-A6E0-4292-9FDB-E1EE4D604A0D}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Glop", "..\Glop\Win32\GlopVS7.vcproj", "{E1C26B67-A6E0-4292-9FDB-E1EE4D604A0D}"
 	ProjectSection(ProjectDependencies) = postProject
 	EndProjectSection
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Tests", "Tests.vcproj", "{0EE8C3D3-548D-4819-AC5E-CB242E7293B3}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Tests", "TestsVS7.vcproj", "{0EE8C3D3-548D-4819-AC5E-CB242E7293B3}"
 	ProjectSection(ProjectDependencies) = postProject
 		{E1C26B67-A6E0-4292-9FDB-E1EE4D604A0D} = {E1C26B67-A6E0-4292-9FDB-E1EE4D604A0D}
 	EndProjectSection

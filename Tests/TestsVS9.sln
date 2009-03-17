@@ -1,0 +1,29 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 10.00
+# Visual Studio 2008
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "TestsVS9", "TestsVS9.vcproj", "{0EE8C3D3-548D-4819-AC5E-CB242E7293B3}"
+	ProjectSection(ProjectDependencies) = postProject
+		{E1C26B67-A6E0-4292-9FDB-E1EE4D604A0D} = {E1C26B67-A6E0-4292-9FDB-E1EE4D604A0D}
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Glop", "..\Glop\Win32\GlopVS9.vcproj", "{E1C26B67-A6E0-4292-9FDB-E1EE4D604A0D}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Win32 = Debug|Win32
+		Release|Win32 = Release|Win32
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{0EE8C3D3-548D-4819-AC5E-CB242E7293B3}.Debug|Win32.ActiveCfg = Debug|Win32
+		{0EE8C3D3-548D-4819-AC5E-CB242E7293B3}.Debug|Win32.Build.0 = Debug|Win32
+		{0EE8C3D3-548D-4819-AC5E-CB242E7293B3}.Release|Win32.ActiveCfg = Release|Win32
+		{0EE8C3D3-548D-4819-AC5E-CB242E7293B3}.Release|Win32.Build.0 = Release|Win32
+		{E1C26B67-A6E0-4292-9FDB-E1EE4D604A0D}.Debug|Win32.ActiveCfg = Debug|Win32
+		{E1C26B67-A6E0-4292-9FDB-E1EE4D604A0D}.Debug|Win32.Build.0 = Debug|Win32
+		{E1C26B67-A6E0-4292-9FDB-E1EE4D604A0D}.Release|Win32.ActiveCfg = Release|Win32
+		{E1C26B67-A6E0-4292-9FDB-E1EE4D604A0D}.Release|Win32.Build.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
