@@ -202,7 +202,7 @@ class GlopFrame {
   // clipping and logical size. This is useful for focus tracking due to mouse clicks for example.
   // It can be overridden if the frame's visible extent is not the same as its size. The focus
   // frame variant does the same thing except it uses the focus frame as a basis instead if the
-  // focus frame exists. Otherwise, it is the same as IsPointVisibel.
+  // focus frame exists. Otherwise, it is the same as IsPointVisible.
   virtual bool IsPointVisible(int screen_x, int screen_y) const;
   virtual bool IsPointVisibleInFocusFrame(int screen_x, int screen_y) const;
   
