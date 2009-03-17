@@ -30,6 +30,9 @@ using namespace std;
 template <class T>
 void ParseFromString(const string&, T*);
 
+template <class T>
+void SerializeToString(const T&, string*);
+
 // ListId class definition
 class ListId {
  public: 
@@ -286,7 +289,7 @@ template <class T> class List {
     string temp;
     for (int i = nodes_[0].next; i != 0; i = nodes_[i].next) {
       header = (int*)result->data();  // May change after appending data
-      SerializeToString(nodes_[i].value, &temp);
+      ::SerializeToString(nodes_[i].value, &temp);
       header[2+capacity+j] = (int)temp.size();
       j++;
       (*result) += temp;
