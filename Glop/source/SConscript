@@ -93,6 +93,7 @@ env.BuildObjects(
     'game_engine/P2PNG.h',
     'game_engine/MovingWindow.h',
     'game_engine/GameProtos.pb.h',
+    'game_engine/P2pSet.h',
   ],
 )
 
