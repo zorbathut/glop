@@ -22,6 +22,11 @@
 #include <OpenGl/glu.h>
 #endif
 
+#ifdef LINUX
+#include <GL/gl.h>
+#include <GL/glu.h>
+#endif
+
 // Other includes
 #include "Base.h"
 #include "Color.h"

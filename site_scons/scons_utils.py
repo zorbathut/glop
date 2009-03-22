@@ -245,6 +245,8 @@ def AppendOsParams(env):
     import win32 as operating_system
   elif os_params[0].startswith('CYGWIN'):
     import cygwin as operating_system
+  elif os_params[0].startswith('Linux'):
+    import linux as operating_system
   else:
     print 'Operating system "' + os_params[0] + '" was unrecognized.'
     Exit(1)

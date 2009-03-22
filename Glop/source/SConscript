@@ -11,6 +11,7 @@ env.BuildObjects(
     'GlopWindow.cpp',
     'OsMacOSX.cpp',
     'OsWin32.cpp',
+    'OsLinux.cpp',
     'System.cpp',
     'Utils.cpp',
     'GlopInternalData.cpp',

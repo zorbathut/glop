@@ -76,6 +76,7 @@
 using namespace std;
 
 // Class declarations
+class GlopWindow;
 class Input;
 struct OsKeyEvent;
 struct OsWindowData;

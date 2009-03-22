@@ -1,6 +1,7 @@
 // Includes
 #include "Utils.h"
 #include "Base.h"
+#include <cstdlib>
 #include <limits.h>
 
 // String parsing

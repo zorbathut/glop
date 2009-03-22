@@ -1,3 +1,5 @@
+#include <cstdlib>
+#include <cstring>
 #include "Stream.h"
 
 // InputStream

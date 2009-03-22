@@ -21,6 +21,7 @@
 #define GLOP_LIST_H__
 
 // Includes
+#include <cstdlib>
 #include <memory.h>
 #include <iterator>
 #include <string>

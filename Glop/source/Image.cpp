@@ -4,6 +4,8 @@
 extern "C" {
 #include "jpeglib/jpeglib.h"
 }
+#include <cstdlib>
+#include <cstring>
 #include <setjmp.h>  // For LoadJpg error handling
 
 // Constants
@@ -190,6 +192,7 @@ Image *Image::LoadBmp(InputStream input) {
   Image *result = 0;                        // The return value
   unsigned char *palette = 0, *pixels = 0;  // Image data (palette is used if bpp <= 8)
   unsigned char *buffer = 0;                // A location to load a line of data into
+  int new_bpp = 0;
 
   // Read the header
   char tag[2];
@@ -228,7 +231,7 @@ Image *Image::LoadBmp(InputStream input) {
     return 0;
   if (width < 0 || width > kMaxImageWidth || height < 0 || height > kMaxImageHeight)
     return 0;
-  int new_bpp = (bpp == 32? 32 : 24);
+  new_bpp = (bpp == 32? 32 : 24);
 
   // Read the color masks if they exist
 	switch (compression) {
@@ -702,6 +705,10 @@ Image *Image::LoadJpg(InputStream input) {
   unsigned char *compressed_data = 0;
   int compressed_data_length;
   jpeg_decompress_struct info;
+  jpeg_source_mgr *source_manager = NULL;
+	int width = 0;
+	int height = 0;
+	int bpp = 0;
 
   // Set up the error handler. If jpeglib runs into an error at any future point, it will
   // execute the block after setjmp(), which will otherwise remain unexecuted.
@@ -715,7 +722,7 @@ Image *Image::LoadJpg(InputStream input) {
   // Set up the memory source
   jpeg_create_decompress(&info);
   compressed_data_length = input.ReadAllData((void**)&compressed_data);
-  jpeg_source_mgr *source_manager = (jpeg_source_mgr*)
+  source_manager = (jpeg_source_mgr*)
     (*info.mem->alloc_small) ((j_common_ptr)&info, JPOOL_PERMANENT, sizeof(jpeg_source_mgr));
   source_manager->init_source = JpegMemoryInitSource;
   source_manager->fill_input_buffer = JpegMemoryFillInputBuffer;
@@ -729,9 +736,9 @@ Image *Image::LoadJpg(InputStream input) {
   // Decompress the jpg image
 	jpeg_read_header(&info, true);
   jpeg_start_decompress(&info);
-	int width = info.image_width;
-	int height = info.image_height;
-	int bpp = info.num_components*8;
+	width = info.image_width;
+	height = info.image_height;
+	bpp = info.num_components*8;
   if (width < 0 || height < 0 || width > kMaxImageWidth || height > kMaxImageHeight ||
       (bpp != 24 && bpp != 32))
     goto error;

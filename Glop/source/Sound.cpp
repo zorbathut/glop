@@ -1,4 +1,5 @@
 // Includes
+#include <cstring>
 #include "Sound.h"
 #include "System.h"
 #include "fmod/fmod.hpp"
