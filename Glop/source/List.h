@@ -31,6 +31,9 @@ using namespace std;
 template <class T>
 void ParseFromString(const string&, T*);
 
+template <class T>
+void SerializeToString(const T&, string*);
+
 // ListId class definition
 class ListId {
  public: 
@@ -177,7 +180,7 @@ template <class T> class List {
     nodes_ = (typename List::Node*)realloc((void*)nodes_, capacity * sizeof(nodes_[0]));
     memcpy(nodes_, rhs.nodes_, capacity*sizeof(nodes_[0]));
     for (int i = nodes_[0].next; i != 0; i = nodes_[i].next)
-      nodes_[i].value = rhs.nodes_[i].value;
+      new (&nodes_[i].value) T(rhs.nodes_[i].value);
     return *this;
   }
 
@@ -287,7 +290,7 @@ template <class T> class List {
     string temp;
     for (int i = nodes_[0].next; i != 0; i = nodes_[i].next) {
       header = (int*)result->data();  // May change after appending data
-      SerializeToString(nodes_[i].value, &temp);
+      ::SerializeToString(nodes_[i].value, &temp);
       header[2+capacity+j] = (int)temp.size();
       j++;
       (*result) += temp;
@@ -311,7 +314,7 @@ template <class T> class List {
     for (int i = nodes_[0].next; i != 0; i = nodes_[i].next) {
       int len = data[2 + capacity + j];
       j++;
-      nodes_[i].value = T();
+      new (&nodes_[i].value) T();
       ::ParseFromString(s.substr(s_pos, len), &nodes_[i].value);
       s_pos += len;
     }

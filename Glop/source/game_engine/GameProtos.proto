@@ -1,0 +1,52 @@
+message GameStateEventData {
+  required string game_state = 1;
+  required int32 timestep = 2;
+  repeated int32 engine_ids = 3;
+  required int32 source_engine_id = 4;
+  required int32 temporary_engine_id = 5;
+}
+
+message ReadyToPlayEventData {
+  required int32 origin = 1;
+  required int32 temporary = 2;
+}
+
+message NewEngineEventData {
+  required int32 origin = 1;
+  required int32 temporary = 2;
+  required int32 engine = 3;
+}
+
+
+
+
+
+
+
+message AddPlayerEventData {
+  required int32 player_id = 1;
+}
+
+message DropPlayerEventData {
+  repeated int32 player_id = 1;
+}
+
+message JoinGameEventData {
+  required int32 timestep = 1;     // Timestep that game_state is from.
+  required int32 new_player_id = 2;// ID of the new player once he finally joins
+  repeated int32 player_ids = 3;   // IDs of the other players in the game at the starting timestep.
+  required string game_state = 4;  // Complete serialized GameState.
+}
+
+message AcknowledgeJoinGameEventData {
+}
+
+message StartGameEventData {
+  required int32 player_id = 1;  // This what the new player's ID is
+}
+
+message AcknowledgeStartGameEventData {
+  // The timestep here should match the timestep in the StartGameEventData that it is responding to.
+  // TODO(jwills): Like in StartGameEventData, this is probably unnecessary
+  required int32 timestep = 1;
+}

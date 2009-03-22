@@ -62,6 +62,8 @@ env.BuildObjects(
     'net/base',
     'glop2d/base',
     'glop3d/base',
+    'game_protos',
+    'game_engine'
   ]
 )
 
@@ -71,4 +73,77 @@ env.Test(
   packages = [
     'glop',
   ]
+)
+
+env.BuildObjects(
+  target_name = 'game_engine',
+  source = [
+    'game_engine/GameConnection.cpp',
+    'game_engine/GameEngine.cpp',
+    'game_engine/GameEvent.cpp',
+    'game_engine/GameProtos.pb.cc',
+  ],
+  packages = [
+    'game_protos',
+  ],
+  headers = [ # Not clear yet what should be public
+    'game_engine/GameState.h',
+    'game_engine/GameEngine.h',
+    'game_engine/GameEvent.h',
+    'game_engine/GameConnection.h',
+    'game_engine/P2PNG.h',
+    'game_engine/MovingWindow.h',
+    'game_engine/GameProtos.pb.h',
+    'game_engine/P2pSet.h',
+  ],
+)
+
+env.BuildProtos(
+  target_name = 'game_protos',
+  source = [
+    'game_engine/GameProtos.proto',
+  ]
+)
+
+env.BuildProtos(
+  target_name = 'test_protos',
+  source = [
+    'game_engine/TestProtos.proto',
+  ],
+)
+
+env.Test(
+  'game_event_test',
+  'game_engine/GameEvent_test.cpp',
+  packages = [
+    'game_engine',
+    'test_protos',
+    'glop',
+  ]
+)
+
+env.Test(
+  'game_connection_test',
+  'game_engine/GameConnection_test.cpp',
+  packages = [
+    'game_engine',
+    'test_protos',
+    'glop',
+  ]
+)
+
+env.Test(
+  'game_engine_test',
+  'game_engine/GameEngine_test.cpp',
+  packages = [
+    'game_engine',
+    'test_protos',
+    'glop',
+  ]
+)
+
+env.Test(
+  'moving_window_test',
+  'game_engine/MovingWindow_test.cpp',
+  packages = []
 )

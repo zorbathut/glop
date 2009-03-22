@@ -1,0 +1,29 @@
+
+message Foo {
+  optional int32 foo = 1;
+  optional int32 bar = 2;
+}
+
+message Bar {
+  optional int64 nuts = 1;
+  optional float wingding = 2;
+  optional float barbaz = 3;
+}
+
+message PlayerPosition {
+  required int32 x = 1;
+  required int32 y = 2;
+}
+
+message TestGameState {
+  repeated PlayerPosition positions = 1;
+  repeated int32 player_ids = 2;
+  required int32 applies = 3;
+  required int32 thinks = 4;
+}
+
+message TestEngineMoveEvent {
+  required int32 player = 1;
+  required int32 x = 2;
+  required int32 y = 3;
+}
