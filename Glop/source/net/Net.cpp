@@ -124,14 +124,23 @@ void NetworkManager::Disconnect(GlopNetworkAddress gna) {
 
 vector<GlopNetworkAddress> NetworkManager::GetConnections() const {
   SystemAddress connections[256];
-  unsigned short num_connections;
+  unsigned short num_connections = 256;
   rakpeer_->GetConnectionList(connections, &num_connections);
   vector<GlopNetworkAddress> ret;
   for (int i = 0; i < num_connections; i++) {
     GlopNetworkAddress g = RSA2GNA(connections[i]);
-//    if (!rakpeer_->IsConnected(connections[i], true, false)) { continue; }
     ret.push_back(RSA2GNA(connections[i]));
   }
+/*
+  for (int i = 0; i < ret.size(); i++) {
+        char buf[25];
+        int ip = ret[i].first;
+        sprintf(buf, "%d.%d.%d.%d", ip & 0xff, (ip >> 8) & 0xff, (ip >> 16) & 0xff, (ip >> 24) & 0xff);
+        printf("Connected to %s\n", buf);
+        if (!rakpeer_->IsConnected(connections[i], true, false)) { continue; }
+    
+  }
+*/
   return ret;
 }
 
@@ -183,7 +192,6 @@ int NetworkManager::PendingData() const {
 }
 
 void NetworkManager::Think() {
-//	rakpeer_->Ping("255.255.255.255", 65000, true);
   Packet* p = rakpeer_->Receive();
   while (p != NULL) {
     if (p->data[0] == ID_PONG) {

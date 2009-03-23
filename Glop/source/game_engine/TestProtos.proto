@@ -6,8 +6,8 @@ message Foo {
 
 message Bar {
   optional int64 nuts = 1;
-  optional float wingding = 2;
-  optional float barbaz = 3;
+  optional int32 wingding = 2;
+  optional int32 barbaz = 3;
 }
 
 message PlayerPosition {

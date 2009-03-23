@@ -10,6 +10,7 @@ class TestState : public GameState {
   TestState() {
     AddPlayer();
     state.set_applies(0);
+    state.set_thinks(0);
   }
   virtual ~TestState() {}
 
@@ -17,9 +18,14 @@ class TestState : public GameState {
     for (int i = 0; i < state.positions_size(); i++) {
       state.mutable_positions(i)->set_x(state.positions(i).x() + 1);
       state.mutable_positions(i)->set_y(state.positions(i).y() + 2);
+      if (state.positions(i).x() < 0) {
+        state.mutable_positions(i)->set_x(0);
+      }
+      if (state.positions(i).y() < 0) {
+        state.mutable_positions(i)->set_y(0);
+      }
     }
     state.set_thinks(state.thinks() + 1);
-    thinks++;
   };
 
   virtual GameState* Copy() const {
@@ -62,6 +68,7 @@ class MovePlayerEvent : public GameEvent {
     typed_data_->set_y(y);
   }
   virtual GameEventResult* ApplyToGameState(GameState* game_state) const {
+    printf("Apply event\n");
     TestState* state = static_cast<TestState*>(game_state);
     if (state->state.positions_size() > typed_data_->player()) {
       int x = state->state.positions(typed_data_->player()).x();
@@ -70,7 +77,7 @@ class MovePlayerEvent : public GameEvent {
       state->state.mutable_positions(typed_data_->player())->set_y(y + typed_data_->y());
     }
     state->state.set_applies(state->state.applies() + 1);
-    return  NULL;
+    return NULL;
   }
  private:
   TestEngineMoveEvent* typed_data_;
@@ -81,20 +88,16 @@ REGISTER_EVENT(1, MovePlayerEvent);
 // current frame and delayed frame are during a test.
 class TestFrameCalculator : public GameEngineFrameCalculator {
  public:
-  TestFrameCalculator(const GameEngine& engine)
-    : GameEngineFrameCalculator(engine),
-      current_timestep(0),
-      delayed_timestep(0) {}
-  virtual void GetFrame(Timestep* current_frame, Timestep* delayed_frame) const {
-    *current_frame = current_timestep;
-    *delayed_frame = delayed_timestep;
+  TestFrameCalculator() : time_ms_(0) {}
+  virtual int GetTime() const {
+    return time_ms_;
   }
-  virtual void Set(Timestep timestep) {
-    current_timestep = timestep;
-    delayed_timestep = timestep;
+  virtual void SetTime(int time_ms) {
+//    printf("SetTime: %d -> %d\n", time_ms_, time_ms);
+    time_ms_ = time_ms;
   }
-  Timestep current_timestep;
-  Timestep delayed_timestep;
+ private:
+  int time_ms_;
 };
 
 class GlopEnvironment : public testing::Environment {
@@ -113,386 +116,512 @@ static GlopEnvironment* env = new GlopEnvironment;
 TEST(GameEngineTest, TestThinksHappenAtTheCorrectTime) {
   TestState s;
 
-  GameEngine engine(s, 0, true, false, 10, 50, 0);
-  TestFrameCalculator* frame_calculator = new TestFrameCalculator(engine);
+  GameEngine engine(s, 50, 30, 10, 0);
+  TestFrameCalculator* frame_calculator = new TestFrameCalculator();
   engine.InstallFrameCalculator(frame_calculator);
 
-  {
-    frame_calculator->current_timestep = 0;
-    frame_calculator->delayed_timestep = 0;
+  for (int i = 0; i < 100; i++) {
+    frame_calculator->SetTime(i);
     engine.Think();
-    const TestState& state = static_cast<const TestState&>(engine.GetCurrentGameState());
-    ASSERT_EQ(1, state.state.positions_size());
-    EXPECT_EQ(1, state.state.positions(0).x());
-    EXPECT_EQ(2, state.state.positions(0).y());
-  }
-
-  {
-    frame_calculator->current_timestep = 1;
-    frame_calculator->delayed_timestep = 0;
-    engine.Think();
-    const TestState& state = static_cast<const TestState&>(engine.GetCurrentGameState());
-    ASSERT_EQ(1, state.state.positions_size());
-    EXPECT_EQ(1, state.state.positions(0).x());
-    EXPECT_EQ(2, state.state.positions(0).y());
-  }
-
-  {
-    frame_calculator->current_timestep = 1;
-    frame_calculator->delayed_timestep = 1;
-    engine.Think();
-    const TestState& state = static_cast<const TestState&>(engine.GetCurrentGameState());
-    ASSERT_EQ(1, state.state.positions_size());
-    EXPECT_EQ(2, state.state.positions(0).x());
-    EXPECT_EQ(4, state.state.positions(0).y());
-  }
-
-  {
-    frame_calculator->current_timestep = 2;
-    frame_calculator->delayed_timestep = 1;
-    engine.Think();
-    const TestState& state = static_cast<const TestState&>(engine.GetCurrentGameState());
-    ASSERT_EQ(1, state.state.positions_size());
-    EXPECT_EQ(2, state.state.positions(0).x());
-    EXPECT_EQ(4, state.state.positions(0).y());
-  }
-
-  {
-    frame_calculator->current_timestep = 2;
-    frame_calculator->delayed_timestep = 2;
-    engine.Think();
-    const TestState& state = static_cast<const TestState&>(engine.GetCurrentGameState());
-    ASSERT_EQ(1, state.state.positions_size());
-    EXPECT_EQ(3, state.state.positions(0).x());
-    EXPECT_EQ(6, state.state.positions(0).y());
+    const TestState& ts = (const TestState&)engine.GetCurrentGameState();
+    EXPECT_EQ(i/10 + 1, ts.state.thinks());
   }
 }
 
-// Test that events that are applied take effect when the delayed frame exceeds the current frame
-// that the event was applied on.
-TEST(GameEngineTest, TestEventsHappenWhenDelayedTimeChanges) {
+TEST(GameEngineTest, TestEventsAreAppliedAtTheCorrectTime) {
   TestState s;
-  s.thinks = 0;
 
-  GameEngine engine(s, 0, true, false, 10, 50, 0);
-  TestFrameCalculator* frame_calculator = new TestFrameCalculator(engine);
+  GameEngine engine(s, 50, 30, 10, 0);
+  TestFrameCalculator* frame_calculator = new TestFrameCalculator();
   engine.InstallFrameCalculator(frame_calculator);
 
-  {
-    frame_calculator->current_timestep = 0;
-    frame_calculator->delayed_timestep = 0;
-    MovePlayerEvent* move_player = NewMovePlayerEvent();
-    move_player->SetData(0, 1,1);
-    engine.ApplyEvent(move_player);
+  for (int i = 0; i < 100; i++) {
+    printf("%d\n", i);
+    frame_calculator->SetTime(i);
+    if (i%10==5) {
+      MovePlayerEvent* mpe = NewMovePlayerEvent();
+      mpe->SetData(0, 1, 1);
+      engine.ApplyEvent(mpe);
+    }
     engine.Think();
-    const TestState& state = static_cast<const TestState&>(engine.GetCurrentGameState());
-    ASSERT_EQ(1, state.state.positions_size());
-    EXPECT_EQ(1, state.state.positions(0).x());
-    EXPECT_EQ(2, state.state.positions(0).y());
-  }
-
-  {
-    frame_calculator->current_timestep = 1;
-    frame_calculator->delayed_timestep = 0;
-    MovePlayerEvent* move_player = NewMovePlayerEvent();
-    move_player->SetData(0, 1,1);
-    engine.ApplyEvent(move_player);
-    engine.Think();
-    const TestState& state = static_cast<const TestState&>(engine.GetCurrentGameState());
-    ASSERT_EQ(1, state.state.positions_size());
-    EXPECT_EQ(1, state.state.positions(0).x());
-    EXPECT_EQ(2, state.state.positions(0).y());
-  }
-
-  {
-    frame_calculator->current_timestep = 1;
-    frame_calculator->delayed_timestep = 1;
-    engine.Think();
-    const TestState& state = static_cast<const TestState&>(engine.GetCurrentGameState());
-    ASSERT_EQ(1, state.state.positions_size());
-    EXPECT_EQ(3, state.state.positions(0).x());
-    EXPECT_EQ(5, state.state.positions(0).y());
-  }
-
-  {
-    frame_calculator->current_timestep = 2;
-    frame_calculator->delayed_timestep = 1;
-    engine.Think();
-    const TestState& state = static_cast<const TestState&>(engine.GetCurrentGameState());
-    ASSERT_EQ(1, state.state.positions_size());
-    EXPECT_EQ(3, state.state.positions(0).x());
-    EXPECT_EQ(5, state.state.positions(0).y());
-  }
-
-  {
-    frame_calculator->current_timestep = 2;
-    frame_calculator->delayed_timestep = 2;
-    engine.Think();
-    const TestState& state = static_cast<const TestState&>(engine.GetCurrentGameState());
-    ASSERT_EQ(1, state.state.positions_size());
-    EXPECT_EQ(5, state.state.positions(0).x());
-    EXPECT_EQ(8, state.state.positions(0).y());
+    const TestState& ts = (const TestState&)engine.GetCurrentGameState();
+    printf("player pos: %d %d\n", ts.state.positions(0).x(), ts.state.positions(0).y());
+    EXPECT_EQ(i/10 + 1, ts.state.thinks());
+    EXPECT_EQ((i/10 + 1) + i/10, ts.state.positions(0).x());
+    EXPECT_EQ(2 * (i/10 + 1) + i/10, ts.state.positions(0).y());
   }
 }
 
-// \todo jwills - Should probably have some death tests
+TEST(GameEngineTest, TestEventsAreAppliedAtTheCorrectTimeWhenWaitingForNetTimestep) {
+  TestState s;
 
-// Nothing special except that we're running through more frames than we can fit into the
-// MovingWindows that we have
+  GameEngine engine(s, 50, 30, 10, 15);
+  TestFrameCalculator* frame_calculator = new TestFrameCalculator();
+  engine.InstallFrameCalculator(frame_calculator);
+
+  for (int i = 0; i < 100; i++) {
+    printf("%d\n", i);
+    frame_calculator->SetTime(i);
+    if (i%10==5) {
+      MovePlayerEvent* mpe = NewMovePlayerEvent();
+      mpe->SetData(0, 1, 1);
+      engine.ApplyEvent(mpe);
+    }
+    engine.Think();
+    const TestState& ts = (const TestState&)engine.GetCurrentGameState();
+    printf("player pos: %d %d\n", ts.state.positions(0).x(), ts.state.positions(0).y());
+    EXPECT_EQ(i/10 + 1, ts.state.thinks());
+    EXPECT_EQ((i/10 + 1) + i/10, ts.state.positions(0).x());
+    EXPECT_EQ(2 * (i/10 + 1) + i/10, ts.state.positions(0).y());
+  }
+}
+
+TEST(GameEngineTest, TestEventsAreAppliedInTheCorrectOrder) {
+  TestState s;
+
+  GameEngine engine(s, 50, 30, 10, 0);
+  TestFrameCalculator* frame_calculator = new TestFrameCalculator();
+  engine.InstallFrameCalculator(frame_calculator);
+
+  // We set the time and create an event here because we can't get an event in
+  // before the first think happens.
+  frame_calculator->SetTime(5);
+  {
+    MovePlayerEvent* mpe = NewMovePlayerEvent();
+    mpe->SetData(0, -100, -100);
+    engine.ApplyEvent(mpe);
+  }
+  for (int i = 10; i < 100; i++) {
+    printf("%d\n", i);
+    frame_calculator->SetTime(i);
+    if (i%10==5) {
+      MovePlayerEvent* mpe = NewMovePlayerEvent();
+      mpe->SetData(0, -100, -100);
+      engine.ApplyEvent(mpe);
+    }
+    engine.Think();
+    const TestState& ts = (const TestState&)engine.GetCurrentGameState();
+    printf("player pos: %d %d\n", ts.state.positions(0).x(), ts.state.positions(0).y());
+    EXPECT_EQ(i/10 + 1, ts.state.thinks());
+
+    // We tried to move a player way negative, but think should prevent that.
+    // Specifically, we are checking that apply events, then think, rather than thinking
+    // and then applying events.
+    EXPECT_EQ(0, ts.state.positions(0).x());
+    EXPECT_EQ(0, ts.state.positions(0).y());
+  }
+}
+
 TEST(GameEngineTest, TestThingsWorkAfterManyFramesHaveBeenProcessed) {
   TestState s;
 
-  GameEngine engine(s, 0, true, false, 10, 50, 0);
-  TestFrameCalculator* frame_calculator = new TestFrameCalculator(engine);
+  GameEngine engine(s, 50, 30, 10, 0);
+  TestFrameCalculator* frame_calculator = new TestFrameCalculator();
   engine.InstallFrameCalculator(frame_calculator);
 
-  for (int i = 0; i < 500; i++) {
-    frame_calculator->current_timestep = i;
-    frame_calculator->delayed_timestep = i;
-
-    // \todo jwills - This is a ridiculous memory leak, should definitely fix it, but have to be
-    // clear on exactly when we can delete the events.  Perhaps the engine should take ownership of
-    // them?
-    MovePlayerEvent* move_player = NewMovePlayerEvent();
-    move_player->SetData(0, 1, 1);
-    engine.ApplyEvent(move_player);
+  for (int i = 0; i < 10000; i++) {
+    frame_calculator->SetTime(i);
     engine.Think();
-    const TestState& state = static_cast<const TestState&>(engine.GetCurrentGameState());
-    ASSERT_EQ(1, state.state.positions_size());
-    EXPECT_EQ((i+1)*1 + i*1, state.state.positions(0).x());
-    EXPECT_EQ((i+1)*2 + i*1, state.state.positions(0).y());
+    const TestState& ts = (const TestState&)engine.GetCurrentGameState();
+    EXPECT_EQ(i/10 + 1, ts.state.thinks());
   }
 }
 
-TEST(GameEngineTest, TestMultipleFramesPassingAtATime) {
+/*
+TEST(GameEngineTest, TestThingsWorkAfterManyFramesHaveBeenProcessedAfterStartingOnNonZeroTimestep) {
   TestState s;
 
-  GameEngine engine(s, 0, true, false, 10, 50, 0);
-  TestFrameCalculator* frame_calculator = new TestFrameCalculator(engine);
+  GameEngine engine(s, true, 123, 50, 30, 10, 0);
+  TestFrameCalculator* frame_calculator = new TestFrameCalculator();
   engine.InstallFrameCalculator(frame_calculator);
 
-  for (int i = 0; i < 500; i++) {
-    frame_calculator->current_timestep = i*5;
-    frame_calculator->delayed_timestep = i*5;
-
-    // \todo jwills - This is a ridiculous memory leak, should definitely fix it, but have to be
-    // clear on exactly when we can delete the events.  Perhaps the engine should take ownership of
-    // them?
-    MovePlayerEvent* move_player = NewMovePlayerEvent();
-    move_player->SetData(0, 1, 1);
-    engine.ApplyEvent(move_player);
+  for (int i = 1230; i < 10000; i++) {
+    frame_calculator->SetTime(i);
     engine.Think();
-    const TestState& state = static_cast<const TestState&>(engine.GetCurrentGameState());
-    ASSERT_EQ(1, state.state.positions_size());
-    EXPECT_EQ((i*5+1)*1 + i*1, state.state.positions(0).x());
-    EXPECT_EQ((i*5+1)*2 + i*1, state.state.positions(0).y());
+    const TestState& ts = (const TestState&)engine.GetCurrentGameState();
+    EXPECT_EQ((i-1230)/10 + 1, ts.state.thinks());
   }
+}
+*/
+
+TEST(GameEngineTest, TestSkippingManyFramesAtATime) {
+  TestState s;
+
+  GameEngine engine(s, 50, 30, 10, 0);
+  TestFrameCalculator* frame_calculator = new TestFrameCalculator();
+  engine.InstallFrameCalculator(frame_calculator);
+
+  frame_calculator->SetTime(5);
+  MovePlayerEvent* mpe = NewMovePlayerEvent();
+  mpe->SetData(0, -100, -100);
+  engine.ApplyEvent(mpe);
+  frame_calculator->SetTime(400);
+  engine.Think();
+  const TestState& ts = (const TestState&)engine.GetCurrentGameState();
+  EXPECT_EQ(41, ts.state.thinks());
+  EXPECT_EQ(39, ts.state.positions(0).x());
+  EXPECT_EQ(78, ts.state.positions(0).y());
+}
+
+
+TEST(GameEngineTest, TestEnginesCanHostAndFindHosts) {
+  TestState s;
+  s.AddPlayer();
+
+  GameEngine engine1(s, 50, 30, 10, 0);
+  TestFrameCalculator* frame_calculator1 = new TestFrameCalculator();
+  engine1.InstallFrameCalculator(frame_calculator1);
+
+  ASSERT_TRUE(engine1.StartNetworkManager(65000));
+  EXPECT_TRUE(engine1.AllowIncomingConnections("THUNDER awesome"));
+  EXPECT_TRUE(engine1.DisallowIncomingConnections());
+  ASSERT_TRUE(engine1.AllowIncomingConnections("AWESOME thunder"));
+
+
+  GameEngine engine2(s);
+  TestFrameCalculator* frame_calculator2 = new TestFrameCalculator();
+  engine2.InstallFrameCalculator(frame_calculator2);
+
+  // TODO: Make this a WaitForHost helper function
+  ASSERT_TRUE(engine2.StartNetworkManager(65001));
+  engine2.FindHosts(65000);
+  int t = system()->GetTime();
+  while (engine2.AvailableHosts().size() != 1 && system()->GetTime() < t + 250) {
+    engine1.Think();
+    engine2.Think();
+    frame_calculator1->SetTime(frame_calculator1->GetTime());
+    frame_calculator2->SetTime(frame_calculator2->GetTime());
+    system()->Sleep(5);
+  }
+  vector<pair<GlopNetworkAddress, string> > hosts = engine2.AvailableHosts();
+  ASSERT_EQ(1, hosts.size());
+  EXPECT_EQ("AWESOME thunder", hosts[0].second);
 }
 
 TEST(GameEngineTest, TestEnginesCanConnect) {
   TestState s;
   s.AddPlayer();
 
-  GameEngine engine1(s, 0, true, false, 50, 50, 65000);
-  TestFrameCalculator* frame_calculator1 = new TestFrameCalculator(engine1);
+  GameEngine engine1(s, 50, 10, 10, 0);
+  TestFrameCalculator* frame_calculator1 = new TestFrameCalculator();
   engine1.InstallFrameCalculator(frame_calculator1);
 
-  ASSERT_TRUE(engine1.StartNetworkManager());
-  EXPECT_TRUE(engine1.AllowIncomingConnections("THUNDER awesome"));
-  EXPECT_TRUE(engine1.DisallowIncomingConnections());
-  ASSERT_TRUE(engine1.AllowIncomingConnections("AWESOME thunder"));
+  for (int i = 0; i < 100; i++) {
+    frame_calculator1->SetTime(frame_calculator1->GetTime() + 1);
+    engine1.Think();
+  }
+  
+
+  ASSERT_TRUE(engine1.StartNetworkManager(65000));
+  EXPECT_TRUE(engine1.AllowIncomingConnections("am host"));
 
 
-  GameEngine engine2(s, 0, false, false, 50, 50, 65001);
-  TestFrameCalculator* frame_calculator2 = new TestFrameCalculator(engine2);
+  GameEngine engine2(s);
+  TestFrameCalculator* frame_calculator2 = new TestFrameCalculator();
   engine2.InstallFrameCalculator(frame_calculator2);
 
   // TODO: Make this a WaitForHost helper function
-  ASSERT_TRUE(engine2.StartNetworkManager());
+  ASSERT_TRUE(engine2.StartNetworkManager(65001));
   engine2.FindHosts(65000);
   int t = system()->GetTime();
   while (engine2.AvailableHosts().size() != 1 && system()->GetTime() < t + 250) {
     engine1.Think();
     engine2.Think();
-    frame_calculator1->current_timestep++;
-    frame_calculator1->delayed_timestep++;
-    frame_calculator2->current_timestep++;
-    frame_calculator2->delayed_timestep++;
+    frame_calculator1->SetTime(frame_calculator1->GetTime() + 1);
+    frame_calculator2->SetTime(frame_calculator2->GetTime() + 1);
     system()->Sleep(5);
   }
   vector<pair<GlopNetworkAddress, string> > hosts = engine2.AvailableHosts();
   ASSERT_EQ(1, hosts.size());
-  EXPECT_EQ("AWESOME thunder", hosts[0].second);
+  ASSERT_EQ("am host", hosts[0].second);
 
   engine2.Connect(hosts[0].first, hosts[0].second);
   t = system()->GetTime();
-  while (engine2.Think() == kConnecting && system()->GetTime() < t + 250) {
-    engine1.Think();
-    frame_calculator1->current_timestep++;
-    frame_calculator1->delayed_timestep++;
-    frame_calculator2->current_timestep++;
-    frame_calculator2->delayed_timestep++;
+  GameEngineThinkState think_state;
+  while ((think_state = engine2.Think()) == kConnecting && system()->GetTime() < t + 250) {
+//    engine1.Think();
+/*    frame_calculator1->SetTime(test_time);
+    frame_calculator2->SetTime(test_time);
+    test_time += 5;
+    printf("Time: %d\n", test_time);
+*/
     system()->Sleep(5);
   }
-  ASSERT_EQ(kJoining, engine2.Think());
-  t = system()->GetTime();
-  while (engine2.Think() == kJoining && system()->GetTime() < t + 250) {
-    engine1.Think();
-    frame_calculator1->current_timestep++;
-    frame_calculator1->delayed_timestep++;
-    frame_calculator2->current_timestep++;
-    frame_calculator2->delayed_timestep++;
-    system()->Sleep(5);
-  }
-  ASSERT_EQ(kReady, engine2.Think());
-  t = system()->GetTime();
-  while (engine2.Think() == kReady && system()->GetTime() < t + 250) {
-    engine1.Think();
-    frame_calculator1->current_timestep++;
-    frame_calculator1->delayed_timestep++;
-    frame_calculator2->current_timestep++;
-    frame_calculator2->delayed_timestep++;
-    system()->Sleep(5);
-  }
-  ASSERT_EQ(kPlaying, engine2.Think());
-  // TODO: It's possible for the connecting engine to start a little bit behind, so the engine
-  // should advance the calculator as necessary if it sees future events coming from other players
-  // regularly.
-  frame_calculator2->current_timestep = frame_calculator1->current_timestep;
-  frame_calculator2->delayed_timestep = frame_calculator1->delayed_timestep;
-  t = system()->GetTime();
-  while (engine1.GetCompleteTimestep() != engine2.GetCompleteTimestep() &&
-         system()->GetTime() < t + 250) {
-    frame_calculator1->current_timestep++;
-    frame_calculator1->delayed_timestep++;
-    frame_calculator2->current_timestep = frame_calculator1->current_timestep;
-    frame_calculator2->delayed_timestep = frame_calculator1->delayed_timestep;
-    engine1.Think();
-    engine2.Think();
-    system()->Sleep(10);
-  }
-  ASSERT_EQ(engine1.GetCompleteTimestep(), engine2.GetCompleteTimestep());
-  engine1.Think();
-  engine2.Think();
-  string s1;
-  string s2;
-  for (int i = 0; i < 50; i++) {
-    engine1.Think();
-    engine2.Think();
-    Timestep t1 = engine1.GetCompleteTimestep();
-    Timestep t2 = engine2.GetCompleteTimestep();
-    Timestep tx = (t1<t2) ? t1 : t2;
-    engine1.GetSpecificGameState(tx).SerializeToString(&s1);
-    engine2.GetSpecificGameState(tx).SerializeToString(&s2);
-    const TestGameState& ts1 = ((const TestState&)(engine1.GetSpecificGameState(tx))).state;
-    const TestGameState& ts2 = ((const TestState&)(engine2.GetSpecificGameState(tx))).state;
-    ASSERT_EQ(s1, s2);
-    frame_calculator1->current_timestep++;
-    frame_calculator1->delayed_timestep++;
-    frame_calculator2->current_timestep++;
-    frame_calculator2->delayed_timestep++;
+  ASSERT_EQ(kJoining, think_state);
 
-    // \todo jwills - This is a ridiculous memory leak, should definitely fix it, but have to be
-    // clear on exactly when we can delete the events.  Perhaps the engine should take ownership of
-    // them?
-    MovePlayerEvent* move_player = NewMovePlayerEvent();
-    move_player->SetData(0, 1, 1);
-    engine1.ApplyEvent(move_player);
-
-    move_player = NewMovePlayerEvent();
-    move_player->SetData(1, 3, 5);
-    engine2.ApplyEvent(move_player);
-    system()->Sleep(10);
-  }
   t = system()->GetTime();
-  while (engine1.GetCompleteTimestep() != engine2.GetCompleteTimestep() &&
-         system()->GetTime() < t + 1250) {
+  while ((think_state = engine2.Think()) == kJoining && system()->GetTime() < t + 250) {
+    engine1.Think();
+    frame_calculator1->SetTime(frame_calculator1->GetTime() + 5);
+    frame_calculator2->SetTime(frame_calculator2->GetTime() + 5);
+    printf("Time: %d\n", frame_calculator2->GetTime());
+    system()->Sleep(5);
+  }
+  printf("state: %d\n", think_state);
+  ASSERT_EQ(kReady, think_state);
+
+  t = system()->GetTime();
+  while ((think_state = engine2.Think()) == kReady && system()->GetTime() < t + 1250) {
+    engine1.Think();
+    frame_calculator1->SetTime(frame_calculator1->GetTime() + 5);
+    frame_calculator2->SetTime(frame_calculator2->GetTime() + 5);
+    printf("Time: %d\n", frame_calculator2->GetTime());
+    system()->Sleep(5);
+  }
+  printf("state: %d\n", think_state);
+  ASSERT_EQ(kPlaying, think_state);
+
+  for (int i = 0; i < 100; i++) {
     engine1.Think();
     engine2.Think();
-    system()->Sleep(10);
+    frame_calculator1->SetTime(frame_calculator1->GetTime() + 5);
+    frame_calculator2->SetTime(frame_calculator2->GetTime() + 5);
+    system()->Sleep(5);
   }
-  EXPECT_EQ(engine1.GetCompleteTimestep(), engine2.GetCompleteTimestep());
-  engine1.GetCompleteGameState().SerializeToString(&s1);
-  engine2.GetCompleteGameState().SerializeToString(&s2);
-  EXPECT_EQ(s1, s2);
-  const TestGameState& ts1 = ((const TestState&)(engine1.GetCompleteGameState())).state;
-  const TestGameState& ts2 = ((const TestState&)(engine2.GetCompleteGameState())).state;
+  for (int i = 0; i < 100; i++) {
+    if (i%10==5) {
+      MovePlayerEvent* mpe = NewMovePlayerEvent();
+      mpe->SetData(0, -100, -100);
+      engine1.ApplyEvent(mpe);
+    }
+    engine1.Think();
+    engine2.Think();
+    frame_calculator1->SetTime(frame_calculator1->GetTime() + 5);
+    frame_calculator2->SetTime(frame_calculator2->GetTime() + 5);
+    system()->Sleep(5);
+  }
+  if (frame_calculator1->GetTime() > frame_calculator2->GetTime()) {
+    frame_calculator2->SetTime(frame_calculator1->GetTime());
+  } else {
+    frame_calculator1->SetTime(frame_calculator2->GetTime());
+  }
+  for (int i = 0; i < 100; i++) {
+    if (i%10==5) {
+      MovePlayerEvent* mpe = NewMovePlayerEvent();
+      mpe->SetData(1, -100, -100);
+      engine2.ApplyEvent(mpe);
+    }
+    engine1.Think();
+    engine2.Think();
+    frame_calculator1->SetTime(frame_calculator1->GetTime() + 5);
+    frame_calculator2->SetTime(frame_calculator2->GetTime() + 5);
+    system()->Sleep(5);
+  }
+  const TestState& ts1 = (const TestState&)engine1.GetCurrentGameState();
+  const TestState& ts2 = (const TestState&)engine2.GetCurrentGameState();
+  EXPECT_EQ(ts1.state.thinks(), ts2.state.thinks());
+  EXPECT_EQ(ts1.state.positions(0).x(), ts2.state.positions(0).x());
+  EXPECT_EQ(ts1.state.positions(0).y(), ts2.state.positions(0).y());
+  EXPECT_EQ(ts1.state.positions(1).x(), ts2.state.positions(1).x());
+  EXPECT_EQ(ts1.state.positions(1).y(), ts2.state.positions(1).y());
 }
 
-// Convenience method for connecting one engine to another.  Assumes they both use some sort of time
-// based framerate calculator.
-void ConnectEngines(GameEngine* host, GameEngine* client, int port, vector<GameEngine*> others) {
-  ASSERT_TRUE(host->StartNetworkManager());
+class Waiter {
+ public:
+  virtual void Tick(GameEngineFrameCalculator* calculator) = 0;
+  virtual void StartWaiting() = 0;
+  virtual bool StillWaiting() = 0;
+  virtual void Pause() = 0;
+};
+
+class RealTimerWaiter : public Waiter {
+ public:
+  RealTimerWaiter(int wait_duration, int pause_duration)
+    : wait_duration_(wait_duration),
+      pause_duration_(pause_duration) { }
+  virtual void Tick(GameEngineFrameCalculator* calculator) { }
+  virtual void StartWaiting() {
+    reference_time_ = system()->GetTime();
+  }
+  virtual bool StillWaiting() {
+    return system()->GetTime() - reference_time_ < wait_duration_;
+  }
+  virtual void Pause() {
+    system()->Sleep(pause_duration_);
+  }
+ private:
+  const int wait_duration_;
+  int reference_time_;
+  const int pause_duration_;
+};
+
+class TestTimerWaiter : public Waiter {
+ public:
+  TestTimerWaiter(int tick_amount, int wait_duration)
+    : tick_amount_(tick_amount),
+      wait_duration_(wait_duration) { }
+  virtual void Tick(GameEngineFrameCalculator* calculator) {
+    calculator->SetTime(calculator->GetTime() + tick_amount_);
+  }
+  virtual void StartWaiting() {
+    reference_time_ = wait_duration_;
+  }
+  virtual bool StillWaiting() {
+    reference_time_--;
+    return reference_time_ > 0;
+  }
+  virtual void Pause() {
+    system()->Sleep(5);
+  }
+ private:
+  const int tick_amount_;
+  const int wait_duration_;
+  int reference_time_;
+};
+
+GameEngineThinkState ThinkAll(
+    GameEngine* client,
+    set<pair<GameEngine*, GameEngineFrameCalculator*> > all,
+    Waiter* waiter) {
+  GameEngineThinkState ret = kIdle;
+  set<pair<GameEngine*, GameEngineFrameCalculator*> >::iterator it;
+  for (it = all.begin(); it != all.end(); it++) {
+    GameEngineThinkState think_state = it->first->Think();
+    if (it->first == client) {
+      ret = think_state;
+    }
+    waiter->Tick(it->second);
+  }
+  return ret;
+}
+
+void ConnectEngines(
+    GameEngine* host,
+    int host_port,
+    GameEngine* client,
+    int client_port,
+    set<pair<GameEngine*, GameEngineFrameCalculator*> > all_engines,
+    Waiter* waiter) {
+  ASSERT_TRUE(host->StartNetworkManager(host_port));
   EXPECT_TRUE(host->AllowIncomingConnections("I AM HOST"));
 
-  ASSERT_TRUE(client->StartNetworkManager());
-  client->FindHosts(port);
+  ASSERT_TRUE(client->StartNetworkManager(client_port));
+  client->FindHosts(host_port);
 
-  int t = system()->GetTime();
-  while (client->AvailableHosts().size() != 1 && system()->GetTime() < t + 250) {
-    host->Think();
-    client->Think();
-    for (int i = 0; i < others.size(); i++) {
-      others[i]->Think();
-    }
-    system()->Sleep(5);
+  waiter->StartWaiting();
+  while (client->AvailableHosts().size() != 1 && waiter->StillWaiting()) {
+    ThinkAll(client, all_engines, waiter);
+    waiter->Pause();
   }
   vector<pair<GlopNetworkAddress, string> > hosts = client->AvailableHosts();
   ASSERT_EQ(1, hosts.size());
   EXPECT_EQ("I AM HOST", hosts[0].second);
 
-  printf("Found host\n");
+  printf("***Found host\n");
 
   client->Connect(hosts[0].first, hosts[0].second);
-  t = system()->GetTime();
-  while (client->Think() == kConnecting && system()->GetTime() < t + 250) {
-    host->Think();
-    for (int i = 0; i < others.size(); i++) {
-      others[i]->Think();
-    }
-    system()->Sleep(5);
+  waiter->StartWaiting();
+  while (ThinkAll(client, all_engines, waiter) == kConnecting && waiter->StillWaiting()) {
+    printf("***Connecting...\n");
+    waiter->Pause();
   }
   ASSERT_EQ(kJoining, client->Think());
 
-  printf("Joinging...\n");
+  printf("***Joining...\n");
 
-  t = system()->GetTime();
-  while (client->Think() == kJoining && system()->GetTime() < t + 250) {
-    host->Think();
-    for (int i = 0; i < others.size(); i++) {
-      others[i]->Think();
-    }
-    system()->Sleep(5);
+  waiter->StartWaiting();
+  while (ThinkAll(client, all_engines, waiter) == kJoining && waiter->StillWaiting()) {
+    printf("***Joining\n");
+    waiter->Pause();
   }
   ASSERT_EQ(kReady, client->Think());
 
-  printf("Ready\n");
+  printf("***Ready...\n");
 
-  t = system()->GetTime();
-  while (client->Think() == kReady && system()->GetTime() < t + 250) {
-    host->Think();
-    for (int i = 0; i < others.size(); i++) {
-      others[i]->Think();
-    }
-    system()->Sleep(5);
+  waiter->StartWaiting();
+  while (ThinkAll(client, all_engines, waiter) == kReady && waiter->StillWaiting()) {
+    printf("***Ready...\n");
+    waiter->Pause();
   }
   ASSERT_EQ(kPlaying, client->Think());
 
-  printf("playing\n");
+  printf("***playing\n");
 
 
   // Run them a bit just for kicks
-  t = system()->GetTime();
-  while (system()->GetTime() < t + 250) {
-    host->Think();
-    client->Think();
-    for (int i = 0; i < others.size(); i++) {
-      others[i]->Think();
-    }
-    system()->Sleep(5);
+  waiter->StartWaiting();
+  while (waiter->StillWaiting()) {
+    ThinkAll(client, all_engines, waiter);
+    waiter->Pause();
   }
 }
 
+#if 1
+TEST(GameEngineTest, TestEnginesCanConnectArbitrarilyX) {
+  TestState s;
+  s.AddPlayer();
+  s.AddPlayer();
+
+  GameEngine engine1(s, 50, 30, 10, 0);
+  engine1.InstallFrameCalculator(new TestFrameCalculator());
+  GameEngine engine2(s);
+  engine2.InstallFrameCalculator(new TestFrameCalculator());
+  GameEngine engine3(s);
+  engine3.InstallFrameCalculator(new TestFrameCalculator());
+
+  TestTimerWaiter waiter(1, 50);
+  set<pair<GameEngine*, GameEngineFrameCalculator*> > all_engines;
+  all_engines.insert(make_pair(&engine1, engine1.GetFrameCalculator()));
+  all_engines.insert(make_pair(&engine2, engine2.GetFrameCalculator()));
+  ConnectEngines(&engine1, 65001, &engine2, 65002, all_engines, &waiter);
+  all_engines.insert(make_pair(&engine3, engine3.GetFrameCalculator()));
+  ConnectEngines(&engine1, 65001, &engine3, 65003, all_engines, &waiter);
+}
+#endif
+#if 0
+TEST(GameEngineTest, TestEnginesCanConnectArbitrarily) {
+  TestState s;
+  s.AddPlayer();
+  s.AddPlayer();
+  s.AddPlayer();
+  s.AddPlayer();
+  s.AddPlayer();
+
+  GameEngine engine1(s, 50, 30, 10, 0);
+  GameEngine engine2(s);
+  GameEngine engine3(s);
+  GameEngine engine4(s);
+  GameEngine engine5(s);
+  GameEngine engine6(s);
+  GameEngine engine7(s);
+  GameEngine engine8(s);
+  GameEngine engine9(s);
+  GameEngine engine10(s);
+  GameEngine engine11(s);
+  GameEngine engine12(s);
+  GameEngine engine13(s);
+
+  RealTimerWaiter waiter(250, 5);
+  set<pair<GameEngine*, GameEngineFrameCalculator*> > all_engines;
+  all_engines.insert(make_pair(&engine1, engine1.GetFrameCalculator()));
+  all_engines.insert(make_pair(&engine2, engine2.GetFrameCalculator()));
+  ConnectEngines(&engine1, 65001, &engine2, 65002, all_engines, &waiter);
+  all_engines.insert(make_pair(&engine3, engine3.GetFrameCalculator()));
+  ConnectEngines(&engine1, 65001, &engine3, 65003, all_engines, &waiter);
+  all_engines.insert(make_pair(&engine4, engine4.GetFrameCalculator()));
+  ConnectEngines(&engine1, 65001, &engine4, 65004, all_engines, &waiter);
+  all_engines.insert(make_pair(&engine5, engine5.GetFrameCalculator()));
+  ConnectEngines(&engine1, 65001, &engine5, 65005, all_engines, &waiter);
+  all_engines.insert(make_pair(&engine6, engine6.GetFrameCalculator()));
+  ConnectEngines(&engine4, 65004, &engine6, 65006, all_engines, &waiter);
+  all_engines.insert(make_pair(&engine7, engine7.GetFrameCalculator()));
+  ConnectEngines(&engine4, 65004, &engine7, 65007, all_engines, &waiter);
+  all_engines.insert(make_pair(&engine8, engine8.GetFrameCalculator()));
+  ConnectEngines(&engine7, 65007, &engine8, 65008, all_engines, &waiter);
+  all_engines.insert(make_pair(&engine9, engine9.GetFrameCalculator()));
+  ConnectEngines(&engine4, 65004, &engine9, 65009, all_engines, &waiter);
+
+  all_engines.insert(make_pair(&engine10, engine10.GetFrameCalculator()));
+  ConnectEngines(&engine7, 65007, &engine10, 65010, all_engines, &waiter);
+  all_engines.insert(make_pair(&engine11, engine11.GetFrameCalculator()));
+  ConnectEngines(&engine7, 65007, &engine11, 65011, all_engines, &waiter);
+  all_engines.insert(make_pair(&engine12, engine12.GetFrameCalculator()));
+  ConnectEngines(&engine7, 65007, &engine12, 65012, all_engines, &waiter);
+  all_engines.insert(make_pair(&engine13, engine13.GetFrameCalculator()));
+  ConnectEngines(&engine7, 65007, &engine13, 65013, all_engines, &waiter);
+}
+#endif
+/*
 TEST(GameEngineTest, TestEnginesCanConnectArbitrarily) {
   TestState s;
   s.AddPlayer();
@@ -519,7 +648,7 @@ TEST(GameEngineTest, TestEnginesCanConnectArbitrarily) {
 
   printf("Connected 2 to 1\n");
   for (int i = 0; i < all.size(); i++) {
-    printf("engine %d at timestep: %d\n", i+1, all[i]->GetCompleteTimestep());
+    printf("engine %d at timestep: %d\n", i+1, all[i]->GetCompleteNetTimestep());
   }
 
   others.clear();
@@ -528,7 +657,7 @@ TEST(GameEngineTest, TestEnginesCanConnectArbitrarily) {
 
   printf("Connected 3 to 1\n");
   for (int i = 0; i < all.size(); i++) {
-    printf("engine %d at timestep: %d\n", i+1, all[i]->GetCompleteTimestep());
+    printf("engine %d at timestep: %d\n", i+1, all[i]->GetCompleteNetTimestep());
   }
 
   others.clear();
@@ -538,7 +667,7 @@ TEST(GameEngineTest, TestEnginesCanConnectArbitrarily) {
 
   printf("Connected 4 to 2\n");
   for (int i = 0; i < all.size(); i++) {
-    printf("engine %d at timestep: %d\n", i+1, all[i]->GetCompleteTimestep());
+    printf("engine %d at timestep: %d\n", i+1, all[i]->GetCompleteNetTimestep());
   }
 
   others.clear();
@@ -550,7 +679,7 @@ TEST(GameEngineTest, TestEnginesCanConnectArbitrarily) {
   printf("Connected 5 to 2\n");
 
   for (int i = 0; i < all.size(); i++) {
-    printf("engine %d at timestep: %d\n", i+1, all[i]->GetCompleteTimestep());
+    printf("engine %d at timestep: %d\n", i+1, all[i]->GetCompleteNetTimestep());
   }
 
 
@@ -568,10 +697,10 @@ TEST(GameEngineTest, TestEnginesCanConnectArbitrarily) {
     }
     system()->Sleep(40);
   }
-  Timestep timestep = 10000000;
+  NetTimestep timestep = 10000000;
   for (int i = 0; i < all.size(); i++) {
-    if (all[i]->GetCompleteTimestep() < timestep) {
-      timestep = all[i]->GetCompleteTimestep();
+    if (all[i]->GetCompleteNetTimestep() < timestep) {
+      timestep = all[i]->GetCompleteNetTimestep();
     }
   }
   vector<string> serialized(all.size());
@@ -582,3 +711,4 @@ TEST(GameEngineTest, TestEnginesCanConnectArbitrarily) {
     EXPECT_EQ(serialized[0], serialized[i]);
   }
 }
+*/

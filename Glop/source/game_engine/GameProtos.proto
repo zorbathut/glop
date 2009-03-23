@@ -1,9 +1,15 @@
 message GameStateEventData {
-  required string game_state = 1;
+  required bytes game_state = 1;
   required int32 timestep = 2;
   repeated int32 engine_ids = 3;
   required int32 source_engine_id = 4;
   required int32 temporary_engine_id = 5;
+
+  // These are used to actually construct the engine
+  required int32 max_frames = 6;
+  required int32 ms_per_net_frame = 7;
+  required int32 ms_per_state_frame = 8;
+  required int32 ms_delay = 9;
 }
 
 message ReadyToPlayEventData {
@@ -32,7 +38,7 @@ message DropPlayerEventData {
 }
 
 message JoinGameEventData {
-  required int32 timestep = 1;     // Timestep that game_state is from.
+  required int32 timestep = 1;     // NetTimestep that game_state is from.
   required int32 new_player_id = 2;// ID of the new player once he finally joins
   repeated int32 player_ids = 3;   // IDs of the other players in the game at the starting timestep.
   required string game_state = 4;  // Complete serialized GameState.

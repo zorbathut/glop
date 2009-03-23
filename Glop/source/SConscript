@@ -79,8 +79,8 @@ env.BuildObjects(
   target_name = 'game_engine',
   source = [
     'game_engine/GameConnection.cpp',
-    'game_engine/GameEngine.cpp',
     'game_engine/GameEvent.cpp',
+    'game_engine/GameEngine.cpp',
     'game_engine/GameProtos.pb.cc',
   ],
   packages = [
@@ -113,8 +113,8 @@ env.BuildProtos(
 )
 
 env.Test(
-  'game_event_test',
-  'game_engine/GameEvent_test.cpp',
+  'game_connection_test',
+  'game_engine/GameConnection_test.cpp',
   packages = [
     'game_engine',
     'test_protos',
@@ -123,8 +123,8 @@ env.Test(
 )
 
 env.Test(
-  'game_connection_test',
-  'game_engine/GameConnection_test.cpp',
+  'game_event_test',
+  'game_engine/GameEvent_test.cpp',
   packages = [
     'game_engine',
     'test_protos',
@@ -147,3 +147,4 @@ env.Test(
   'game_engine/MovingWindow_test.cpp',
   packages = []
 )
+

@@ -110,7 +110,6 @@ class GameEventFactory {
   /// be called during static initialization, so that all GameEvents will be registered before we
   /// hit main().
   GameEventFactory(int event_type, GameEvent* (*event_constructor)()) {
-    printf("Registering %d\n", event_type);
     if (event_constructors_ == NULL) {
       event_constructors_ = new map<int, GameEvent* (*)()>;
       mutex_ = new Mutex;
@@ -127,6 +126,7 @@ class GameEventFactory {
     map<int, GameEvent* (*)()>::iterator it = event_constructors_->begin();
     GameEvent* event = (*event_constructors_)[event_type]();
     event->set_type(event_type);
+printf("GameEventFactory::GetEventByType(%d)\n",event_type);
     return event;
   }
 
@@ -152,7 +152,7 @@ inline GameEvent* __ ## EVENT_CLASS ## __create() {                             
 }                                                                                  \
 static GameEventFactory __ ## EVENT_CLASS ##                                       \
     __creator(EVENT_TYPE, &__ ## EVENT_CLASS ## __create);                         \
-EVENT_CLASS* New ## EVENT_CLASS() {                                         \
+EVENT_CLASS* New ## EVENT_CLASS() {                                                \
   return static_cast<EVENT_CLASS*>(GameEventFactory::GetEventByType(EVENT_TYPE));  \
 }
 

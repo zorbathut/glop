@@ -16,7 +16,6 @@ void GameEventFactory::Serialize(const GameEvent* event, string* str) {
     assert(false);
     printf("ZZEROREOR!n\n");
   }
- 
   event->data_->AppendToString(str);
 }
 

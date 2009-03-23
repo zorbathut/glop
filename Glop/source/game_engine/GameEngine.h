@@ -36,17 +36,17 @@ class GameState;
 /// This struct maintains important information about the GameEngine that could change from frame to
 /// frame.
 struct GameEngineInfo {
-  GameEngineInfo() : timestep(-1) { }
+  GameEngineInfo() : state_timestep(-1) { }
 
   /// set of the IDs of all engines currently in the game
   set<EngineID> engine_ids;
 
   /// timestep of this frame (possibly not needed since its in a MovingWindow?)
-  int timestep;
+  StateTimestep state_timestep;
 };
 
 enum GameEngineThinkState {
-  kIdle,              // Nothing of interest is going on, might be time to destroy the engine.
+  kIdle,              // Nothing of interest is going on
   kPlaying,           // Currently playing a game, keep calling Think() to keep playing.
   kLagging,           // We're waiting on packets from another player before we can continue.
   kGameOver,          // Game *just* finished, will return kIdle afte this.
@@ -57,16 +57,15 @@ enum GameEngineThinkState {
 };
 
 class GameEngine;
-/// This class allows tests to override the function that the GameEngine uses to determine what the
-/// current frame is.
+
+/// This class exists so that we can write tests easily.  Normally it will be filled in with a
+/// standard class that just uses system()->GetTime().  Calculators always work in milliseconds.
 class GameEngineFrameCalculator {
  public:
-  GameEngineFrameCalculator(const GameEngine& engine) : engine_(engine) { }
-  virtual void GetFrame(Timestep* current_frame, Timestep* delayed_frame) const = 0;
-  virtual void Set(Timestep timestep) = 0;
-
- protected:
-  const GameEngine& engine_;
+  GameEngineFrameCalculator() { }
+  ~GameEngineFrameCalculator() { }
+  virtual int GetTime() const = 0;
+  virtual void SetTime(int) = 0;
 };
 
 /// GameEngine handles all of the work for maintain a P2PNG game.  This includes making/breaking
@@ -76,15 +75,18 @@ class GameEngineFrameCalculator {
 /// stopping/slowing-down/speeding-up the game to keep in sync with other GameEngines.
 class GameEngine {
  public:
+  GameEngine(const GameState& reference);
   GameEngine(
       const GameState& initial_state,
-      int initial_timestep,
-      bool host,
-      bool multithreaded,
       int max_frames,
-      int ms_per_frame,
-      int port);
+      int ms_per_net_frame,
+      int ms_per_state_frame,
+      int ms_delay);
   ~GameEngine();
+
+  // Stats
+  int NumThinks() const { return num_thinks_; }
+  int NumRethinks() const { return num_rethinks_; }
 
   /// Returns the most accurate GameState object for the current timestep.  This will block until
   /// all pending GameEvents have been applied to the GameState history.
@@ -93,13 +95,13 @@ class GameEngine {
   /// Returns the most recent GameState object that is completely accurate.
   const GameState& GetCompleteGameState();
 
-  const GameState& GetSpecificGameState(Timestep);
+  const GameState& GetSpecificGameState(NetTimestep);
 
-  /// Returns the most recent Timestep for which we have a completely accurate state.
-  Timestep GetCompleteTimestep();
+  /// Returns the most recent NetTimestep for which we have a completely accurate state.
+  NetTimestep GetCompleteNetTimestep();
 
-  /// Returns the current Timestep according to the framerate calculator.
-  Timestep GetCurrentTimestep();
+  /// Returns the current NetTimestep according to the framerate calculator.
+  NetTimestep GetCurrentNetTimestep();
 
   /// Applies an event to the current GameState, and packages it to be sent out when appropriate to
   /// other GameEngines.
@@ -108,6 +110,7 @@ class GameEngine {
 
   /// Used for installing new logic in the engine, primarily here for testing purposes.
   void InstallFrameCalculator(GameEngineFrameCalculator* frame_calculator);
+  GameEngineFrameCalculator* GetFrameCalculator() const { return frame_calculator_; }
 
   /// Think should be called regularly in the main loop of the game.
   GameEngineThinkState Think();
@@ -116,7 +119,7 @@ class GameEngine {
 
   // Starts the network manager if it is not already started.  Returns true iff after this function
   // is called the network manager is ready to rock.
-  bool StartNetworkManager();
+  bool StartNetworkManager(int port);
 
   /// Starts a NetworkManager and sets the broadcast message that is sent to anyone looking for a
   /// game.  Returns false iff there was an error.
@@ -141,12 +144,9 @@ class GameEngine {
   /// with it.
   void Connect(GlopNetworkAddress gna, const string& message);
 
-
-
-
-
   // Accessors
-  int ms_per_frame() const { return ms_per_frame_; }
+  int ms_per_net_frame() const { return ms_per_net_frame_; }
+  int ms_per_state_frame() const { return ms_per_state_frame_; }
   int ms_delay() const { return ms_delay_; }
 
  private:
@@ -159,29 +159,30 @@ class GameEngine {
   void ThinkJoining();
   void ThinkNetworking();
 
-  // Sends out all events for all timesteps up to current_timestep
-  void SendEvents(Timestep current_timestep);
+  void QueueEvents(StateTimestep state_timestep);
 
-  void RecreateState(Timestep timestep);
+  void SendEvents(NetTimestep net_timestep);
 
-  void AdvanceAsFarAsPossible(Timestep current_timestep, Timestep delayed_timestep);
+  void RecreateState(StateTimestep state_timestep);
 
-/*  
-  void ConnectToHost();
+  bool IsStateComplete(StateTimestep state_timestep);
 
+  StateTimestep GameEngine::GetCurrentDelayedStateTimestep();
 
-  void CheckForJoinRequests();
-  void CheckForJoinAcknowledges();
+  void AdvanceAsFarAsPossible(NetTimestep current_timestep, NetTimestep delayed_timestep);
 
-  void CheckForJoinEvent();
-*/
   // Helper method that applies a batch of events to a GameState in the appropriate order for that
   // timestep.
   void ApplyEventsToGameState(
-      Timestep timestep,
-      map<EngineID, vector<GameEvent*> > events,
+      int think_count,
+      const map<EngineID, vector<GameEvent*> >& events,
       GameState* game_state,
       GameEngineInfo* game_engine_info);
+//  void ApplyEventsToGameState(
+//      NetTimestep timestep,
+//      map<EngineID, vector<GameEvent*> > events,
+//      GameState* game_state,
+//      GameEngineInfo* game_engine_info);
 
   EngineID engine_id_;
   EngineID source_engine_id_;
@@ -192,18 +193,19 @@ class GameEngine {
   EngineID next_game_engine_id_;
 
   bool host_;
-  bool multithreaded_;
   int max_frames_;
-  int ms_per_frame_;
+  int ms_per_net_frame_;
+  int ms_per_state_frame_;
 
-  /// For the standard frame calculator, this delay is imposed on the GetDelayFrame.
   int ms_delay_;
 
   /// The timestep most recently reported during a call to ApplyEvent_.
-  Timestep last_apply_event_timestep_;
+  NetTimestep last_queue_event_timestep_;
 
-  Timestep oldest_dirty_timestep_;
+  StateTimestep last_send_event_timestep_;
 
+  StateTimestep oldest_dirty_timestep_;
+  StateTimestep latest_complete_state_timestep_;
 
   int port_;
   List<GlopNetworkAddress> connectees_;  // List of addresses that have asked to join this game.
@@ -229,7 +231,8 @@ class GameEngine {
   /// Current state of the engine.  This value of this is always returned by Think().
   GameEngineThinkState think_state_;
 
-  /// List of GameEvents that have been generated by this engine.
+  /// List of GameEvents that have been generated by this engine, along with the time in ms (since
+  /// the game started) that they were generated.
   vector<GameEvent*> local_events_;
 
   GameEngineFrameCalculator* frame_calculator_;
@@ -239,9 +242,30 @@ class GameEngine {
   string connection_message_;  // Message that we'll send as soon as we are connected.
   set<GlopNetworkAddress> connected_gnas_;
 
-  map<Timestep, map<EngineID, vector<GameEvent*> > > game_event_buffer_;
+  map<NetTimestep, map<EngineID, vector<GameEvent*> > > game_event_buffer_;
   // While we're waiting to join we may receive a lot of game events, this will hold them until
   // we've received the whole gamestate.
+
+
+  // stats
+  int num_thinks_;
+  int num_rethinks_;
+};
+
+// Use a GameEngineConnector to find games.  Once you've found and connected to the game you're
+// interested in you can grab an actual engine from it and ditch the connector.
+class GameEngineConnector {
+ public:
+   explicit GameEngineConnector(int port);
+   ~GameEngineConnector();
+   void Think();
+   void FindHosts(int port);
+   vector<pair<GlopNetworkAddress, string> > AvailableHosts() const;
+   void ClearHosts();
+   void ConnectToHost(GlopNetworkAddress gna, const string& message);
+   GameEngine* GetEngine();
+ private:
+  NetworkManager* network_manager_;
 };
 
 class GameStateEvent : public GameEvent {
@@ -255,10 +279,14 @@ class GameStateEvent : public GameEvent {
   }
   void SetData(
       const string& game_state,
-      Timestep timestep,
+      NetTimestep timestep,
       set<EngineID> engine_ids,
       EngineID source_engine_id,
-      EngineID temporary_engine_id) {
+      EngineID temporary_engine_id,
+      int max_frames,
+      int ms_per_net_frame,
+      int ms_per_state_frame,
+      int ms_delay) {
     typed_data_->set_game_state(game_state);
     typed_data_->set_timestep(timestep);
     for (set<EngineID>::iterator it = engine_ids.begin(); it != engine_ids.end(); it++) {
@@ -266,6 +294,10 @@ class GameStateEvent : public GameEvent {
     }
     typed_data_->set_source_engine_id(source_engine_id);
     typed_data_->set_temporary_engine_id(temporary_engine_id++);
+    typed_data_->set_max_frames(max_frames);
+    typed_data_->set_ms_per_net_frame(ms_per_net_frame);
+    typed_data_->set_ms_per_state_frame(ms_per_state_frame);
+    typed_data_->set_ms_delay(ms_delay);
   }
   const GameStateEventData& GetData() {
     return *typed_data_;
@@ -292,7 +324,7 @@ class ReadyToPlayEvent : public GameEvent {
     return typed_data_->origin();
   }
   int temporary() const {
-    typed_data_->temporary();
+    return typed_data_->temporary();
   }
  private:
   ReadyToPlayEventData* typed_data_;
@@ -327,86 +359,4 @@ class NewEngineEvent : public GameEvent {
  private:
   NewEngineEventData* typed_data_;
 };
-
-/*class AddPlayerEvent : public GameEvent {
- public:
-  AddPlayerEvent() {
-    typed_data_ = new AddPlayerEventData;
-    data_ = typed_data_;
-  }
-  virtual ~AddPlayerEvent() {
-    delete typed_data_;
-  }
-  void SetPlayerID(PlayerID player_id) {
-    typed_data_->set_player_id(player_id);
-  }
-  virtual GameEventResult* ApplyToGameState(PlayerID player_id, GameState* game_state) const {
-    game_state->AddPlayer(typed_data_->player_id());
-    return  NULL;
-  }
-  virtual void ApplyToGameEngineInfo(GameEngineInfo* info) const {
-    if (info->player_ids.count(typed_data_->player_id())) {
-      printf("Adding a player that already exists! (%d)\n");
-    }
-    info->player_ids.insert(typed_data_->player_id());
-  }
- private:
-  AddPlayerEventData* typed_data_;
-};
-
-class DropPlayerEvent : public GameEvent {
- public:
-  DropPlayerEvent() {
-    DropPlayerEventData* typed_data_ = new DropPlayerEventData;
-    data_ = typed_data_;
-  }
-  virtual ~DropPlayerEvent() {
-    delete typed_data_;
-  }
-  void DropPlayedID(int id) {
-    typed_data_->add_player_id(id);
-  }
-  vector<int> GetPlayerIDs() const {
-    vector<int> v(typed_data_->player_id_size());
-    for (int i = 0; i < typed_data_->player_id_size(); i++) {
-      v.push_back(typed_data_->player_id(i));
-    }
-    return v;
-  }
-  virtual void ApplyToGameEngineInfo(GameEngineInfo* info) const {
-  }
- private:
-  DropPlayerEventData* typed_data_;
-};
-
-
-// Hosting: For an engine to host, it will call engine.Host(message).  This will start up the hosting service of the engine and send the message to any engine that is looking for a game.
-// Connection: If an engine wants to connect to another engine, first it calls engine.FindHosts().  This will search for hosts on the LAN and as they are found will become available through engine.AvailableHosts().  For each host, AvailableHosts will supply a GlopNetworkAddress along with the message that the host supplied when it called engine.Host.  Then to connect to a host, call engine.Connect(gna) with the gna of the host that you want to connect to.
-// Once a connection is established the host will send a SetGameStateEvent.  From then on the host will send all events necessary for updating the GameState through that connection.  Once the client has received the SetGameStateEvent and is up-to-date enough to start playing, he will send a GoodToGoEvent.  On the NEXT event the GameEngine will be ready to receive local events through GameEngine.ApplyEvent(s).
-
-// Calling GameEngine.Think() will return one of the following values
-// PLAYING - Currently playing a game.  This will be set if a GameState is being updated on Think.
-// GAMEOVER - Was PLAYING, but now the game is done.  This value will be returned once, then IDLE
-//   will be returned.
-// CONNECTING - Currently trying to conncet to a host engine.
-// CONNECTION_FAILED - Tried to conncet to a host, but unsuccessful, this value will be returned
-//   once, afterwards IDLE will be returned.
-// IDLE - Nothing of interest is going on.
-
-class AcknowledgeStartGameEvent : public GameEvent {
- public:
-  AcknowledgeStartGameEvent() {
-    typed_data_ = new AcknowledgeStartGameEventData;
-    data_ = typed_data_;
-  }
-  void SetData(int timestep) {
-    typed_data_->set_timestep(timestep);
-  }
-  virtual ~AcknowledgeStartGameEvent() {
-    delete typed_data_;
-  }
- private:
-  AcknowledgeStartGameEventData* typed_data_;
-};
-*/
 #endif // GAMEENGINE_GAMEENGINE_H

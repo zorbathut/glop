@@ -8,6 +8,10 @@
 template <class T>
 class MovingWindow {
  public:
+  MovingWindow() : size_(-1), first_index_(-1), data_(NULL) {
+    
+  }
+
   MovingWindow(int size, int start) : size_(size), first_index_(start) {
     assert(size >= 1);
     data_ = new T[size];
@@ -42,15 +46,27 @@ class MovingWindow {
 
   T& operator[](int index) {
 //    printf("%d %d %d\n", index, first_index_, first_index_ + size_);
-    assert(index >= first_index_);
-    assert(index < first_index_ + size_);
+    if (index < first_index_) {
+      printf("index %d < first_index_ %d\n", index, first_index_);
+      assert(false);
+    }
+    if (index >= first_index_ + size_) {
+      printf("index %d >= first_index_ + size_ %d\n", index, first_index_ + size_);
+      assert(false);
+    }
     return data_[((index % size_) + size_) % size_];
   }
 
   const T& operator[](int index) const {
 //    printf("%d %d %d\n", index, first_index_, first_index_ + size_);
-    assert(index >= first_index_);
-    assert(index < first_index_ + size_);
+    if (index < first_index_) {
+      printf("index %d < first_index_ %d\n", index, first_index_);
+      assert(false);
+    }
+    if (index >= first_index_ + size_) {
+      printf("index %d >= first_index_ + size_ %d\n", index, first_index_ + size_);
+      assert(false);
+    }
     return data_[((index % size_) + size_) % size_];
   }
 
@@ -75,7 +91,8 @@ class MovingWindow {
   /// The first available index in the window
   int first_index_;
 
-  MovingWindow();
+// I initially made this private, is that a good idea?
+//  MovingWindow();
 };
 
 #endif

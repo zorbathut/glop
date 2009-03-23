@@ -14,9 +14,9 @@ class GameEvent;
 class GamePlayer;
 
 struct EventPackageID {
-  EventPackageID(Timestep t, EngineID e) : timestep(t), engine_id(e) {}
-  EventPackageID() : timestep(-1), engine_id(-1) {}
-  Timestep timestep;
+  EventPackageID(StateTimestep t, EngineID e) : state_timestep(t), engine_id(e) {}
+  EventPackageID() : state_timestep(-1), engine_id(-1) {}
+  StateTimestep state_timestep;
   EngineID engine_id;
 };
 
@@ -31,24 +31,31 @@ class GameConnection {
   GameConnection() {};
   virtual ~GameConnection() {};
 
-  /// Send all events for one timestep/player pair, in the order that they should be executed.
-  void SendEvents(EventPackageID id, const vector<GameEvent*>& events);
+  /// Queues up all events for one NetTimestep/EngineID pair.  These events will get sent the next
+  /// time that SendEvents() is called.
+  void QueueEvents(EventPackageID id, const vector<GameEvent*>& events);
+
+  /// Sends all events that have been queued up by QueueEvents().
+  void SendEvents();
 
   /// Receive all available events on this connection.
   void ReceiveEvents(vector<pair<EventPackageID, vector<GameEvent*> > >* events);
 
  protected:
-  /// Subclasses implement this function to send data from this connection to the connection on the
-  /// other end.
-  virtual void DoSendEvents(const string& data) = 0;
+  /// Subclasses implement this function to send data to whoever is on the other end of the
+  /// connection.
+  virtual void SendData(const string& data) = 0;
 
   /// Subclasses implement this function to receive all of the data that has been sent to it all at
   /// once.
-  virtual void DoReceiveEvents(vector<string>* data) = 0; 
+  virtual void ReceiveData(vector<string>* data) = 0; 
 
  private:
   void SerializeEvents(EventPackageID id, const vector<GameEvent*>& events, string* data);
   void DeserializeEvents(const string& data, EventPackageID* id, vector<GameEvent*>* events);
+
+  // Everything gets queued up here until it is sent through the connection.
+  string buffer_;
 };
 
 class PeerConnection : public GameConnection {
@@ -59,8 +66,8 @@ class PeerConnection : public GameConnection {
   virtual ~PeerConnection() {}
 
  protected:
-  virtual void DoSendEvents(const string& data);
-  virtual void DoReceiveEvents(vector<string>* data);
+  virtual void SendData(const string& data);
+  virtual void ReceiveData(vector<string>* data);
 
  private:
   NetworkManager* network_manager_;
@@ -73,8 +80,8 @@ class SelfConnection : public GameConnection {
   virtual ~SelfConnection() {}
  
   protected:
-   virtual void DoSendEvents(const string& data);
-   virtual void DoReceiveEvents(vector<string>* data);
+   virtual void SendData(const string& data);
+   virtual void ReceiveData(vector<string>* data);
  
   private:
   vector<string> data_;
@@ -90,11 +97,11 @@ class TestConnection : public GameConnection {
     connection_ = connection;
   }
  protected:
-  virtual void DoSendEvents(const string& data) {
+  virtual void SendData(const string& data) {
     connection_->data_.push_back(data);
   }
 
-  virtual void DoReceiveEvents(vector<string>* data) {
+  virtual void ReceiveData(vector<string>* data) {
     for (int i = 0; i < data_.size(); i++) {
       data->push_back(data_[i]);
     }
