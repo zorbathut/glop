@@ -49,9 +49,15 @@ TEST(GameConnectionTest, TestConnectionCanSendAndReceiveEvents) {
   in->SetOutput(out);
   out->SetOutput(in);
 
-  GameEvent* e1 = NewFooEvent();
-  GameEvent* e2 = NewBarEvent();
-  GameEvent* e3 = NewBarEvent();
+  BarEvent* e1 = NewBarEvent();
+  e1->GetData()->set_wingding(1234);
+  e1->GetData()->set_barbaz(2345);
+  FooEvent* e2 = NewFooEvent();
+  e2->GetData()->set_foo(23456789);
+  e2->GetData()->set_bar(0);
+  BarEvent* e3 = NewBarEvent();
+  e3->GetData()->set_wingding(125);
+  e3->GetData()->set_barbaz(7);
   vector<GameEvent*> v;
   v.push_back(e1);
   v.push_back(e2);
@@ -66,29 +72,91 @@ TEST(GameConnectionTest, TestConnectionCanSendAndReceiveEvents) {
 
   vector<pair<EventPackageID, vector<GameEvent*> > > output_events;
   out->ReceiveEvents(&output_events);
-  EXPECT_EQ(2, output_events.size());
-  if (output_events.size() >= 1) {
-    EXPECT_EQ(1,   output_events[0].first.state_timestep);
-    EXPECT_EQ(100, output_events[0].first.engine_id);
-    EXPECT_EQ(2, output_events[0].second.size());
-    if (output_events[0].second.size() == 2) {
-      EXPECT_EQ(1, GameEventFactory::GetGameEventType(output_events[0].second[0]));
-      EXPECT_EQ(2, GameEventFactory::GetGameEventType(output_events[0].second[1]));
-    }
+  ASSERT_EQ(2, output_events.size());
+
+  EXPECT_EQ(1,   output_events[0].first.state_timestep);
+  EXPECT_EQ(100, output_events[0].first.engine_id);
+  EXPECT_EQ(2, output_events[0].second.size());
+  if (output_events[0].second.size() == 2) {
+    EXPECT_EQ(2, GameEventFactory::GetGameEventType(output_events[0].second[0]));
+    BarEvent* bar = (BarEvent*)output_events[0].second[0];
+    EXPECT_EQ(1234, bar->GetData()->wingding());
+    EXPECT_EQ(2345, bar->GetData()->barbaz());
+    EXPECT_EQ(1, GameEventFactory::GetGameEventType(output_events[0].second[1]));
   }
-  if (output_events.size() >= 2) {
-    EXPECT_EQ(2,   output_events[1].first.state_timestep);
-    EXPECT_EQ(101, output_events[1].first.engine_id);
-    EXPECT_EQ(1, output_events[1].second.size());
-    if (output_events[1].second.size() == 1) {
-      EXPECT_EQ(2, GameEventFactory::GetGameEventType(output_events[1].second[0]));
-    }
+
+  EXPECT_EQ(2,   output_events[1].first.state_timestep);
+  EXPECT_EQ(101, output_events[1].first.engine_id);
+  EXPECT_EQ(1, output_events[1].second.size());
+  if (output_events[1].second.size() == 1) {
+    EXPECT_EQ(2, GameEventFactory::GetGameEventType(output_events[1].second[0]));
   }
+  BarEvent* bar = (BarEvent*)output_events[1].second[0];
+  EXPECT_EQ(125, bar->GetData()->wingding());
+  EXPECT_EQ(7, bar->GetData()->barbaz());
   
   delete in;
   delete out;
 }
 
+// Just like the test above, except that the packages are queued in the opposite order.  This
+// reveals a bug that happened in the connections at one point.
+TEST(GameConnectionTest, TestConnectionCanSendAndReceiveEventsRedux) {
+  TestConnection* in = new TestConnection();
+  TestConnection* out = new TestConnection();
+  in->SetOutput(out);
+  out->SetOutput(in);
+
+  BarEvent* e1 = NewBarEvent();
+  e1->GetData()->set_wingding(1234);
+  e1->GetData()->set_barbaz(2345);
+  FooEvent* e2 = NewFooEvent();
+  e2->GetData()->set_foo(23456789);
+  e2->GetData()->set_bar(0);
+  BarEvent* e3 = NewBarEvent();
+  e3->GetData()->set_wingding(125);
+  e3->GetData()->set_barbaz(7);
+  vector<GameEvent*> v;
+  v.push_back(e3);
+  in->QueueEvents(EventPackageID(2,101), v);
+  v.resize(0);
+  v.push_back(e1);
+  v.push_back(e2);
+  in->QueueEvents(EventPackageID(1,100), v);
+  in->SendEvents();
+  delete e1;
+  delete e2;
+  delete e3;
+
+  vector<pair<EventPackageID, vector<GameEvent*> > > output_events;
+  out->ReceiveEvents(&output_events);
+  ASSERT_EQ(2, output_events.size());
+
+  EXPECT_EQ(2,   output_events[0].first.state_timestep);
+  EXPECT_EQ(101, output_events[0].first.engine_id);
+  EXPECT_EQ(1, output_events[0].second.size());
+  if (output_events[0].second.size() == 1) {
+    EXPECT_EQ(2, GameEventFactory::GetGameEventType(output_events[0].second[0]));
+  }
+  BarEvent* bar = (BarEvent*)output_events[0].second[0];
+  EXPECT_EQ(125, bar->GetData()->wingding());
+  EXPECT_EQ(7, bar->GetData()->barbaz());
+  
+  EXPECT_EQ(1,   output_events[1].first.state_timestep);
+  EXPECT_EQ(100, output_events[1].first.engine_id);
+  EXPECT_EQ(2, output_events[1].second.size());
+  if (output_events[1].second.size() == 2) {
+    EXPECT_EQ(2, GameEventFactory::GetGameEventType(output_events[1].second[0]));
+    BarEvent* bar = (BarEvent*)output_events[1].second[0];
+    EXPECT_EQ(1234, bar->GetData()->wingding());
+    EXPECT_EQ(2345, bar->GetData()->barbaz());
+    EXPECT_EQ(1, GameEventFactory::GetGameEventType(output_events[1].second[1]));
+  }
+
+  delete in;
+  delete out;
+}
+/*
 TEST(GameConnectionTest, TestSendingAndReceivingVariousEngineIDsAndStateTimesteps) {
   TestConnection* in = new TestConnection();
   TestConnection* out = new TestConnection();
@@ -184,3 +252,4 @@ TEST(GameConnectionTest, TestNetworkConnections) {
   delete p1;
   delete p2;
 }
+*/
