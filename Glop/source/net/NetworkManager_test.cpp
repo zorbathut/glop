@@ -3,7 +3,7 @@
 #include <gtest/gtest.h>
 #include "third_party/raknet/RakPeerInterface.h"
 #include "third_party/raknet/RakNetworkFactory.h"
-#include "Net.h"
+#include "NetworkManager.h"
 #include "../System.h"
 #include "../Thread.h"
 

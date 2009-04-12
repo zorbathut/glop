@@ -1,5 +1,5 @@
-#ifndef GLOP_NET_NET_H__
-#define GLOP_NET_NET_H__
+#ifndef GLOP_NET_NETWORK_MANAGER_H__
+#define GLOP_NET_NETWORK_MANAGER_H__
 
 #include <string>
 #include <vector>
@@ -7,6 +7,7 @@
 #include <queue>
 using namespace std;
 
+#include "NetworkManagerInterface.h"
 #include "../List.h"
 
 class RakPeerInterface;
@@ -30,7 +31,7 @@ class NetworkConnection {
   int id_;
 };
 
-class NetworkManager {
+class NetworkManager : public NetworkManagerInterface {
  public:
   NetworkManager();
   ~NetworkManager();
@@ -57,8 +58,6 @@ class NetworkManager {
 
   int PendingData() const;
 
-  void Broadcast(const string& data);
-
   void Think();
  private:
   RakPeerInterface* rakpeer_;
@@ -75,4 +74,4 @@ class NetworkManager {
 
 
 
-#endif // GLOP_NET_NET_H__
+#endif // GLOP_NET_NETWORK_MANAGER_H__

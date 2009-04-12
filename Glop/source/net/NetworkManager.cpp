@@ -1,6 +1,6 @@
 #include <stdio.h>
 
-#include "Net.h"
+#include "NetworkManager.h"
 #include "third_party/raknet/PluginInterface.h"
 #include "third_party/raknet/RakNetworkFactory.h"
 #include "third_party/raknet/RakPeerInterface.h"
@@ -76,10 +76,14 @@ void NetworkManager::FindHosts(int port) {
 //  printf("This: %x\n", this);
   host_search_port_ = port;
   map<GlopNetworkAddress, string>::iterator it;
+  vector<map<GlopNetworkAddress, string>::iterator> trash;
   for (it = hosts_.begin(); it != hosts_.end(); it++) {
     if (it->first.second != port) {
-      hosts_.erase(it);
+      trash.push_back(it);
     }
+  }
+  for (int i = 0; i < trash.size(); i++) {
+    hosts_.erase(trash[i]);
   }
 	rakpeer_->Ping("255.255.255.255", port, true);
 }

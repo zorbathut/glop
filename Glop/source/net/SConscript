@@ -6,14 +6,36 @@ Export('env')
 env.BuildObjects(
   target_name = 'base',
   source = [
-    'Net.cpp',
+    'NetworkManager.cpp',
   ],
   headers = [
-    'Net.h',
+    'NetworkManagerInterface.h',
+    'NetworkManager.h',
   ],
   libs = [
     'rakneti386',
   ],
 )
 
-env.Test('net_test', 'Net_test.cpp', packages = ['base', '/glop'])
+env.BuildObjects(
+  target_name = 'mock',
+  source = [
+    'MockNetworkManager.cpp',
+    'MockRouter.cpp',
+  ],
+  headers = [
+  ],
+  packages = [
+  ],
+)
+
+env.Test(
+  'network_manager_test',
+  'NetworkManager_test.cpp',
+  packages = ['base', '/glop']
+)
+env.Test(
+  'mock_network_manager_test',
+  'MockNetworkManager_test.cpp',
+  packages = ['mock', '/glop']
+)
