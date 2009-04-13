@@ -59,8 +59,10 @@ bool NetworkManager::Startup(int port) {
 }
 
 NetworkManager::~NetworkManager() {
-  rakpeer_->Shutdown(0);
-  RakNetworkFactory::DestroyRakPeerInterface(rakpeer_);
+  if (rakpeer_ != NULL) {
+    rakpeer_->Shutdown(0);
+    RakNetworkFactory::DestroyRakPeerInterface(rakpeer_);
+  }
 }
 
 void NetworkManager::StartHosting(const string& data) {
