@@ -122,23 +122,23 @@ void GameEngine::QueueEvents(StateTimestep current_state_timestep) {
       oldest_dirty_timestep_ = t;
     }
     for (int i = 0; i < all_connections_.size(); i++) {
-      all_connections_[i]->QueueEvents(EventPackageID(t, engine_id_), local_events_);
+      all_connections_[i]->QueueEvents(0, EventPackageID(t, engine_id_), local_events_);
     }
     local_events_.clear();
   }
 
   // This check shouldn't really be needed, but just in case...
-//  if (current_state_timestep > last_queue_event_timestep_) {
+  if (current_state_timestep > last_queue_event_timestep_) {
     printf("set lqet: %d -> %d\n", last_queue_event_timestep_, current_state_timestep);
     last_queue_event_timestep_ = current_state_timestep;
-//  }  
+  }  
 }
 
 void GameEngine::SendEvents(NetTimestep current_net_timestep) {
   if (current_net_timestep > last_send_event_timestep_) {
   printf("Sending events for net step %d\n", current_net_timestep);
     for (int i = 0; i < all_connections_.size(); i++) {
-      all_connections_[i]->SendEvents();
+      all_connections_[i]->SendEvents(0); // TODO: should have enums for channels
     }
     last_send_event_timestep_ = current_net_timestep;
   }
@@ -354,6 +354,7 @@ void GameEngine::ThinkPlaying() {
       // NOTE: This check must be at the end of this block because in the event of a ReadyToPlay
       // event we actually modify the timestep of the event package.
       if (events[j].first.state_timestep < oldest_dirty_timestep_) {
+        printf("seting: oldest_dirty_timestep_ %d\n", oldest_dirty_timestep_);
         oldest_dirty_timestep_ = events[j].first.state_timestep;
       }
     }
@@ -365,7 +366,7 @@ void GameEngine::ThinkPlaying() {
     for (int j = 0; j < all_connections_.size(); j++) {
       if (all_connections_[j] == playing_connections_[i]) { continue; }
       for (int k = 0; k < events.size(); k++) {
-        all_connections_[j]->QueueEvents(events[k].first, events[k].second);
+        all_connections_[j]->QueueEvents(1, events[k].first, events[k].second);
       }
     }
     for (int j = 0; j < events.size(); j++) {
@@ -393,14 +394,20 @@ void GameEngine::ThinkPlaying() {
       game_events_[state_timestep][engine_id] = events[j].second;
     }
   }
-  for (NetTimestep t = oldest_dirty_timestep_; t <= current_state_timestep; t++) {
+  for (StateTimestep t = oldest_dirty_timestep_; t <= current_state_timestep; t++) {
     printf("Thunder: %d\n", t);
     RecreateState(t);
   }
-//  AdvanceAsFarAsPossible(current_timestep, delayed_timestep);
-  // TODO: This line is dangerous i think
-  oldest_dirty_timestep_ = current_state_timestep;
+  for (int j = 0; j < all_connections_.size(); j++) {
+    all_connections_[j]->SendEvents(1);
+  }
+  SendEvents(current_state_timestep);
 
+  // TODO: Consider whether we should skip the if statement, and just make sure we're always ready
+  // to have oldest_dirty_timestep_ updated
+  if (current_state_timestep > oldest_dirty_timestep_) {
+    oldest_dirty_timestep_ = current_state_timestep;
+  }
   // We only go up to delayed_timestep here so that we have a little extra time to get everyone
   // else's events for the head frame before having to call think on it.  This prevents us from
   // having to run GameState.Think() more than once on any frame so long as we receive all events
@@ -482,10 +489,11 @@ void GameEngine::ThinkNetworking() {
           ms_delay_,
           frame_calculator_->GetTime());
       peer->QueueEvents(
+          0,
           EventPackageID(latest_complete_state_timestep_ - 1, engine_id_),
           vector<GameEvent*>(1, gse));
       // Send this first, and apart from the events that we send next, because this might be big.
-      peer->SendEvents();
+      peer->SendEvents(0);
 
       // Now we have to send any events that we have that happened after that timestep
       // TODO: prolly need to only go up to last_queue_event_timestep_
@@ -498,11 +506,11 @@ void GameEngine::ThinkNetworking() {
         map<EngineID, vector<GameEvent*> >::iterator it;
         for (it = game_events_[t].begin(); it != game_events_[t].end(); it++) {
           printf("Sending new engine events on timestep %d\n", t);
-          peer->QueueEvents(EventPackageID(t, it->first), it->second);
+          peer->QueueEvents(0, EventPackageID(t, it->first), it->second);
         }
       }
       // TODO: Consider whether or not these should all be sent as one packet, it could be big.
-      peer->SendEvents();
+      peer->SendEvents(0);
 
       connected_gnas_.insert(connections[i]);
     }
@@ -650,16 +658,17 @@ void GameEngine::ThinkJoining() {
     r2p->SetData(source_engine_id_, engine_id_);
     printf("outgoing r2p event: %d %d\n", r2p->origin(), r2p->temporary());
     all_connections_[0]->QueueEvents(
+        0,
         EventPackageID(complete, (unsigned int)-1),
         vector<GameEvent*>(1, r2p));
-    all_connections_[0]->SendEvents();
+    all_connections_[0]->SendEvents(0);
     printf("Sent ReadyToPlay event\n");
 
     latest_complete_state_timestep_ = complete;
     // Advancing potentially as far as the most recent event we have.  This is the best we can do
     for (StateTimestep t = data.timestep() + 1; t <= it->first; t++) {
       printf("Rawr: %d\n", t);
-      RecreateState(t);
+//      RecreateState(t);
     }
 
     oldest_dirty_timestep_ = latest_complete_state_timestep_ + 1;

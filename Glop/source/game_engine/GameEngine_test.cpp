@@ -532,6 +532,7 @@ TEST(GameEngineTest, TestEnginesCanConnectArbitrarilyX) {
   TestState s;
   s.AddPlayer();
   s.AddPlayer();
+  s.AddPlayer();
 
   MockRouter router;
   GameEngine engine1(s, 10, 30, 10, 5);
@@ -543,14 +544,34 @@ TEST(GameEngineTest, TestEnginesCanConnectArbitrarilyX) {
   GameEngine engine3(s);
   engine3.InstallFrameCalculator(new TestFrameCalculator());
   engine3.InstallNetworkManager(new MockNetworkManager(&router));
+  GameEngine engine4(s);
+  engine4.InstallFrameCalculator(new TestFrameCalculator());
+  engine4.InstallNetworkManager(new MockNetworkManager(&router));
 
   TestTimerWaiter waiter(5, 10);  // 5 * 10 > ms_per_net_frame
   set<pair<GameEngine*, GameEngineFrameCalculator*> > all_engines;
   all_engines.insert(make_pair(&engine1, engine1.GetFrameCalculator()));
   all_engines.insert(make_pair(&engine2, engine2.GetFrameCalculator()));
   ConnectEngines(&engine1, 65001, &engine2, 65002, all_engines, &waiter);
-  //all_engines.insert(make_pair(&engine3, engine3.GetFrameCalculator()));
-  //ConnectEngines(&engine1, 65001, &engine3, 65003, all_engines, &waiter);
+  all_engines.insert(make_pair(&engine3, engine3.GetFrameCalculator()));
+  ConnectEngines(&engine1, 65001, &engine3, 65003, all_engines, &waiter);
+  all_engines.insert(make_pair(&engine4, engine4.GetFrameCalculator()));
+  ConnectEngines(&engine3, 65003, &engine4, 65004, all_engines, &waiter);
+
+  for (int i = 0; i < 10; i++) {
+    waiter.StartWaiting();
+    while (waiter.StillWaiting()) {
+      engine1.Think();
+      waiter.Tick(engine1.GetFrameCalculator());
+      engine2.Think();
+      waiter.Tick(engine2.GetFrameCalculator());
+      engine3.Think();
+      waiter.Tick(engine3.GetFrameCalculator());
+      engine4.Think();
+      waiter.Tick(engine4.GetFrameCalculator());
+      waiter.Pause();
+    }
+  }
 }
 #endif
 #if 0

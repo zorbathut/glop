@@ -32,11 +32,14 @@ class GameConnection {
   virtual ~GameConnection() {};
 
   /// Queues up all events for one NetTimestep/EngineID pair.  These events will get sent the next
-  /// time that SendEvents() is called.
-  void QueueEvents(EventPackageID id, const vector<GameEvent*>& events);
+  /// time that SendEvents() is called on this channel.
+  void QueueEvents(int channel, EventPackageID id, const vector<GameEvent*>& events);
 
-  /// Sends all events that have been queued up by QueueEvents().
-  void SendEvents();
+  /// Sends all events that have been queued up by QueueEvents() on this channel.
+  void SendEvents(int channel);
+
+  /// Sends all events that have been queued up by QueueEvents() on all channels.
+  void SendAllEvents();
 
   /// Receive all available events on this connection.
   void ReceiveEvents(vector<pair<EventPackageID, vector<GameEvent*> > >* events);
@@ -54,8 +57,9 @@ class GameConnection {
   void SerializeEvents(EventPackageID id, const vector<GameEvent*>& events, string* data);
   void DeserializeEvents(const string& data, EventPackageID* id, vector<GameEvent*>* events);
 
-  // Everything gets queued up here until it is sent through the connection.
-  string buffer_;
+  // map of channel to buffer.  The buffers will be sent over the connection when the appropriate
+  // send method is called.
+  map<int, string>  buffers_;
 };
 
 class PeerConnection : public GameConnection {

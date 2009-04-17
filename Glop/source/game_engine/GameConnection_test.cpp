@@ -4,6 +4,8 @@
 #include "TestProtos.pb.h"
 
 #include "../System.h"
+#include "../net/MockNetworkManager.h"
+
 
 class GlopEnvironment : public testing::Environment {
  public:
@@ -61,11 +63,11 @@ TEST(GameConnectionTest, TestConnectionCanSendAndReceiveEvents) {
   vector<GameEvent*> v;
   v.push_back(e1);
   v.push_back(e2);
-  in->QueueEvents(EventPackageID(1,100), v);
+  in->QueueEvents(0, EventPackageID(1,100), v);
   v.resize(0);
   v.push_back(e3);
-  in->QueueEvents(EventPackageID(2,101), v);
-  in->SendEvents();
+  in->QueueEvents(0, EventPackageID(2,101), v);
+  in->SendEvents(0);
   delete e1;
   delete e2;
   delete e3;
@@ -118,12 +120,12 @@ TEST(GameConnectionTest, TestConnectionCanSendAndReceiveEventsRedux) {
   e3->GetData()->set_barbaz(7);
   vector<GameEvent*> v;
   v.push_back(e3);
-  in->QueueEvents(EventPackageID(2,101), v);
+  in->QueueEvents(0, EventPackageID(2,101), v);
   v.resize(0);
   v.push_back(e1);
   v.push_back(e2);
-  in->QueueEvents(EventPackageID(1,100), v);
-  in->SendEvents();
+  in->QueueEvents(0, EventPackageID(1,100), v);
+  in->SendEvents(0);
   delete e1;
   delete e2;
   delete e3;
@@ -156,7 +158,52 @@ TEST(GameConnectionTest, TestConnectionCanSendAndReceiveEventsRedux) {
   delete in;
   delete out;
 }
-/*
+
+// Queues events on two channels so that they should arrive in the opposite order they are queued.
+TEST(GameConnectionTest, TestConnectionsCanSendOneChannelAtATime) {
+  TestConnection* in = new TestConnection();
+  TestConnection* out = new TestConnection();
+  in->SetOutput(out);
+  out->SetOutput(in);
+
+  BarEvent* e1 = NewBarEvent();
+  e1->GetData()->set_wingding(1234);
+  e1->GetData()->set_barbaz(2345);
+  in->QueueEvents(1, EventPackageID(2,101), vector<GameEvent*>(1,e1));
+  delete e1;
+
+  FooEvent* e2 = NewFooEvent();
+  e2->GetData()->set_foo(23456789);
+  e2->GetData()->set_bar(0);
+  in->QueueEvents(0, EventPackageID(2,100), vector<GameEvent*>(1,e2));
+  delete e2;
+
+  in->SendEvents(0);
+  vector<pair<EventPackageID, vector<GameEvent*> > > output_events;
+  out->ReceiveEvents(&output_events);
+  ASSERT_EQ(1, output_events.size());
+  EXPECT_EQ(2,   output_events[0].first.state_timestep);
+  EXPECT_EQ(100, output_events[0].first.engine_id);
+  EXPECT_EQ(1, output_events[0].second.size());
+  if (output_events[0].second.size() == 1) {
+    EXPECT_EQ(1, GameEventFactory::GetGameEventType(output_events[0].second[0]));
+  }
+  
+  in->SendEvents(1);
+  output_events.clear();
+  out->ReceiveEvents(&output_events);
+  ASSERT_EQ(1, output_events.size());
+  EXPECT_EQ(2,   output_events[0].first.state_timestep);
+  EXPECT_EQ(101, output_events[0].first.engine_id);
+  EXPECT_EQ(1, output_events[0].second.size());
+  if (output_events[0].second.size() == 1) {
+    EXPECT_EQ(2, GameEventFactory::GetGameEventType(output_events[0].second[0]));
+  }
+  
+  delete in;
+  delete out;
+}
+
 TEST(GameConnectionTest, TestSendingAndReceivingVariousEngineIDsAndStateTimesteps) {
   TestConnection* in = new TestConnection();
   TestConnection* out = new TestConnection();
@@ -170,8 +217,8 @@ TEST(GameConnectionTest, TestSendingAndReceivingVariousEngineIDsAndStateTimestep
       StateTimestep state_timestep = values[i];
       EngineID engine_id = values[j];
       vector<GameEvent*> v;
-      in->QueueEvents(EventPackageID(state_timestep, engine_id), v);
-      in->SendEvents();
+      in->QueueEvents(0, EventPackageID(state_timestep, engine_id), v);
+      in->SendEvents(0);
       vector<pair<EventPackageID, vector<GameEvent*> > > output_events;
       out->ReceiveEvents(&output_events);
       ASSERT_EQ(1, output_events.size());
@@ -185,8 +232,9 @@ TEST(GameConnectionTest, TestSendingAndReceivingVariousEngineIDsAndStateTimestep
 }
 
 TEST(GameConnectionTest, TestNetworkConnections) {
-  NetworkManager nm1;
-  NetworkManager nm2;
+  MockRouter router;
+  MockNetworkManager nm1(&router);
+  MockNetworkManager nm2(&router);
   
   nm1.Startup(65000);
   nm1.StartHosting("host 1");
@@ -234,8 +282,8 @@ TEST(GameConnectionTest, TestNetworkConnections) {
       StateTimestep t = values[i];
       EngineID e = values[j];
       vector<GameEvent*> v;
-      p1->QueueEvents(EventPackageID(t,e), v);
-      p1->SendEvents();
+      p1->QueueEvents(0, EventPackageID(t,e), v);
+      p1->SendEvents(0);
       the_time = system()->GetTime();
       vector<pair<EventPackageID, vector<GameEvent*> > > output_events;
       while (output_events.size() == 0 && the_time + 250 > system()->GetTime()) {
@@ -252,4 +300,4 @@ TEST(GameConnectionTest, TestNetworkConnections) {
   delete p1;
   delete p2;
 }
-*/
+

@@ -10,24 +10,24 @@ bool operator < (const EventPackageID& a, const EventPackageID& b) {
   return a.engine_id < b.engine_id;
 }
 
-void GameConnection::QueueEvents(EventPackageID id, const vector<GameEvent*>& events) {
+void GameConnection::QueueEvents(int channel, EventPackageID id, const vector<GameEvent*>& events) {
   string data;
   SerializeEvents(id, events, &data);
   string size(sizeof(int), 0);
   ((int*)size.data())[0] = data.size();
-  buffer_ += size + data;
-  printf("GameConnection[%x]::QueueEvents(): Timestep: %d, Engine: %d, Len: %d\n", this, id.state_timestep, id.engine_id, data.size());
-//printf("Addresses: ");
-for (int i = 0; i < events.size(); i++) {
-  //printf(" %x ", events[i]);
-}
-//printf("\n");
+  buffers_[channel] += size + data;
 }
 
-void GameConnection::SendEvents() {
-  //printf("GameConnection[%x]::SendEvents()\n", this);
-  SendData(buffer_);
-  buffer_.clear();
+void GameConnection::SendEvents(int channel) {
+  SendData(buffers_[channel]);
+  buffers_[channel].clear();
+}
+
+void GameConnection::SendAllEvents() {
+  map<int,string>::iterator it;
+  for (it = buffers_.begin(); it != buffers_.end(); it++) {
+    SendEvents(it->first);
+  }
 }
 
 // TODO: Need to be sure this method is resiliant to corrupt data
