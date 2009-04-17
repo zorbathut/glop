@@ -13,7 +13,7 @@ using namespace std;
 #include "GameConnection.h"
 #include "GameProtos.pb.h"
 #include "../List.h"
-#include "../net/Net.h"
+#include "../net/NetworkManager.h"
 
 // CORNER CASES: This is a list of problematic situations, all of which will need to be dealt with
 // * Player sends out events and then is retroacively dropped by the host.  Events from that player
@@ -47,13 +47,13 @@ struct GameEngineInfo {
 
 enum GameEngineThinkState {
   kIdle,              // Nothing of interest is going on
-  kPlaying,           // Currently playing a game, keep calling Think() to keep playing.
+  kConnectionFailed,  // Failed to connect to a game, will return kIdle after this.
   kLagging,           // We're waiting on packets from another player before we can continue.
   kGameOver,          // Game *just* finished, will return kIdle afte this.
   kConnecting,        // In the process of connecting to a game.
   kJoining,           // Connected to a game and waiting to be sent all of the appropriate info.
   kReady,             // Ready to start playing, just waiting for the signal to go from the host.
-  kConnectionFailed,  // Failed to connect to a game, will return kIdle after this.
+  kPlaying,           // Currently playing a game, keep calling Think() to keep playing.
 };
 
 class GameEngine;
@@ -112,6 +112,9 @@ class GameEngine {
   void InstallFrameCalculator(GameEngineFrameCalculator* frame_calculator);
   GameEngineFrameCalculator* GetFrameCalculator() const { return frame_calculator_; }
 
+  void InstallNetworkManager(NetworkManagerInterface* manager);
+  NetworkManagerInterface* GetNetworkManager() const { return network_manager_; }
+
   /// Think should be called regularly in the main loop of the game.
   GameEngineThinkState Think();
 
@@ -167,7 +170,7 @@ class GameEngine {
 
   bool IsStateComplete(StateTimestep state_timestep);
 
-  StateTimestep GameEngine::GetCurrentDelayedStateTimestep();
+  StateTimestep GetCurrentDelayedStateTimestep(int time_ms);
 
   void AdvanceAsFarAsPossible(NetTimestep current_timestep, NetTimestep delayed_timestep);
 
@@ -237,7 +240,8 @@ class GameEngine {
 
   GameEngineFrameCalculator* frame_calculator_;
 
-  NetworkManager* network_manager_;
+  NetworkManagerInterface* network_manager_;
+  bool networking_enabled_;
   GlopNetworkAddress connection_gna_;  // gna of the host we're trying to connect to.
   string connection_message_;  // Message that we'll send as soon as we are connected.
   set<GlopNetworkAddress> connected_gnas_;
@@ -286,7 +290,8 @@ class GameStateEvent : public GameEvent {
       int max_frames,
       int ms_per_net_frame,
       int ms_per_state_frame,
-      int ms_delay) {
+      int ms_delay,
+      int time_ms) {
     typed_data_->set_game_state(game_state);
     typed_data_->set_timestep(timestep);
     for (set<EngineID>::iterator it = engine_ids.begin(); it != engine_ids.end(); it++) {
@@ -298,6 +303,7 @@ class GameStateEvent : public GameEvent {
     typed_data_->set_ms_per_net_frame(ms_per_net_frame);
     typed_data_->set_ms_per_state_frame(ms_per_state_frame);
     typed_data_->set_ms_delay(ms_delay);
+    typed_data_->set_time_ms(time_ms);
   }
   const GameStateEventData& GetData() {
     return *typed_data_;

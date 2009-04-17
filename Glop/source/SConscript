@@ -119,6 +119,7 @@ env.Test(
     'game_engine',
     'test_protos',
     'glop',
+    '/net/mock',
   ]
 )
 
@@ -139,6 +140,7 @@ env.Test(
     'game_engine',
     'test_protos',
     'glop',
+    '/net/mock',
   ]
 )
 

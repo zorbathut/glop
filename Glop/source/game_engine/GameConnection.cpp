@@ -1,7 +1,7 @@
 #include "GameConnection.h"
 #include "GameEvent.h"
 
-#include "../net/Net.h"
+#include "../net/NetworkManagerInterface.h"
 
 bool operator < (const EventPackageID& a, const EventPackageID& b) {
   if (a.state_timestep != b.state_timestep) {

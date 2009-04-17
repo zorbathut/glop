@@ -10,6 +10,7 @@ message GameStateEventData {
   required int32 ms_per_net_frame = 7;
   required int32 ms_per_state_frame = 8;
   required int32 ms_delay = 9;
+  required int32 time_ms = 10;
 }
 
 message ReadyToPlayEventData {

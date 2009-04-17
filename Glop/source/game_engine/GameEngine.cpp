@@ -36,7 +36,8 @@ GameEngine::GameEngine(const GameState& reference)
     next_game_engine_id_(0),
     host_(false),
     frame_calculator_(new StandardFrameCalculator()),
-    network_manager_(NULL),
+    network_manager_(new NetworkManager()),
+    networking_enabled_(false),
     reference_state_(reference.Copy()),
     num_thinks_(0),
     num_rethinks_(0) {
@@ -55,10 +56,11 @@ GameEngine::GameEngine(
       ms_per_state_frame_(ms_per_state_frame),
       ms_delay_(ms_delay),
       last_queue_event_timestep_(-1),
-      last_send_event_timestep_(-1),
+      last_send_event_timestep_(0),
       oldest_dirty_timestep_(0),
       latest_complete_state_timestep_(-1),
-      network_manager_(NULL),
+      network_manager_(new NetworkManager()),
+      networking_enabled_(false),
       port_(-1),
       reference_state_(initial_state.Copy()),
       game_states_(max_frames_ + 1, -1),
@@ -105,7 +107,15 @@ void GameEngine::InstallFrameCalculator(GameEngineFrameCalculator* frame_calcula
   frame_calculator_ = frame_calculator;
 }
 
+void GameEngine::InstallNetworkManager(NetworkManagerInterface* manager) {
+  if (network_manager_ != NULL) {
+    delete network_manager_;
+  }
+  network_manager_ = manager;
+}
+
 void GameEngine::QueueEvents(StateTimestep current_state_timestep) {
+  printf("current_state_timestep: %d\n",current_state_timestep );
   for (StateTimestep t = last_queue_event_timestep_ + 1; t <= current_state_timestep; t++) {
     game_events_[t][engine_id_] = local_events_;
     if (t < oldest_dirty_timestep_) {
@@ -119,12 +129,14 @@ void GameEngine::QueueEvents(StateTimestep current_state_timestep) {
 
   // This check shouldn't really be needed, but just in case...
 //  if (current_state_timestep > last_queue_event_timestep_) {
+    printf("set lqet: %d -> %d\n", last_queue_event_timestep_, current_state_timestep);
     last_queue_event_timestep_ = current_state_timestep;
 //  }  
 }
 
 void GameEngine::SendEvents(NetTimestep current_net_timestep) {
   if (current_net_timestep > last_send_event_timestep_) {
+  printf("Sending events for net step %d\n", current_net_timestep);
     for (int i = 0; i < all_connections_.size(); i++) {
       all_connections_[i]->SendEvents();
     }
@@ -132,8 +144,7 @@ void GameEngine::SendEvents(NetTimestep current_net_timestep) {
   }
 }
 
-StateTimestep GameEngine::GetCurrentDelayedStateTimestep() {
-  int time_ms = frame_calculator_->GetTime();
+StateTimestep GameEngine::GetCurrentDelayedStateTimestep(int time_ms) {
   if (ms_delay_ == 0) {
     return time_ms / ms_per_state_frame_;
   }
@@ -143,12 +154,12 @@ StateTimestep GameEngine::GetCurrentDelayedStateTimestep() {
 }
 
 void GameEngine::ApplyEvent(GameEvent* event) {
-  QueueEvents(GetCurrentDelayedStateTimestep());
+  QueueEvents(GetCurrentDelayedStateTimestep(frame_calculator_->GetTime() / ms_per_state_frame_));
   local_events_.push_back(event);
 }
 
 void GameEngine::ApplyEvents(const vector<GameEvent*>& events) {
-  QueueEvents(GetCurrentDelayedStateTimestep());
+  QueueEvents(GetCurrentDelayedStateTimestep(frame_calculator_->GetTime() / ms_per_state_frame_));
   for (int i = 0; i < events.size(); i++) {
     local_events_.push_back(events[i]);
   }
@@ -206,6 +217,7 @@ NetTimestep GameEngine::GetCurrentNetTimestep() {
 */
 
 void GameEngine::RecreateState(StateTimestep state_timestep) {
+  printf("RecreateState(%d)\n", state_timestep);
   if (game_states_[state_timestep] != NULL) {
     delete game_states_[state_timestep];
   }
@@ -234,6 +246,7 @@ void GameEngine::RecreateState(StateTimestep state_timestep) {
       game_events_.Advance();
       game_engine_infos_.Advance();
     }
+    printf("Timestep %d is done.\n", latest_complete_state_timestep_);
     latest_complete_state_timestep_++;
   }
 }
@@ -283,9 +296,10 @@ void GameEngine::ThinkPlaying() {
   int time_ms = frame_calculator_->GetTime();
   StateTimestep current_state_timestep = time_ms / ms_per_state_frame_;
   NetTimestep current_net_timestep = time_ms / ms_per_net_frame_;
-
+  StateTimestep delayed_state_timestep = GetCurrentDelayedStateTimestep(time_ms);
+  printf("%d %d %d\n", current_state_timestep, delayed_state_timestep, current_net_timestep);
   if (think_state_ == kPlaying) {
-    QueueEvents(current_state_timestep);
+    QueueEvents(delayed_state_timestep);
     SendEvents(current_net_timestep);
   }
 
@@ -300,6 +314,7 @@ void GameEngine::ThinkPlaying() {
     // Special processing for certain engine-level events.  This should probably be migrated to its
     // own method.
     for (int j = 0; j < events.size(); j++) {
+ printf("Received events for engine %d on timestep %d\n", events[j].first.engine_id, events[j].first.state_timestep);
       for (int k = 0; k < events[j].second.size(); k++) {
         if (events[j].second[k]->type() == -2) {
           assert(events[j].second.size() == 1); // This event should always be by itself
@@ -379,6 +394,7 @@ void GameEngine::ThinkPlaying() {
     }
   }
   for (NetTimestep t = oldest_dirty_timestep_; t <= current_state_timestep; t++) {
+    printf("Thunder: %d\n", t);
     RecreateState(t);
   }
 //  AdvanceAsFarAsPossible(current_timestep, delayed_timestep);
@@ -431,9 +447,7 @@ GameEngineThinkState GameEngine::Think() {
 
 // NETWORKING SCHTUFF
 void GameEngine::ThinkNetworking() {
-  if (network_manager_ == NULL) {
-    return;
-  }
+  if (!networking_enabled_) { return; }
   network_manager_->Think();
 
   // TODO: This should be in a different function entireyly
@@ -465,7 +479,8 @@ void GameEngine::ThinkNetworking() {
           max_frames_,
           ms_per_net_frame_,
           ms_per_state_frame_,
-          ms_delay_);
+          ms_delay_,
+          frame_calculator_->GetTime());
       peer->QueueEvents(
           EventPackageID(latest_complete_state_timestep_ - 1, engine_id_),
           vector<GameEvent*>(1, gse));
@@ -473,11 +488,16 @@ void GameEngine::ThinkNetworking() {
       peer->SendEvents();
 
       // Now we have to send any events that we have that happened after that timestep
+      // TODO: prolly need to only go up to last_queue_event_timestep_
+ printf("Send events up to lqet: %d\n",last_queue_event_timestep_); 
       for (StateTimestep t = latest_complete_state_timestep_ + 1;
-           t <= game_events_.GetLastIndex();
+           t <= last_queue_event_timestep_;
+           //(last_send_event_timestep_ * ms_per_net_timestep_) / ms_per_state_timestep_;
+           //t <= game_events_.GetLastIndex();
            t++) {
         map<EngineID, vector<GameEvent*> >::iterator it;
         for (it = game_events_[t].begin(); it != game_events_[t].end(); it++) {
+          printf("Sending new engine events on timestep %d\n", t);
           peer->QueueEvents(EventPackageID(t, it->first), it->second);
         }
       }
@@ -490,14 +510,14 @@ void GameEngine::ThinkNetworking() {
 }
 
 bool GameEngine::StartNetworkManager(int port) {
-  if (network_manager_ != NULL) { return true; }
+  if (networking_enabled_) { return true; }
   port_ = port;
-  network_manager_ = new NetworkManager();
   if (!network_manager_->Startup(port_)) {
     delete network_manager_;
     network_manager_ = NULL;
     return false;
   }
+  networking_enabled_ = true;
   return true;
 }
 
@@ -634,14 +654,22 @@ void GameEngine::ThinkJoining() {
         vector<GameEvent*>(1, r2p));
     all_connections_[0]->SendEvents();
     printf("Sent ReadyToPlay event\n");
-    oldest_dirty_timestep_ = complete + 1;
-    latest_complete_state_timestep_ = complete;
-    frame_calculator_->SetTime((complete + 1) * ms_per_state_frame_);
 
+    latest_complete_state_timestep_ = complete;
     // Advancing potentially as far as the most recent event we have.  This is the best we can do
     for (StateTimestep t = data.timestep() + 1; t <= it->first; t++) {
+      printf("Rawr: %d\n", t);
       RecreateState(t);
     }
+
+    oldest_dirty_timestep_ = latest_complete_state_timestep_ + 1;
+    printf("Timestep %d is done.\n", latest_complete_state_timestep_);
+    int time_ms_estimate = (oldest_dirty_timestep_ + 1) * ms_per_state_frame_;
+    if (ms_delay_ > 0) {
+      time_ms_estimate += ms_per_net_frame_ + ms_delay_;
+    }
+//    frame_calculator_->SetTime(time_ms_estimate);
+    frame_calculator_->SetTime(data.time_ms());
 
     think_state_ = kReady;
     last_queue_event_timestep_ = -1;

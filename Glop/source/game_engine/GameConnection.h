@@ -1,7 +1,7 @@
 #ifndef GAMEENGINE_GAMECONNECTION_H
 #define GAMEENGINE_GAMECONNECTION_H
 
-#include "../net/Net.h"
+#include "../net/NetworkManagerInterface.h"
 
 #include <vector>
 #include <string>
@@ -60,7 +60,7 @@ class GameConnection {
 
 class PeerConnection : public GameConnection {
  public:
-  PeerConnection(NetworkManager* network_manager, GlopNetworkAddress gna)
+  PeerConnection(NetworkManagerInterface* network_manager, GlopNetworkAddress gna)
       : network_manager_(network_manager),
         gna_(gna) {}
   virtual ~PeerConnection() {}
@@ -70,7 +70,7 @@ class PeerConnection : public GameConnection {
   virtual void ReceiveData(vector<string>* data);
 
  private:
-  NetworkManager* network_manager_;
+  NetworkManagerInterface* network_manager_;
   GlopNetworkAddress gna_;
 };
 
