@@ -22,6 +22,8 @@ typedef unsigned __int64 uint64;
 typedef long long int64;
 typedef unsigned long long uint64;
 #endif
+typedef int int32;
+typedef unsigned int uint32;
 
 // Constants
 const float kPi = 3.1415926535897932385f;

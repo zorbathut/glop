@@ -63,7 +63,8 @@ env.BuildObjects(
     'glop2d/base',
     'glop3d/base',
     'game_protos',
-    'game_engine'
+    'game_engine',
+    'random',
   ]
 )
 
@@ -149,4 +150,24 @@ env.Test(
   'game_engine/MovingWindow_test.cpp',
   packages = []
 )
+
+
+env.BuildObjects(
+  target_name = 'random',
+  source = [
+    'random/Random.cpp',
+    'random/CMWC.cpp',
+    'random/DevRand.cpp',
+  ],
+  packages = [
+  ],
+  headers = [
+    'random/CMWC.h',
+    'random/DevRand.h',
+    'random/Random.h',
+  ],
+)
+
+env.Test('random_test', 'random/Random_test.cpp', packages = ['random'])
+
 
