@@ -14,15 +14,13 @@ void GameEventFactory::Serialize(const GameEvent* event, string* str) {
 
   if (event->type() == 0) {
     assert(false);
-    printf("ZZEROREOR!n\n");
   }
   event->data_->AppendToString(str);
 }
 
 GameEvent* GameEventFactory::Deserialize(const string& str) {
   if (str.size() < 4) {
-    printf("%d %d %d\n", str[0], str[1], str[2]);
-    printf("Tried to deserialize a string of lenght %d\n", str.size());
+    printf("Tried to deserialize a string of length %d\n", str.size());
     assert(false);
   }
   int type = 0;

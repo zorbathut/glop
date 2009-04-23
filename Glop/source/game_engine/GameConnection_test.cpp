@@ -269,9 +269,6 @@ TEST(GameConnectionTest, TestNetworkConnections) {
   EXPECT_EQ(1, nm1.GetConnections().size());
   EXPECT_EQ(1, nm2.GetConnections().size());
 
-  printf("Connection: %d %d\n", nm1.GetConnections()[0].first, nm1.GetConnections()[0].second);
-  printf("Connection: %d %d\n", nm2.GetConnections()[0].first, nm2.GetConnections()[0].second);
-
   GameConnection* p1 = new PeerConnection(&nm1, nm1.GetConnections()[0]);
   GameConnection* p2 = new PeerConnection(&nm2, nm2.GetConnections()[0]);
 

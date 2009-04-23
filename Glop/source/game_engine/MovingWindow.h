@@ -37,15 +37,11 @@ class MovingWindow {
   }
 
   ~MovingWindow() {
-    for (int i = 0; i < size_; i++) {
-//      data_[i].~T();
-    }
     delete[] data_;
     data_ = NULL;
   }
 
   T& operator[](int index) {
-//    printf("%d %d %d\n", index, first_index_, first_index_ + size_);
     if (index < first_index_) {
       printf("index %d < first_index_ %d\n", index, first_index_);
       assert(false);
@@ -58,7 +54,6 @@ class MovingWindow {
   }
 
   const T& operator[](int index) const {
-//    printf("%d %d %d\n", index, first_index_, first_index_ + size_);
     if (index < first_index_) {
       printf("index %d < first_index_ %d\n", index, first_index_);
       assert(false);

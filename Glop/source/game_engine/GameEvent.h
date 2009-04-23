@@ -126,7 +126,6 @@ class GameEventFactory {
     map<int, GameEvent* (*)()>::iterator it = event_constructors_->begin();
     GameEvent* event = (*event_constructors_)[event_type]();
     event->set_type(event_type);
-printf("GameEventFactory::GetEventByType(%d)\n",event_type);
     return event;
   }
 

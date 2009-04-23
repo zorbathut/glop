@@ -35,8 +35,6 @@ void GameConnection::ReceiveEvents(vector<pair<EventPackageID, vector<GameEvent*
   vector<string> data;
   ReceiveData(&data);
   for (int i = 0; i < data.size(); i++) {
-//printf("GameConnection[%x]::ReceiveEvents(): data[%d].size() ==", this, i);
-//printf(" %d\n", data[i].size());
     for (int pos = 0; pos < data[i].size(); ) {
       // TODO: This does unaligned memory access, is that bad?
       int len = *((int*)(&data[i].data()[pos]));
@@ -44,13 +42,8 @@ void GameConnection::ReceiveEvents(vector<pair<EventPackageID, vector<GameEvent*
       EventPackageID id;
       vector<GameEvent*> batch;
       DeserializeEvents(data[i].substr(pos, len), &id, &batch);
-//printf("timestep: %d\n", id.state_timestep);
-//printf("engine: %d\n", id.engine_id);
       pos += len;
       events->push_back(pair<EventPackageID, vector<GameEvent*> >(id, batch));
-for (int j = 0; j < events->back().second.size(); j++) {
-  //printf("type: %d\n", events->back().second[j]->type());
-}
     }
   }
 }
@@ -113,17 +106,14 @@ void GameConnection::DeserializeEvents(
 }
 
 void PeerConnection::SendData(const string& data) {
-  //printf("PeerConnection:SendData(): %d\n", data.size());
   network_manager_->SendData(gna_, data);
 }
 
 void PeerConnection::ReceiveData(vector<string>* data) {
   string message;
   data->clear();
-//printf("PeerConnection:ReceiveData()\n");
   while (network_manager_->ReceiveData(gna_, &message)) {
     data->push_back(message);
-//printf("PeerConnection: %d\n", message.size());
   }
 }
 

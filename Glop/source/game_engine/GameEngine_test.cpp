@@ -71,7 +71,6 @@ class MovePlayerEvent : public GameEvent {
     typed_data_->set_y(y);
   }
   virtual GameEventResult* ApplyToGameState(GameState* game_state) const {
-    printf("Apply event\n");
     TestState* state = static_cast<TestState*>(game_state);
     if (state->state.positions_size() > typed_data_->player()) {
       int x = state->state.positions(typed_data_->player()).x();
@@ -96,7 +95,6 @@ class TestFrameCalculator : public GameEngineFrameCalculator {
     return time_ms_;
   }
   virtual void SetTime(int time_ms) {
-//    printf("SetTime: %d -> %d\n", time_ms_, time_ms);
     time_ms_ = time_ms;
   }
  private:
@@ -113,7 +111,7 @@ class GlopEnvironment : public testing::Environment {
   }
 };
 static GlopEnvironment* env = new GlopEnvironment;
-/*
+
 // Increment current frame and delayed frame and make sure that think happens only when the delayed
 // frame increases.
 TEST(GameEngineTest, TestThinksHappenAtTheCorrectTime) {
@@ -139,7 +137,6 @@ TEST(GameEngineTest, TestEventsAreAppliedAtTheCorrectTime) {
   engine.InstallFrameCalculator(frame_calculator);
 
   for (int i = 0; i < 100; i++) {
-    printf("%d\n", i);
     frame_calculator->SetTime(i);
     if (i%10==5) {
       MovePlayerEvent* mpe = NewMovePlayerEvent();
@@ -148,34 +145,41 @@ TEST(GameEngineTest, TestEventsAreAppliedAtTheCorrectTime) {
     }
     engine.Think();
     const TestState& ts = (const TestState&)engine.GetCurrentGameState();
-    printf("player pos: %d %d\n", ts.state.positions(0).x(), ts.state.positions(0).y());
     EXPECT_EQ(i/10 + 1, ts.state.thinks());
     EXPECT_EQ((i/10 + 1) + i/10, ts.state.positions(0).x());
     EXPECT_EQ(2 * (i/10 + 1) + i/10, ts.state.positions(0).y());
   }
 }
 
-TEST(GameEngineTest, TestEventsAreAppliedAtTheCorrectTimeWhenWaitingForNetTimestep) {
+TEST(GameEngineTest, TestEventsAreAppliedCorrectlyWhenWaitingForNetTimestep) {
   TestState s;
 
   GameEngine engine(s, 50, 30, 10, 15);
   TestFrameCalculator* frame_calculator = new TestFrameCalculator();
   engine.InstallFrameCalculator(frame_calculator);
 
+  vector<int> pending_move(15);
+  int total_move = 0;
   for (int i = 0; i < 100; i++) {
-    printf("%d\n", i);
     frame_calculator->SetTime(i);
     if (i%10==5) {
       MovePlayerEvent* mpe = NewMovePlayerEvent();
       mpe->SetData(0, 1, 1);
       engine.ApplyEvent(mpe);
+      // ((i + 30) / 30) figures out which net timestep to apply these events on
+      // * 3 is because there are exactly three states per net timestep
+      // + 2 is because a delay of 15ms will put the state we apply these on 2 state timesteps later
+      // 1 + is so we pick it up at the right time in the if block below
+      pending_move[1 + ((i + 30) / 30) * 3 + 2]++;
+    }
+    if (i%10==0) {
+      total_move += pending_move[i/10];
     }
     engine.Think();
     const TestState& ts = (const TestState&)engine.GetCurrentGameState();
-    printf("player pos: %d %d\n", ts.state.positions(0).x(), ts.state.positions(0).y());
     EXPECT_EQ(i/10 + 1, ts.state.thinks());
-    EXPECT_EQ((i/10 + 1) + i/10, ts.state.positions(0).x());
-    EXPECT_EQ(2 * (i/10 + 1) + i/10, ts.state.positions(0).y());
+    EXPECT_EQ(1 * (i/10 + 1) + total_move, ts.state.positions(0).x());
+    EXPECT_EQ(2 * (i/10 + 1) + total_move, ts.state.positions(0).y());
   }
 }
 
@@ -195,7 +199,6 @@ TEST(GameEngineTest, TestEventsAreAppliedInTheCorrectOrder) {
     engine.ApplyEvent(mpe);
   }
   for (int i = 10; i < 100; i++) {
-    printf("%d\n", i);
     frame_calculator->SetTime(i);
     if (i%10==5) {
       MovePlayerEvent* mpe = NewMovePlayerEvent();
@@ -204,7 +207,6 @@ TEST(GameEngineTest, TestEventsAreAppliedInTheCorrectOrder) {
     }
     engine.Think();
     const TestState& ts = (const TestState&)engine.GetCurrentGameState();
-    printf("player pos: %d %d\n", ts.state.positions(0).x(), ts.state.positions(0).y());
     EXPECT_EQ(i/10 + 1, ts.state.thinks());
 
     // We tried to move a player way negative, but think should prevent that.
@@ -395,7 +397,6 @@ TEST(GameEngineTest, TestEnginesCanConnect) {
   EXPECT_EQ(ts1.state.positions(1).x(), ts2.state.positions(1).x());
   EXPECT_EQ(ts1.state.positions(1).y(), ts2.state.positions(1).y());
 }
-*/
 
 class Waiter {
  public:
@@ -525,9 +526,14 @@ void ConnectEngines(
     ThinkAll(client, all_engines, waiter);
     waiter->Pause();
   }
+  set<pair<GameEngine*, GameEngineFrameCalculator*> >::iterator sit;
+  int count = 0;
+  for (sit = all_engines.begin(); sit != all_engines.end(); sit++) {
+    printf("Engine %d: %d\n", count++, sit->first->EarliestDirtyTimestep());
+  }
 }
 
-#if 1
+#if 0
 TEST(GameEngineTest, TestEnginesCanConnectArbitrarilyX) {
   TestState s;
   s.AddPlayer();
@@ -574,7 +580,7 @@ TEST(GameEngineTest, TestEnginesCanConnectArbitrarilyX) {
   }
 }
 #endif
-#if 0
+#if 1
 TEST(GameEngineTest, TestEnginesCanConnectArbitrarily) {
   TestState s;
   s.AddPlayer();
@@ -583,7 +589,9 @@ TEST(GameEngineTest, TestEnginesCanConnectArbitrarily) {
   s.AddPlayer();
   s.AddPlayer();
 
-  GameEngine engine1(s, 50, 30, 10, 0);
+  // TODO: If the number of states we keep around is too low this test fails.  This is because we
+  // don't currently wait for engines that are lagging out in ConnectEngines().
+  GameEngine engine1(s, 500, 30, 10, 0);
   GameEngine engine2(s);
   GameEngine engine3(s);
   GameEngine engine4(s);

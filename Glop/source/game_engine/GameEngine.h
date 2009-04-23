@@ -87,6 +87,7 @@ class GameEngine {
   // Stats
   int NumThinks() const { return num_thinks_; }
   int NumRethinks() const { return num_rethinks_; }
+  StateTimestep EarliestDirtyTimestep() const { return oldest_dirty_timestep_; }
 
   /// Returns the most accurate GameState object for the current timestep.  This will block until
   /// all pending GameEvents have been applied to the GameState history.
