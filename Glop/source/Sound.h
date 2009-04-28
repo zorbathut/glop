@@ -9,11 +9,9 @@
 
 // Class declarations
 class SoundManager;
-namespace FMOD {
-class Channel;
-class Sound;
-class System;
-};
+struct FMOD_CHANNEL;
+struct FMOD_SOUND;
+struct FMOD_SYSTEM;
 
 // Globals
 SoundManager *sound_manager();
@@ -37,8 +35,8 @@ class SoundSource {
 
  private:
   friend class SoundSample;
-  SoundSource(FMOD::Channel *channel): channel_(channel) {}
-  FMOD::Channel *channel_;
+  SoundSource(FMOD_CHANNEL *channel): channel_(channel) {}
+  FMOD_CHANNEL *channel_;
 };
 
 // SoundSample class definition
@@ -50,9 +48,9 @@ class SoundSample {
   SoundSource Play(bool looped = false, bool start_paused = false) const;
  
  private:
-  SoundSample(FMOD::Sound *sound, float base_volume)
+  SoundSample(FMOD_SOUND *sound, float base_volume)
   : sound_(sound), base_volume_(base_volume) {}
-  FMOD::Sound *sound_;
+  FMOD_SOUND *sound_;
   float base_volume_;
   DISALLOW_EVIL_CONSTRUCTORS(SoundSample);
 };
@@ -77,10 +75,10 @@ class SoundManager {
   // SoundSample and SoundSource interface
   friend class SoundSample;
   friend class SoundSource;
-  FMOD::System *GetSystem() const {return system_;}
+  FMOD_SYSTEM *GetSystem() const {return system_;}
 
   // Data
-  FMOD::System *system_;
+  FMOD_SYSTEM *system_;
   float volume_;
   DISALLOW_EVIL_CONSTRUCTORS(SoundManager);
 };

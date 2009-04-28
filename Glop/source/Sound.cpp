@@ -2,7 +2,7 @@
 #include <cstring>
 #include "Sound.h"
 #include "System.h"
-#include "fmod/fmod.hpp"
+#include "fmod/fmod.h"
 
 // Globals
 static SoundManager *gSoundManager = 0;
@@ -13,30 +13,30 @@ SoundManager *sound_manager() {return system()->sound_manager();}
 
 void SoundSource::Play() {
   if (channel_ != 0)
-    channel_->setPaused(false);
+    FMOD_Channel_SetPaused(channel_, false);
 }
 
 void SoundSource::Pause() {
   if (channel_ != 0)
-    channel_->setPaused(true);
+    FMOD_Channel_SetPaused(channel_, true);
 }
 
 bool SoundSource::IsPaused() const {
-  bool is_paused = false;
+  FMOD_BOOL is_paused = false;
   if (channel_ != 0)
-    channel_->getPaused(&is_paused);
+    FMOD_Channel_GetPaused(channel_, &is_paused);
   return is_paused;
 }
 
 void SoundSource::Stop() {
   if (channel_ != 0)
-    channel_->stop();
+    FMOD_Channel_Stop(channel_);
 }
 
 bool SoundSource::IsStopped() const {
-  bool is_playing = false;
+  FMOD_BOOL is_playing = false;
   if (channel_ != 0)
-    channel_->isPlaying(&is_playing);
+    FMOD_Channel_IsPlaying(channel_, &is_playing);
   return !is_playing;
 }
 
@@ -52,17 +52,17 @@ SoundSample *SoundSample::Load(InputStream in, bool store_compressed, float base
   int length = in.ReadAllData((void**)&data);
 
   // Attempt to create the sound
-  FMOD::Sound *sound;
+  FMOD_SOUND *sound;
   FMOD_RESULT result;
   FMOD_CREATESOUNDEXINFO extra_info;
   memset(&extra_info, 0, sizeof(extra_info));
   extra_info.cbsize = sizeof(extra_info);
   extra_info.length = length;
   if (store_compressed) {
-    result = sound_manager()->GetSystem()->createSound(
+    result = FMOD_System_CreateSound(sound_manager()->GetSystem(),
       data, FMOD_CREATECOMPRESSEDSAMPLE | FMOD_OPENMEMORY, &extra_info, &sound);
   } else {
-    result = sound_manager()->GetSystem()->createSound(
+    result = FMOD_System_CreateSound(sound_manager()->GetSystem(),
       data, FMOD_DEFAULT | FMOD_OPENMEMORY, &extra_info, &sound);
   }
   
@@ -74,14 +74,14 @@ SoundSample *SoundSample::Load(InputStream in, bool store_compressed, float base
 }
 
 SoundSample::~SoundSample() {
-  sound_->release();
+  FMOD_Sound_Release(sound_);
 }
 
 SoundSource SoundSample::Play(bool looped, bool start_paused) const {
-  FMOD::Channel *channel;
-  sound_->setLoopCount(looped? -1 : 0);
-  sound_manager()->GetSystem()->playSound(FMOD_CHANNEL_FREE, sound_, start_paused, &channel);
-  channel->setVolume(base_volume_);
+  FMOD_CHANNEL *channel;
+  FMOD_Sound_SetLoopCount(sound_, looped? -1 : 0);
+  FMOD_System_PlaySound(sound_manager()->GetSystem(), FMOD_CHANNEL_FREE, sound_, start_paused, &channel);
+  FMOD_Channel_SetVolume(channel, base_volume_);
   return SoundSource(channel);
 }
 
@@ -91,9 +91,9 @@ SoundSource SoundSample::Play(bool looped, bool start_paused) const {
 void SoundManager::SetVolume(float volume) {
   volume_ = volume;
   if (IsInitialized()) {
-    FMOD::ChannelGroup *master_channel_group;
-    system_->getMasterChannelGroup(&master_channel_group);
-    master_channel_group->setVolume(volume);
+    FMOD_CHANNELGROUP *master_channel_group;
+    FMOD_System_GetMasterChannelGroup(system_, &master_channel_group);
+    FMOD_ChannelGroup_SetVolume(master_channel_group, volume);
   }
 }
 
@@ -101,29 +101,29 @@ SoundManager::SoundManager()
 : system_(0), volume_(1) {
   // Create the system object and check versions
   const int kNumChannels = 128;
-  if (FMOD::System_Create(&system_) != FMOD_OK)
+  if (FMOD_System_Create(&system_) != FMOD_OK)
     return;
   unsigned int version;
-  if (system_->getVersion(&version) != FMOD_OK || version < FMOD_VERSION)
+  if (FMOD_System_GetVersion(system_, &version) != FMOD_OK || version < FMOD_VERSION)
     goto error;
 
   // Fix bad initialization options. FMOD documentation strongly recommends doing this for Windows.
   FMOD_CAPS caps;
   FMOD_SPEAKERMODE speaker_mode;
-  if (system_->getDriverCaps(0, &caps, 0, 0, &speaker_mode) != FMOD_OK)
+  if (FMOD_System_GetDriverCaps(system_, 0, &caps, 0, 0, &speaker_mode) != FMOD_OK)
     goto error;
-  if (system_->setSpeakerMode(speaker_mode) != FMOD_OK)
+  if (FMOD_System_SetSpeakerMode(system_, speaker_mode) != FMOD_OK)
     goto error;
   if (caps & FMOD_CAPS_HARDWARE_EMULATED) {
-    if (system_->setDSPBufferSize(1024, 10) != FMOD_OK)
+    if (FMOD_System_SetDSPBufferSize(system_, 1024, 10) != FMOD_OK)
       goto error;
   }
 
   // Initialize
-  if (system_->init(kNumChannels, FMOD_INIT_NORMAL, 0) != FMOD_OK) {
-    if (system_->setSpeakerMode(FMOD_SPEAKERMODE_STEREO) != FMOD_OK)
+  if (FMOD_System_Init(system_, kNumChannels, FMOD_INIT_NORMAL, 0) != FMOD_OK) {
+    if (FMOD_System_SetSpeakerMode(system_, FMOD_SPEAKERMODE_STEREO) != FMOD_OK)
       goto error;
-    if (system_->init(kNumChannels, FMOD_INIT_NORMAL, 0) != FMOD_OK)
+    if (FMOD_System_Init(system_, kNumChannels, FMOD_INIT_NORMAL, 0) != FMOD_OK)
       goto error;
   }
 
@@ -138,40 +138,40 @@ error:;
 
 SoundManager::~SoundManager() {
   if (IsInitialized())
-    system_->release();
+    FMOD_System_Release(system_);
 }
 
 void SoundManager::Think() {
   if (IsInitialized())
-    system_->update();
+    FMOD_System_Update(system_);
 }
 
 void SoundManager::PlayAllSources() {
   if (IsInitialized()) {
-    FMOD::ChannelGroup *master_channel_group;
-    system_->getMasterChannelGroup(&master_channel_group);
-    master_channel_group->setPaused(false);
+    FMOD_CHANNELGROUP *master_channel_group;
+    FMOD_System_GetMasterChannelGroup(system_, &master_channel_group);
+    FMOD_ChannelGroup_SetPaused(master_channel_group, false);
   }
 }
 
 void SoundManager::PauseAllSources() {
   if (IsInitialized()) {
-    FMOD::ChannelGroup *master_channel_group;
-    system_->getMasterChannelGroup(&master_channel_group);
-    master_channel_group->setPaused(true);
+    FMOD_CHANNELGROUP *master_channel_group;
+    FMOD_System_GetMasterChannelGroup(system_, &master_channel_group);
+    FMOD_ChannelGroup_SetPaused(master_channel_group, true);
   }
 }
 
 void SoundManager::StopAllSources() {
   if (IsInitialized()) {
     int num_channels;
-    FMOD::ChannelGroup *master_channel_group;
-    system_->getMasterChannelGroup(&master_channel_group);
-    master_channel_group->getNumChannels(&num_channels);   
+    FMOD_CHANNELGROUP *master_channel_group;
+    FMOD_System_GetMasterChannelGroup(system_, &master_channel_group);
+    FMOD_ChannelGroup_GetNumChannels(master_channel_group, &num_channels);   
     for (int i = 0; i < num_channels; i++) {
-      FMOD::Channel *channel;
-      master_channel_group->getChannel(i, &channel);
-      channel->stop();
+      FMOD_CHANNEL *channel;
+      FMOD_ChannelGroup_GetChannel(master_channel_group, i, &channel);
+      FMOD_Channel_Stop(channel);
     }
   }
 }
