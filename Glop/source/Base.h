@@ -18,9 +18,17 @@ using namespace std;
 #ifdef MSVC
 typedef __int64 int64;
 typedef unsigned __int64 uint64;
+#define ATTRIBUTE_NORETURN __declspec(noreturn)
+#define ATTRIBUTE_PRINTFISH(start_param) // Is there one?
+#define likely(x) (x)
+#define unlikely(x) (x)
 #else
 typedef long long int64;
 typedef unsigned long long uint64;
+#define ATTRIBUTE_NORETURN __attribute__((__noreturn__))
+#define ATTRIBUTE_PRINTFISH(start_param) __attribute__((format(printf,start_param,start_param+1)));
+#define likely(x) __builtin_expect(!!(x), 1)
+#define unlikely(x) __builtin_expect(!!(x), 0)
 #endif
 typedef int int32;
 typedef unsigned int uint32;
@@ -41,7 +49,7 @@ inline bool IsGreater(float lhs, float rhs) {return IsLess(rhs, lhs);}
 // Format is similar to sprintf except it outputs into a string, and it does not require special
 // memory allocation. The second version makes it easy to implement other functions like this.
 // (See the implementation of FatalMessagef for example.)
-string Format(const char *text, ...);
+string Format(const char *text, ...) ATTRIBUTE_PRINTFISH(1);
 string Format(const char *text, va_list arglist);
 
 // Logging magic. These functions output a message to the log with a specified filename and line
@@ -50,7 +58,8 @@ string Format(const char *text, va_list arglist);
 void __Log(const char *filename, int line, const string &message);
 struct __LogfObject {
   __LogfObject(const char *_filename, int _line): filename(_filename), line(_line) {}
-  void __Logf(const char *message, ...);
+  void __Logf(const char *message, ...) ATTRIBUTE_PRINTFISH(2);
+  void __Logf();
   const char *filename;
   int line;
 };
@@ -79,11 +88,20 @@ void LogToFunction(void (*func)(const string &), bool also_log_to_std_err = fals
 // default, it uses System::DisplayMessage if System::Init has been called. Otherwise, it uses
 // printf.
 void SetFatalErrorHandler(void (*handler)(const string &message));
-void FatalError(const string &error);
-void FatalErrorf(const char *error, ...);
-int __AssertionFailure(const char *filename, int line, const char *expression);
+void FatalError(const string &error) ATTRIBUTE_NORETURN;
+void FatalErrorf(const char *error, ...) ATTRIBUTE_NORETURN;
+void __AssertionFailure(const char *filename, int line, const char *expression) ATTRIBUTE_NORETURN;  
 #define ASSERT(expression) \
-  (void)((expression) != 0? 0 : __AssertionFailure(__FILE__, __LINE__, #expression))
+  (void)((expression) != 0? (void)(0) : __AssertionFailure(__FILE__, __LINE__, #expression))
+
+// Zorba's D-Net error code
+// The behavior we want here is kind of complicated. First off, we want to provide for some concept of "expected asserts" that are never even reported to the debug log. Second, we want to provide for some concept of "handled asserts" that are reported, but then dealt with in some other fashion. Third, we want it to finally crash, tossing a useful message to the fatal error handler as appropriate. Accomplishing all of this is painful.
+// Note that the "expected" and "handled" handlers need to deal with the error in some manner of their own - whether this be crashing, throwing an exception, longjmp'ing the hell away, or whatever. Returning will just leave it in the macro as a whole.
+// Right now, the varargs might be evaluated multiple times.
+#define CHECK_HANDLED(expected_code, handled_code, expression, ...) \
+  (likely(expression) ? (void)(0) : (expected_code, LOGF("Error at %s:%d - %s\n", __FILE__, __LINE__, #expression), LOGF(__VA_ARGS__), handled_code, __AssertionFailure(__FILE__, __LINE__, #expression)))
+#define CHECK(expression, ...) CHECK_HANDLED((void)(0), (void)(0), expression, __VA_ARGS__)
+
 
 // Disallow evil constructors (based on Google.com's basictypes.h)
 // Place this in the private section of a class to declare a dummy copy constructor and a

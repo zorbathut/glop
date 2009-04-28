@@ -113,6 +113,7 @@ void __LogfObject::__Logf(const char *message, ...) {
   __Log(filename, line, Format(message, arglist));
   va_end(arglist);
 }
+void __LogfObject::__Logf() { }
 
 // Error-handling utilities
 // ========================
@@ -135,8 +136,7 @@ void FatalErrorf(const char *error, ...) {
 
 // Handles a failed assertion. It returns an integer so that the ASSERT macro can be done with a ?:
 // operator and thus require a semi-colon.
-int __AssertionFailure(const char *filename, int line, const char *expression) {
+void __AssertionFailure(const char *filename, int line, const char *expression) {
   FatalError(Format("Assertion failed on line #%d of file %s:\n\n%s.",
                     line, filename, expression));
-  return 1;
 }
