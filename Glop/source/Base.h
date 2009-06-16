@@ -100,7 +100,7 @@ void __AssertionFailure(const char *filename, int line, const char *expression) 
 // Right now, the varargs might be evaluated multiple times.
 #define CHECK_HANDLED(expected_code, handled_code, expression, ...) \
   (likely(expression) ? (void)(0) : (expected_code, LOGF("Error at %s:%d - %s\n", __FILE__, __LINE__, #expression), LOGF(__VA_ARGS__), handled_code, __AssertionFailure(__FILE__, __LINE__, #expression)))
-#define CHECK(expression, ...) CHECK_HANDLED((void)(0), (void)(0), expression, __VA_ARGS__)
+//#define CHECK(expression, ...) CHECK_HANDLED((void)(0), (void)(0), expression, __VA_ARGS__)
 
 
 // Disallow evil constructors (based on Google.com's basictypes.h)

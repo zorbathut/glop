@@ -71,6 +71,8 @@ class Image {
   static Image *LoadJpg(InputStream input);
   static bool IsTga(InputStream input);
   static Image *LoadTga(InputStream input);
+  static bool IsPng(InputStream input);
+  static Image *LoadPng(InputStream input);
 
   unsigned char *data_;
   int width_, height_;

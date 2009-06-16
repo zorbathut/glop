@@ -7,6 +7,11 @@ extern "C" {
 #include <cstdlib>
 #include <cstring>
 #include <setjmp.h>  // For LoadJpg error handling
+#include <png.h>
+
+#include <vector>
+
+using namespace std;
 
 // Constants
 const int kMaxImageWidth = 65536;
@@ -60,6 +65,8 @@ Image *Image::Load(InputStream input) {
     return LoadJpg(input);
   if (IsTga(input))
     return LoadTga(input);
+  if (IsPng(input))
+    return LoadPng(input);
   return 0;
 }
 
@@ -836,3 +843,70 @@ Image *Image::LoadTga(InputStream input) {
   }
   return new Image(pixels, width, height, bpp);
 }
+
+// Png loading
+// ===========
+
+bool Image::IsPng(InputStream input) {
+  unsigned char tag[8];
+  bool is_png = (input.LookAheadReadChars(0, 8, tag) == 8 && !png_sig_cmp(tag, 0, 8));
+  return is_png;
+}
+
+void input_reader(png_structp png_ptr, png_bytep data, png_size_t length) {
+  InputStream *istr = (InputStream*)png_get_io_ptr(png_ptr);
+  
+  int ct = istr->ReadChars(length, data);
+  if(ct != length)
+      png_error(png_ptr, "unexpected EOF");
+}
+  
+
+Image *Image::LoadPng(InputStream input) {
+  png_structp png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+  ASSERT(png_ptr);
+
+  png_infop info_ptr = png_create_info_struct(png_ptr);
+  ASSERT(info_ptr);
+  
+  if(setjmp(png_jmpbuf(png_ptr))) {
+    ASSERT(0);
+  }
+  
+  png_set_read_fn(png_ptr, &input, input_reader);
+  
+  png_read_info(png_ptr, info_ptr);
+  
+  if(info_ptr->color_type == PNG_COLOR_TYPE_PALETTE)
+    png_set_palette_to_rgb(png_ptr);
+  if(info_ptr->color_type == PNG_COLOR_TYPE_GRAY && info_ptr->bit_depth < 8)
+    png_set_gray_1_2_4_to_8(png_ptr);
+  if(info_ptr->bit_depth == 16)
+    png_set_strip_16(png_ptr);
+  if(info_ptr->bit_depth < 8)
+    png_set_packing(png_ptr);
+  if(info_ptr->color_type == PNG_COLOR_TYPE_RGB)
+    png_set_filler(png_ptr, 0xff, PNG_FILLER_AFTER);
+  if(info_ptr->color_type == PNG_COLOR_TYPE_GRAY || info_ptr->color_type == PNG_COLOR_TYPE_GRAY_ALPHA)
+    png_set_gray_to_rgb(png_ptr);
+
+  png_read_update_info(png_ptr, info_ptr);
+
+  ASSERT(info_ptr->bit_depth == 8);
+  ASSERT(info_ptr->color_type == PNG_COLOR_TYPE_RGBA || info_ptr->color_type == PNG_COLOR_TYPE_RGB);
+  
+  unsigned char *pixels = new unsigned char[info_ptr->width * info_ptr->height * 4];
+  
+  vector<unsigned char *> ul;
+  for(int i = 0; i < info_ptr->height; i++)
+    ul.push_back(pixels + i * info_ptr->width * 4);
+  
+  png_read_image(png_ptr, (png_byte**)&ul[0]);
+  
+  Image *q = new Image(pixels, info_ptr->width, info_ptr->height, 32);
+
+  png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
+  
+  return q;
+}
+

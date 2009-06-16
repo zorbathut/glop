@@ -50,6 +50,7 @@ env.BuildObjects(
     'jpeg6b',
     'fmodex',
     'z',
+    'png',
   ],
   frameworks = [
     'Carbon',
@@ -62,8 +63,8 @@ env.BuildObjects(
     'net/base',
     'glop2d/base',
     'glop3d/base',
-    'game_protos',
-    'game_engine',
+    #'game_protos',
+    #'game_engine',
     'random',
   ]
 )
