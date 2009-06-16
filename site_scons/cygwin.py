@@ -67,6 +67,7 @@ def AppendOsParams(env):
   env.Append(CXXFLAGS = ['-mno-cygwin'])
   
   env.Append(CPPPATH = ['../../Glop/cygwin/include'])
+  env.Append(CPPPATH = ['/usr/local/include'])
   env.Append(CPPPATH = ['..'])
   
   if cyg_debug:
