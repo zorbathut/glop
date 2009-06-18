@@ -340,7 +340,7 @@ class TextFrame: public GlopFrame {
 //       pointer m
 //     Size: ("S<size>", e.g. "s2.5") Sets the active font to have size the given multiple of the
 //       the original size. Note this is RELATIVE to the base size, unlike other tags.
-//     Color: ("C<r><g><b>" or "C<r><g><b><a>", e.g. "Cff0000") Sets the active color.
+//     Color: ("C<r><g><b>" or "C<r><g><b><a>", e.g. "Cff0000") Sets the active color. Cffffffff is opaque white.
 //
 //    Note that capital letters are always reserved for tag names, and lower case 'a'-'f' are
 //    reserved for hexadecimal. Tags can also be created using the static Tag methods below.
