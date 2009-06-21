@@ -41,8 +41,14 @@ Image *gIcon;
 void IntroScreen() {
   GlopFrame *info = new FancyTextFrame("\1BUCff8080\1Glop Test Program\1Cffffff/B/U\1\n\n"
                                        "Select tests to verify that Glop performs as expected.");
-  GlopFrame *img = new HollowBoxFrame(new ImageFrame("glop.jpg"), kWhite);
-	window()->AddFrame(new ColFrame(info, new RecHeightFrame(new EmptyFrame(), 0.1f), img));
+  GlopFrame *jpg_img = new HollowBoxFrame(new ImageFrame("glop.jpg"), kWhite);
+  GlopFrame *png_img = new HollowBoxFrame(new ImageFrame("png.png"), kWhite);
+  ColFrame *col_frame = new ColFrame(4);
+  col_frame->SetCell(0, info);
+  col_frame->SetCell(1, new RecHeightFrame(new EmptyFrame(), 0.1f));
+  col_frame->SetCell(2, jpg_img);
+  col_frame->SetCell(3, png_img);
+  window()->AddFrame(col_frame);
   input()->WaitForKeyPress();
   window()->ClearFrames();
 }
