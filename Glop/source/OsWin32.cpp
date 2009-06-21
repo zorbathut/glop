@@ -5,6 +5,7 @@
 #include "Image.h"
 #include "System.h"
 #include "Thread.h"
+#include "GlopWindow.h"
 #define DIRECTINPUT_VERSION 0x0700
 #include "dinput.h"
 #include <process.h>
@@ -358,7 +359,8 @@ LRESULT CALLBACK HandleMessage(HWND window_handle, UINT message, WPARAM wparam, 
         return 0;
       break;
     case WM_CLOSE:
-      exit(0);
+      window()->Destroy();  // this is certainly not going to fail hideously
+      return 0;
     case WM_MOVE:
       os_window->x = lparam1;
       os_window->y = lparam2;
@@ -400,6 +402,7 @@ LRESULT CALLBACK HandleMessage(HWND window_handle, UINT message, WPARAM wparam, 
   }
 
   // Pass on remaining messages to the default handler
+  
   return DefWindowProc(window_handle, message, wparam, lparam);
 }
 
