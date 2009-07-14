@@ -15,7 +15,7 @@ System *system() {return gSystem;}
 
 // System-dependent logging formatter and display message handler for use in Base.cpp.
 static string SystemDependentLogFormatter(const char *filename, int line, const string &message) {
-  return Format("[f%d %.3fs %s:%d] %s\n", system()->GetFrameCount(), system()->GetTime() / 1000.0f,
+  return Format("[%3df %7.3fs %10s:%4d] %s\n", system()->GetFrameCount(), system()->GetTime() / 1000.0f,
                 filename, line, message.c_str());
 }
 static void SystemDependentFatalErrorHandler(const string &message) {
