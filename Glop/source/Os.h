@@ -218,6 +218,9 @@ class Os {
 
   // Returns the number of milliseconds that have elapsed since some unspecified basepoint.
   static int GetTime();
+  
+  // Returns the number of microseconds that have elapsed since some unspecified basepoint.
+  static int64 GetTimeMicro();
 
   // Returns the refresh rate for the primary display.
   static int GetRefreshRate();

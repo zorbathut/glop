@@ -106,6 +106,10 @@ int System::GetTime() {
   return Os::GetTime() - start_time_;
 }
 
+int64 System::GetTimeMicro() {
+  return Os::GetTimeMicro() - start_micro_time_;
+}
+
 void System::Sleep(int t) {
   Os::Sleep(t);
 }
@@ -154,6 +158,7 @@ System::System()
   refresh_rate_(0),
   vsync_time_(0),
   start_time_(Os::GetTime()),
+  start_micro_time_(Os::GetTimeMicro()),
   free_type_library_(0),      // The FreeType library is only initialized when needed
   fps_(0),
   fps_history_filled_(false),

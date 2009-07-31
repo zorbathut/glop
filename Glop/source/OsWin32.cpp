@@ -902,6 +902,13 @@ int Os::GetTime() {
   return int((1000 * current_time.QuadPart) / gTimerFrequency.QuadPart);
 }
 
+int64 Os::GetTimeMicro() {
+  LARGE_INTEGER current_time;
+  QueryPerformanceCounter(&current_time);
+  return int64((1000000 * (long double)current_time.QuadPart) / gTimerFrequency.QuadPart);      // on my windows box, the timer frequency is about 2.4 billion (clock speed ahoy). That gives one overflow every 2 hours if done with the same method GetTime() uses, and without floating-point. On a faster system that might go down to 1 hour. Unacceptable. We go to floating-point to avoid issues of this sort. Dividing by 1000 might do the job, but I'm unsure how *low* TimerFrequency might go. It's all kind of nasty.
+}
+
+
 int Os::GetRefreshRate() {
   DEVMODE dev_mode;
   dev_mode.dmSize = sizeof(dev_mode);

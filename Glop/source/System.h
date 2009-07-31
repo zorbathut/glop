@@ -41,6 +41,9 @@ class System {
   // Returns the number of milliseconds that have elapsed since the program began.
   int GetTime();
 
+  // Returns the number of microseconds that have elapsed since the program began. 
+  int64 GetTimeMicro();
+  
   // Returns the number of times Think has finished executing since the program began.
   int GetFrameCount() const {return frame_count_;}
 
@@ -98,6 +101,7 @@ private:
   int refresh_rate_query_delay_, refresh_rate_;
   int vsync_time_;             // Time spent waiting for vsync last frame
   int start_time_, old_time_;  // Os::Time as of program start and as of the last call to Think
+  int64 start_micro_time_;
   void *free_type_library_;    // Internal handle to the FreeType library, used for text
 
   // FPS data
