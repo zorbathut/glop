@@ -110,6 +110,7 @@ class GlUtils {
     glColor4fv(color.GetData());
   }
   static void SetTexture(const Texture *texture) {
+    ASSERT(texture->gl_id_);
     glEnable(GL_TEXTURE_2D);
     glBindTexture(GL_TEXTURE_2D, texture->gl_id_);
   }
