@@ -213,6 +213,10 @@ def AppendOsParams(env):
   env.AddMethod(Application, 'Application')
   env.AddMethod(CopyDirectory, 'CopyDirectory')
 
+  env.AppendUnique(CPPFLAGS = ['-arch', 'i386'])
+  env.AppendUnique(CXXFLAGS = ['-arch', 'i386'])
+  env.AppendUnique(LDFLAGS = ['-arch', 'i386'])
+  
   env.AppendUnique(CPPDEFINES = ['MACOSX'])
   env.AppendUnique(FRAMEWORKPATH = ['/System/Library/Frameworks'])
   env.AppendUnique(FRAMEWORKS = [
