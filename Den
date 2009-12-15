@@ -9,8 +9,8 @@ local glop_filenames = {"Base", "Input", "GlopFrameBase", "GlopFrameStyle", "Glo
 -- basic initial setup and configuration
 local flags = {}
 do
-  ursa.token{"os_name", nil, "uname -o"}
-  local local_os = ursa.value{"os_name"}
+  ursa.token.rule{"os_name", nil, "uname -o"}
+  local local_os = ursa.token{"os_name"}
 
   if local_os == "Cygwin" then
     local_os = "cygwin"
@@ -28,7 +28,7 @@ end
 
 -- parse the result from g++'s built-in dependency scanner
 local function make_dependencies(srcfile)
-  local deps = ursa.util.system(("g++ %s -MM %s"):format(flags.cxx, srcfile))
+  local deps = ursa.util.system{("g++ %s -MM %s"):format(flags.cxx, srcfile)}
   deps = deps:match("^.*: (.*)$")
   
   local dependencies = {}
@@ -48,8 +48,8 @@ for _, file in ipairs(glop_filenames) do
   local o = "build/Glop/" .. file .. ".o"
   local depend = "Glop/" .. file .. " dependencies"
   
-  ursa.token{depend, ursa.util.value_deferred{depend, default = cpp}, function () return make_dependencies(cpp) end}
-  ursa.rule{o, ursa.util.value_deferred{depend}, ("g++ %s -o %s -c %s"):format(flags.cxx, o, cpp)}
+  ursa.token.rule{depend, ursa.util.token_deferred{depend, default = cpp}, function () return make_dependencies(cpp) end}
+  ursa.rule{o, ursa.util.token_deferred{depend}, ("g++ %s -o %s -c %s"):format(flags.cxx, o, cpp)}
   table.insert(objects, o)
 end
 
@@ -68,8 +68,8 @@ local function BuildApp(appname, files)
     local o = ("build/%s/%s.o"):format(appname, file)
     local depend = ("%s/%s dependencies"):format(appname, file)
     
-    ursa.token{depend, ursa.util.value_deferred{depend, default = cpp}, function () return make_dependencies(cpp) end}
-    ursa.rule{o, ursa.util.value_deferred{depend}, ("g++ %s -o %s -c %s"):format(flags.cxx, o, cpp)}
+    ursa.token.rule{depend, ursa.util.token_deferred{depend, default = cpp}, function () return make_dependencies(cpp) end}
+    ursa.rule{o, ursa.util.token_deferred{depend}, ("g++ %s -o %s -c %s"):format(flags.cxx, o, cpp)}
     table.insert(objects, o)
   end
   
@@ -82,5 +82,19 @@ BuildApp("Tests", {"Tests"})
 
 ursa.command{ursa.command.default, applist}
 
+-- clean things up properly
+
+if not clean_dirs then clean_dirs = {} end
+table.insert(clean_dirs, "build/Glop/glop3d")
+table.insert(clean_dirs, "build/Glop")
+table.insert(clean_dirs, "build/Tests")
+table.insert(clean_dirs, "build")
+
+ursa.command{"clean", function ()
+  ursa.util.clean()
+  for _, v in ipairs(clean_dirs) do
+    os.remove(v)
+  end
+end}
 
 ursa.build{...}
