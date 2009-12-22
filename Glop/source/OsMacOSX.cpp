@@ -1176,6 +1176,12 @@ int Os::GetTime() {
   return (((unsigned long long)current_time.hi << 32 | current_time.lo) - start_time) / 1000.0;
 }
 
+int64 Os::GetTimeMicro() {
+  UnsignedWide current_time;
+  Microseconds(&current_time);
+  return (unsigned long long)glop_start_time.hi << 32 | glop_start_time.lo; // fffffffffff
+}
+
 void Os::SwapBuffers(OsWindowData* data) {
   aglSwapBuffers(data->agl_context);
 }
