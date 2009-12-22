@@ -29,6 +29,7 @@ bool SoundSource::IsPaused() const {
 }
 
 void SoundSource::Stop() {
+  LOGF("stopped");
   if (channel_ != 0)
     FMOD_Channel_Stop(channel_);
 }
@@ -60,10 +61,10 @@ SoundSample *SoundSample::Load(InputStream in, bool store_compressed, float base
   extra_info.length = length;
   if (store_compressed) {
     result = FMOD_System_CreateSound(sound_manager()->GetSystem(),
-      data, FMOD_CREATECOMPRESSEDSAMPLE | FMOD_OPENMEMORY | FMOD_SOFTWARE, &extra_info, &sound);
+      data, FMOD_CREATECOMPRESSEDSAMPLE | FMOD_OPENMEMORY | FMOD_SOFTWARE | FMOD_LOOP_NORMAL, &extra_info, &sound);
   } else {
     result = FMOD_System_CreateSound(sound_manager()->GetSystem(),
-      data, FMOD_DEFAULT | FMOD_OPENMEMORY | FMOD_SOFTWARE, &extra_info, &sound);
+      data, FMOD_DEFAULT | FMOD_OPENMEMORY | FMOD_SOFTWARE | FMOD_LOOP_NORMAL, &extra_info, &sound);
   }
   
   // Store the result or return error
@@ -80,7 +81,7 @@ SoundSample::~SoundSample() {
 SoundSource SoundSample::Play(bool looped, bool start_paused) const {
   FMOD_CHANNEL *channel;
   FMOD_Sound_SetLoopCount(sound_, looped? -1 : 0);
-  int rv = FMOD_System_PlaySound(sound_manager()->GetSystem(), FMOD_CHANNEL_FREE, sound_, start_paused, &channel);
+  FMOD_System_PlaySound(sound_manager()->GetSystem(), FMOD_CHANNEL_FREE, sound_, start_paused, &channel);
   FMOD_Channel_SetVolume(channel, base_volume_);
   return SoundSource(channel);
 }
