@@ -52,18 +52,19 @@ for _, file in ipairs(glop_filenames) do
   table.insert(objects, ursa.rule{o, ursa.util.token_deferred{depend}, ("g++ %s -o %s -c %s"):format(flags.cxx, o, cpp)})
 end
 
-local fullglop = {}
+local lib = nil
+local headers = {}
 
 -- build the glop library
-table.insert(fullglop, ursa.rule{"build/Glop/lib/libGlop.a", objects, ursa.util.system_template{"ar rc $TARGET $SOURCES"}})
+lib = ursa.rule{"build/Glop/lib/libGlop.a", objects, ursa.util.system_template{"ar rc $TARGET $SOURCES"}}
 
 -- mirror source files into the appropriate build directory
 ursa.token.rule{"headers", nil, "cd Glop/source && find -type f | sed s*\\\\./**"}
 for k in ursa.token{"headers"}:gmatch("[^%s]+") do
-  table.insert(fullglop, ursa.rule{"build/Glop/include/Glop/" .. k, "Glop/source/" .. k, ursa.util.system_template{"cp $SOURCE $TARGET"}})
+  table.insert(headers, ursa.rule{"build/Glop/include/Glop/" .. k, "Glop/source/" .. k, ursa.util.system_template{"cp $SOURCE $TARGET"}})
 end
 
-ursa.command{"glop", fullglop}
+ursa.command{"glop", {lib, headers}}
 
 
 
@@ -76,12 +77,12 @@ local function BuildApp(appname, files)
     local o = ("build/%s/%s.o"):format(appname, file)
     local depend = ("%s/%s dependencies"):format(appname, file)
     
-    ursa.token.rule{depend, ursa.util.token_deferred{depend, default = cpp}, function () return make_dependencies(cpp) end}
-    table.insert(objects, ursa.rule{o, ursa.util.token_deferred{depend}, ("g++ %s -o %s -c %s"):format(flags.cxx, o, cpp)})
+    ursa.token.rule{depend, {headers, ursa.util.token_deferred{depend, default = cpp}}, function () return make_dependencies(cpp) end}
+    table.insert(objects, ursa.rule{o, {headers, ursa.util.token_deferred{depend}}, ("g++ %s -o %s -c %s"):format(flags.cxx, o, cpp)})
   end
   
   local out = "build/" .. appname .. ".exe"
-  table.insert(applist, ursa.rule{out, {objects, "build/libGlop.a"}, ursa.util.system_template{("g++ -o $TARGET $SOURCES %s"):format(flags.ld)}})
+  table.insert(applist, ursa.rule{out, {objects, lib}, ursa.util.system_template{("g++ -o $TARGET $SOURCES %s"):format(flags.ld)}})
 end
 
 BuildApp("Tests", {"Tests"})
@@ -106,4 +107,4 @@ end}
 ursa.build{...}
 
 
-return {lib = fullglop[1], package = fullglop} -- just in case we're being shelled by something, here's the glop package data
+return {lib = lib, headers = headers} -- just in case we're being shelled by something, here's the glop package data
