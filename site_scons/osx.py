@@ -181,7 +181,7 @@ def Application(env, target, source, resources = [], frameworks = [], packages =
       env.Execute(SCons.Defaults.Delete(target_resource))
     env.Command(target_resource, resource, SCons.Defaults.Copy("$TARGET", "$SOURCE"))
 
-  app_env.Append(LINKFLAGS = ['-arch i386'])
+  app_env.Append(LINKFLAGS = ['-arch', 'i386'])
   for framework in frameworks:
     app_env.AppendUnique(FRAMEWORKPATH = [re.match('#?(.*)/(.*)\.framework.*', framework).group(1)])
     app_env.AppendUnique(FRAMEWORKS = [re.match('(.*)/(.*)\.framework.*', framework).group(2)])
