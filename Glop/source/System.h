@@ -20,6 +20,9 @@ class System {
   // Startup. Creates system() and does all setup we want. ShutDown is done automatically. Many
   // Glop functions require this to be called before they are used.
   static void Init();
+ 
+  // Shutdown. Manual shutdown is currently provided because the automatic thingy wasn't working properly.
+  static void ShutDown();
 
   // Internal logic - Think must be called exactly once per frame. It returns the number of
   // milliseconds that have elapsed since the previous call. During the call to Think, all
@@ -91,7 +94,6 @@ class System {
   vector<string> ListSubdirectories(const string &directory);
 private:
   System();
-  static void ShutDown() {delete system();}
   ~System();
   
   // General data

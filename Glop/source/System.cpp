@@ -15,8 +15,11 @@ System *system() {return gSystem;}
 
 // System-dependent logging formatter and display message handler for use in Base.cpp.
 static string SystemDependentLogFormatter(const char *filename, int line, const string &message) {
-  return Format("[%3df %7.3fs %10s:%4d] %s\n", system()->GetFrameCount(), system()->GetTime() / 1000.0f,
+  if(gSystem)
+    return Format("[%3df %7.3fs %10s:%4d] %s\n", system()->GetFrameCount(), system()->GetTime() / 1000.0f,
                 filename, line, message.c_str());
+  else
+    return Format("[(sys uninit)  %10s:%4d] %s\n", filename, line, message.c_str());
 }
 static void SystemDependentFatalErrorHandler(const string &message) {
   system()->MessageBox("Fatal Error", message);
@@ -31,6 +34,11 @@ void System::Init() {
   InitDefaultFrameStyle(0);
   SetLogFormatter(SystemDependentLogFormatter);
   SetFatalErrorHandler(SystemDependentFatalErrorHandler);
+}
+
+void System::ShutDown() {
+  delete gSystem;
+  gSystem = NULL;
 }
 
 // Internal logic - see System.h.
