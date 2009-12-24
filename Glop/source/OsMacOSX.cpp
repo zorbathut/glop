@@ -8,6 +8,7 @@
 
 #include "Os.h"
 #include "Input.h"
+#include "GlopWindow.h"
 #include <vector>
 #include <string>
 #include <set>
@@ -152,7 +153,7 @@ OSStatus GlopEventHandler(EventHandlerCallRef next_handler, EventRef the_event, 
   }
   if (event_class == kEventClassApplication && event_kind == kEventAppQuit) {
     if (ok_to_exit) {
-      exit(0);
+      window()->Destroy();
       result = noErr;
     }
   }
