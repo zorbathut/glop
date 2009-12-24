@@ -8,22 +8,46 @@ local glop_filenames = {"Base", "Input", "GlopFrameBase", "GlopFrameStyle", "Glo
 
 -- basic initial setup and configuration
 local flags = {}
+local local_os
+
+local executable_extension
+
+local deploy_paths = {}
+
 do
-  ursa.token.rule{"os_name", nil, "uname -o"}
-  local local_os = ursa.token{"os_name"}
+  ursa.token.rule{"os_name", nil, "uname -o || uname"}
+  local_os = ursa.token{"os_name"}
 
   if local_os == "Cygwin" then
     local_os = "cygwin"
     
-    flags.cxx = "-mno-cygwin -DWIN32 -D_LIB -D_MBCS -I/usr/local/include -O2"
-    flags.ld = "-mno-cygwin -LGlop/cygwin/lib -L/lib/mingw -lkernel32 -luser32 -lgdi32 -lwinspool -lcomdlg32 -ladvapi32 -lshell32 -lole32 -loleaut32 -luuid -lodbc32 -lodbccp32 -lopengl32 -lfreetype -ljpeg -lglu32 -ldinput -ldxguid -lfmodex -lwinmm -lpng -O2"
+    flags.cxx = "-mno-cygwin -DWIN32 -D_LIB -D_MBCS -I/usr/local/include"
+    flags.ld = "-mno-cygwin -LGlop/cygwin/lib -L/lib/mingw -lkernel32 -luser32 -lgdi32 -lwinspool -lcomdlg32 -ladvapi32 -lshell32 -lole32 -loleaut32 -luuid -lodbc32 -lodbccp32 -lopengl32 -lfreetype -ljpeg -lglu32 -ldinput -ldxguid -lfmodex -lwinmm -lpng"
     
     table.insert(glop_filenames, "OsWin32")
+    
+    executable_extension = ".exe"
+    
+    deploy_paths.lib = "glop/lib/libGlop.dll"
+    deploy_paths.headers = "glop/include"
+  elseif local_os == "Darwin" then
+    local_os = "osx"
+    
+    flags.cxx = "-arch i386 -DMACOSX -D_DEBUG -IGlop/OSX"
+    flags.ld = "-arch i386 -LGlop/OSX/lib -lfmodex -lfreetype235 -ljpeg6b -lpng -lrakneti386 -lz -F/System/Library/Frameworks -framework Carbon -framework AGL -framework OpenGL -framework ApplicationServices -framework IOKit -dynamiclib -Wl,-single_module -compatibility_version 1 -current_version 1 -mmacosx-version-min=10.5 -headerpad_max_install_names -install_name @executable_path/../Frameworks/Glop.framework/Glop"
+    
+    table.insert(glop_filenames, "OsMacOSX")
+    
+    executable_extension = "app"  -- much of this needs to be redesigned
+    
+    deploy_paths.lib = "Glop.framework/Glop"
+    deploy_paths.headers = "Glop.framework/Headers"
   else
+    print("unknown OS", local_os)
     assert(false)
   end
   
-  flags.cxx = flags.cxx .. " -IGlop/cygwin/include -IGlop/source -I. -O2 -g"
+  flags.cxx = flags.cxx .. " -IGlop/cygwin/include -IGlop/source -I. -g"
 end
 
 -- parse the result from g++'s built-in dependency scanner
@@ -56,12 +80,12 @@ local lib = nil
 local headers = {}
 
 -- build the glop library
-lib = ursa.rule{"build/Glop/lib/libGlop.a", objects, ursa.util.system_template{"ar rc $TARGET $SOURCES"}}
+lib = ursa.rule{"build/Glop/" .. deploy_paths.lib, objects, ursa.util.system_template{("g++ -o $TARGET $SOURCES %s"):format(flags.ld)}}
 
 -- mirror source files into the appropriate build directory
-ursa.token.rule{"headers", nil, "cd Glop/source && find -type f | sed s*\\\\./**"}
+ursa.token.rule{"headers", nil, "cd Glop/source && find . -type f | sed s*\\\\./** | grep \\.h"}
 for k in ursa.token{"headers"}:gmatch("[^%s]+") do
-  table.insert(headers, ursa.rule{"build/Glop/include/Glop/" .. k, "Glop/source/" .. k, ursa.util.system_template{"cp $SOURCE $TARGET"}})
+  table.insert(headers, ursa.rule{"build/Glop/" .. deploy_paths.headers .. "/" .. k, "Glop/source/" .. k, ursa.util.system_template{"cp $SOURCE $TARGET"}})
 end
 
 ursa.command{"glop", {lib, headers}}
@@ -81,7 +105,7 @@ local function BuildApp(appname, files)
     table.insert(objects, ursa.rule{o, {headers, ursa.util.token_deferred{depend}}, ("g++ %s -o %s -c %s"):format(flags.cxx, o, cpp)})
   end
   
-  local out = "build/" .. appname .. ".exe"
+  local out = "build/" .. appname .. executable_extension
   table.insert(applist, ursa.rule{out, {objects, lib}, ursa.util.system_template{("g++ -o $TARGET $SOURCES %s"):format(flags.ld)}})
 end
 
@@ -107,4 +131,4 @@ end}
 ursa.build{...}
 
 
-return {lib = lib, headers = headers} -- just in case we're being shelled by something, here's the glop package data
+return {lib = lib, headers = headers, os = local_os} -- just in case we're being shelled by something, here's the glop package data
