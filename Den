@@ -22,14 +22,14 @@ do
     local_os = "cygwin"
     
     flags.cxx = "-mno-cygwin -DWIN32 -D_LIB -D_MBCS -I/usr/local/include"
-    flags.ld = "-mno-cygwin -LGlop/cygwin/lib -L/lib/mingw -lkernel32 -luser32 -lgdi32 -lwinspool -lcomdlg32 -ladvapi32 -lshell32 -lole32 -loleaut32 -luuid -lodbc32 -lodbccp32 -lopengl32 -lfreetype -ljpeg -lglu32 -ldinput -ldxguid -lfmodex -lwinmm -lpng"
+    flags.ld = "-mno-cygwin -LGlop/cygwin/lib -L/lib/mingw -lkernel32 -luser32 -lgdi32 -lwinspool -lcomdlg32 -ladvapi32 -lshell32 -lole32 -loleaut32 -luuid -lodbc32 -lodbccp32 -lopengl32 -lfreetype -ljpeg -lglu32 -ldinput -ldxguid -lfmodex -lwinmm -lpng -shared"
     
     table.insert(glop_filenames, "OsWin32")
     
     executable_extension = ".exe"
     
     deploy_paths.lib = "glop/lib/libGlop.dll"
-    deploy_paths.headers = "glop/include"
+    deploy_paths.headers = "local/include/Glop"
   elseif local_os == "Darwin" then
     local_os = "osx"
     
