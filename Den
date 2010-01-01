@@ -73,14 +73,14 @@ for _, file in ipairs(glop_filenames) do
   local depend = "Glop/" .. file .. " dependencies"
   
   ursa.token.rule{depend, ursa.util.token_deferred{depend, default = cpp}, function () return make_dependencies(cpp) end}
-  table.insert(objects, ursa.rule{o, ursa.util.token_deferred{depend}, ("g++ %s -o %s -c %s"):format(flags.cxx, o, cpp)})
+  table.insert(objects, ursa.rule{o, ursa.util.token_deferred{depend}, ("g++ -O2 %s -o %s -c %s"):format(flags.cxx, o, cpp)})
 end
 
 local lib = nil
 local headers = {}
 
 -- build the glop library
-lib = ursa.rule{"build/Glop/" .. deploy_paths.lib, objects, ursa.util.system_template{("g++ -o $TARGET $SOURCES %s"):format(flags.ld)}}
+lib = ursa.rule{"build/Glop/" .. deploy_paths.lib, objects, ursa.util.system_template{("g++ -O2 -o $TARGET $SOURCES %s"):format(flags.ld)}}
 
 -- mirror source files into the appropriate build directory
 ursa.token.rule{"headers", nil, "cd Glop/source && find . -type f | sed s*\\\\./** | grep \\.h"}
@@ -102,11 +102,11 @@ local function BuildApp(appname, files)
     local depend = ("%s/%s dependencies"):format(appname, file)
     
     ursa.token.rule{depend, {headers, ursa.util.token_deferred{depend, default = cpp}}, function () return make_dependencies(cpp) end}
-    table.insert(objects, ursa.rule{o, {headers, ursa.util.token_deferred{depend}}, ("g++ %s -o %s -c %s"):format(flags.cxx, o, cpp)})
+    table.insert(objects, ursa.rule{o, {headers, ursa.util.token_deferred{depend}}, ("g++ -O2 %s -o %s -c %s"):format(flags.cxx, o, cpp)})
   end
   
   local out = "build/" .. appname .. executable_extension
-  table.insert(applist, ursa.rule{out, {objects, lib}, ursa.util.system_template{("g++ -o $TARGET $SOURCES %s"):format(flags.ld)}})
+  table.insert(applist, ursa.rule{out, {objects, lib}, ursa.util.system_template{("g++ -O2 -o $TARGET $SOURCES %s"):format(flags.ld)}})
 end
 
 BuildApp("Tests", {"Tests"})
