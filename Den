@@ -21,8 +21,9 @@ do
   if local_os == "Cygwin" then
     local_os = "cygwin"
     
-    flags.cxx = "-mno-cygwin -DWIN32 -D_LIB -D_MBCS -I/usr/local/include"
-    flags.ld = "-mno-cygwin -LGlop/cygwin/lib -L/lib/mingw -lkernel32 -luser32 -lgdi32 -lwinspool -lcomdlg32 -ladvapi32 -lshell32 -lole32 -loleaut32 -luuid -lodbc32 -lodbccp32 -lopengl32 -lfreetype -ljpeg -lglu32 -ldinput -ldxguid -lfmodex -lwinmm -lpng -shared"
+    ursa.token.rule{"CC", nil, function () return "/cygdrive/c/MinGW/bin/g++" end}
+    ursa.token.rule{"CXXFLAGS", nil, function () return "-DWIN32 -D_LIB -D_MBCS -IGlop/cygwin/include -IGlop/source -I. -g" end}
+    ursa.token.rule{"LDFLAGS", nil, function () return "-LGlop/cygwin/lib -lkernel32 -luser32 -lgdi32 -lwinspool -lcomdlg32 -ladvapi32 -lshell32 -lole32 -loleaut32 -luuid -lodbc32 -lodbccp32 -lopengl32 -lfreetype -ljpeg -lglu32 -ldinput -ldxguid -lfmodex -lwinmm -lpng -shared" end}
     
     table.insert(glop_filenames, "OsWin32")
     
@@ -33,8 +34,9 @@ do
   elseif local_os == "Darwin" then
     local_os = "osx"
     
-    flags.cxx = "-arch i386 -DMACOSX -D_DEBUG -IGlop/OSX"
-    flags.ld = "-arch i386 -LGlop/OSX/lib -lfmodex -lfreetype235 -ljpeg6b -lpng -lrakneti386 -lz -F/System/Library/Frameworks -framework Carbon -framework AGL -framework OpenGL -framework ApplicationServices -framework IOKit -dynamiclib -Wl,-single_module -compatibility_version 1 -current_version 1 -mmacosx-version-min=10.5 -headerpad_max_install_names -install_name @executable_path/../Frameworks/Glop.framework/Glop"
+    ursa.token.rule{"CC", nil, function () return "g++" end}
+    ursa.token.rule{"CXXFLAGS", nil, function () return "-arch i386 -DMACOSX -D_DEBUG -IGlop/OSX -IGlop/cygwin/include -IGlop/source -I. -g" end}
+    ursa.token.rule{"LDFLAGS", nil, function () return "-arch i386 -LGlop/OSX/lib -lfmodex -lfreetype235 -ljpeg6b -lpng -lrakneti386 -lz -F/System/Library/Frameworks -framework Carbon -framework AGL -framework OpenGL -framework ApplicationServices -framework IOKit -dynamiclib -Wl,-single_module -compatibility_version 1 -current_version 1 -mmacosx-version-min=10.5 -headerpad_max_install_names -install_name @executable_path/../Frameworks/Glop.framework/Glop" end}
     
     table.insert(glop_filenames, "OsMacOSX")
     
@@ -46,13 +48,11 @@ do
     print("unknown OS", local_os)
     assert(false)
   end
-  
-  flags.cxx = flags.cxx .. " -IGlop/cygwin/include -IGlop/source -I. -g"
 end
 
 -- parse the result from g++'s built-in dependency scanner
 local function make_dependencies(srcfile)
-  local deps = ursa.util.system{("g++ %s -MM %s"):format(flags.cxx, srcfile)}
+  local deps = ursa.util.system{("%s %s -MM %s"):format(ursa.token{"CC"}, ursa.token{"CXXFLAGS"}, srcfile)}
   deps = deps:match("^.*: (.*)$")
   
   local dependencies = {}
@@ -73,14 +73,14 @@ for _, file in ipairs(glop_filenames) do
   local depend = "Glop/" .. file .. " dependencies"
   
   ursa.token.rule{depend, ursa.util.token_deferred{depend, default = cpp}, function () return make_dependencies(cpp) end}
-  table.insert(objects, ursa.rule{o, ursa.util.token_deferred{depend}, ("g++ -O2 %s -o %s -c %s"):format(flags.cxx, o, cpp)})
+  table.insert(objects, ursa.rule{o, ursa.util.token_deferred{depend}, ursa.util.system_template{("#CC -O2 #CXXFLAGS -o %s -c %s"):format(o, cpp)}})
 end
 
 local lib = nil
 local headers = {}
 
 -- build the glop library
-lib = ursa.rule{"build/Glop/" .. deploy_paths.lib, objects, ursa.util.system_template{("g++ -O2 -o $TARGET $SOURCES %s"):format(flags.ld)}}
+lib = ursa.rule{"build/Glop/" .. deploy_paths.lib, objects, ursa.util.system_template{"#CC -O2 -o $TARGET $SOURCES #LDFLAGS"}}
 
 -- mirror source files into the appropriate build directory
 ursa.token.rule{"headers", nil, "cd Glop/source && find . -type f | sed s*\\\\./** | grep \\.h"}
@@ -102,11 +102,11 @@ local function BuildApp(appname, files)
     local depend = ("%s/%s dependencies"):format(appname, file)
     
     ursa.token.rule{depend, {headers, ursa.util.token_deferred{depend, default = cpp}}, function () return make_dependencies(cpp) end}
-    table.insert(objects, ursa.rule{o, {headers, ursa.util.token_deferred{depend}}, ("g++ -O2 %s -o %s -c %s"):format(flags.cxx, o, cpp)})
+    table.insert(objects, ursa.rule{o, {headers, ursa.util.token_deferred{depend}}, ursa.util.system_template{("#CC -O2 #CXXFLAGS -o %s -c %s"):format(o, cpp)}})
   end
   
   local out = "build/" .. appname .. executable_extension
-  table.insert(applist, ursa.rule{out, {objects, lib}, ursa.util.system_template{("g++ -O2 -o $TARGET $SOURCES %s"):format(flags.ld)}})
+  table.insert(applist, ursa.rule{out, {objects, lib}, ursa.util.system_template{"#CC -O2 -o $TARGET $SOURCES #LDFLAGS"}})
 end
 
 BuildApp("Tests", {"Tests"})
@@ -131,4 +131,4 @@ end}
 ursa.build{...}
 
 
-return {lib = lib, headers = headers, os = local_os} -- just in case we're being shelled by something, here's the glop package data
+return {lib = lib, headers = headers, os = local_os, cc = ursa.token{"CC"}} -- just in case we're being shelled by something, here's the glop package data
