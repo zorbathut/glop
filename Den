@@ -56,7 +56,7 @@ local function make_dependencies(srcfile)
   deps = deps:match("^.*: (.*)$")
   
   local dependencies = {}
-  for file in deps:gmatch("([^ \n\t]+)") do
+  for file in deps:gmatch("([^%s]+)") do
     if file ~= "\\" then
       table.insert(dependencies, file)
     end
