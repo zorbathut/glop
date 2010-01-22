@@ -58,7 +58,9 @@ class Texture {
   int GetWidth() const {return image_->GetWidth();}
   int GetHeight() const {return image_->GetHeight();}
   int GetBpp() const {return image_->GetBpp();}
- 
+  
+  const Image *GetImage() const {return image_;}
+  
  private:
   friend class GlDataManager;
   void GlInit();
