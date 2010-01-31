@@ -27,6 +27,11 @@
 #include <GL/glu.h>
 #endif
 
+#ifdef IPHONE
+#include <OpenGLES/ES1/gl.h>
+#include <OpenGLES/ES1/glext.h>
+#endif
+
 // Other includes
 #include "Base.h"
 #include "Color.h"
@@ -76,6 +81,7 @@ class Texture {
   DISALLOW_EVIL_CONSTRUCTORS(Texture);
 };
 
+#ifndef IPHONE
 class DisplayList {
  public:
   virtual ~DisplayList();
@@ -104,12 +110,17 @@ class DisplayLists {
   ListId glop_index_;
   DISALLOW_EVIL_CONSTRUCTORS(DisplayLists);
 };
+#endif
 
 // GlUtils class definition
 class GlUtils {
  public:
   static void SetColor(const Color &color) {
-    glColor4fv(color.GetData());
+    #ifndef IPHONE
+      glColor4fv(color.GetData());
+    #else
+      glColor4f(color[0], color[1], color[2], color[3]);
+    #endif
   }
   static void SetTexture(const Texture *texture) {
     ASSERT(texture->gl_id_);

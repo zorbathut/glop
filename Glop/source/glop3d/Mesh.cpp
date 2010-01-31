@@ -131,6 +131,9 @@ void Mesh::Render(const Viewpoint &viewpoint) {
 }
 
 void Mesh::Render() const {
+#ifdef IPHONE
+  ASSERT(0);
+#else
   // Rebuild rendering data if necessary
   if (num_groups_ == -1) {
     short group_v0;
@@ -224,6 +227,7 @@ void Mesh::Render() const {
       vertex_indices_ + 3*group_start_[i]);
 	}
   GlUtils::SetNoTexture();
+#endif
 }
 
 Mesh *StockMeshes::NewBoxMesh(float width, float height, float depth, const Color &color,

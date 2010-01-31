@@ -3,6 +3,9 @@
 require "luarocks.loader"
 require "ursa"
 
+local params = ...
+if type(params) ~= "table" then params = nil end -- whoops commandline input
+
 -- Filename list for Glop core
 local glop_filenames = {"Base", "Input", "GlopFrameBase", "GlopFrameStyle", "GlopWindow", "System", "Utils", "GlopInternalData", "OpenGl", "Collisions", "Font", "GlopFrameWidgets", "Image", "Thread", "Sound", "Stream", "glop3d/Camera", "glop3d/Mesh", "glop3d/Point3"}
 
@@ -15,7 +18,12 @@ local executable_extension
 local deploy_paths = {}
 
 do
-  ursa.token.rule{"os_name", nil, "uname -o || uname"}
+  if params.platform then
+    ursa.token.rule{"os_name", "!" .. params.platform, function () return params.platform end}
+  else
+    ursa.token.rule{"os_name", nil, "uname -o || uname"}
+  end
+    
   local_os = ursa.token{"os_name"}
 
   if local_os == "Cygwin" then
@@ -35,12 +43,25 @@ do
     local_os = "osx"
     
     ursa.token.rule{"CC", nil, function () return "g++" end}
-    ursa.token.rule{"CXXFLAGS", nil, function () return "-arch i386 -DMACOSX -D_DEBUG -IGlop/OSX -IGlop/cygwin/include -IGlop/source -I. -g" end}
+    ursa.token.rule{"CXXFLAGS", nil, function () return "-arch i386 -DMACOSX -D_DEBUG -IGlop/OSX -IGlop/source -I. -g" end}
     ursa.token.rule{"LDFLAGS", nil, function () return "-arch i386 -LGlop/OSX/lib -lfmodex -lfreetype235 -ljpeg6b -lpng -lrakneti386 -lz -F/System/Library/Frameworks -framework Carbon -framework AGL -framework OpenGL -framework ApplicationServices -framework IOKit -dynamiclib -Wl,-single_module -compatibility_version 1 -current_version 1 -mmacosx-version-min=10.5 -headerpad_max_install_names -install_name @executable_path/../Frameworks/Glop.framework/Glop" end}
     
     table.insert(glop_filenames, "OsMacOSX")
     
     executable_extension = "app"  -- much of this needs to be redesigned
+    
+    deploy_paths.lib = "Glop.framework/Glop"
+    deploy_paths.headers = "Glop.framework/Headers"
+  elseif local_os == "iphone_sim" then
+    local_os = "iphone_sim"
+    
+    ursa.token.rule{"CC", nil, function () return "/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/bin/g++" end}
+    ursa.token.rule{"CXXFLAGS", nil, function () return "-D__IPHONE_OS_VERSION_MIN_REQUIRED=30000 -arch i386 -isysroot /Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator3.0.sdk -mmacosx-version-min=10.5 -Fglorp/Glop/build/Glop -DIPHONE -IGlop/OSX -IGlop/source" end}
+    ursa.token.rule{"LDFLAGS", nil, function () return "-dynamiclib -arch i386 -isysroot /Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator3.0.sdk -mmacosx-version-min=10.5 -framework Foundation -framework UIKit -framework OpenGLES -framework QuartzCore -LGlop/OSX/lib -ljpeg6b -lfreetype235 -lpng -lz" end}
+    
+    table.insert(glop_filenames, "OsIphone")
+    
+    executable_extension = "app"
     
     deploy_paths.lib = "Glop.framework/Glop"
     deploy_paths.headers = "Glop.framework/Headers"

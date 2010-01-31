@@ -65,11 +65,15 @@ void CameraFrame::Render() const {
   // fog will not actually fade things out to precisely the fog color. Instead, we render the
   // background in any color, but far into the fog.
   if (is_fog_enabled_) {
+    #ifdef IPHONE
+    ASSERT(0);
+    #else
     glEnable(GL_FOG);
     glFogfv(GL_FOG_COLOR, fog_color_.GetData());
 		glFogf(GL_FOG_START, -1);
 		glFogf(GL_FOG_END, 0);
 		glFogi(GL_FOG_MODE, GL_LINEAR);
+    #endif
   }
   GlUtils2d::FillRectangle(GetX(), GetY(), GetX2(), GetY2(), kBlack);
 
@@ -81,7 +85,7 @@ void CameraFrame::Render() const {
   float near_height = float(tan(GetCamera().GetFieldOfView() * kPi / 360 ) *
                             GetCamera().GetNearPlane());
 	float near_width = near_height * float(GetWidth()) / GetHeight();
-  glFrustum(-near_width, near_width, -near_height, near_height, camera_.GetNearPlane(),
+  glFrustumf(-near_width, near_width, -near_height, near_height, camera_.GetNearPlane(),
             camera_.GetFarPlane());
 	glMatrixMode(GL_MODELVIEW);	
 	glPushMatrix();
