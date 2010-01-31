@@ -128,19 +128,23 @@ void DefaultWindowView::Render(int x1, int y1, int x2, int y2,
 
   // Draw the fancy title bar
   if (padded_title_frame != 0) {
-    glBegin(GL_QUADS);
-    GlUtils::SetColor(border_highlight_color_);
-    glVertex2i(x1 + 1, y1 + 1);
-    glVertex2i(x2, y1 + 1);
-    GlUtils::SetColor(border_lowlight_color_);
-    glVertex2i(x2, y1 + title_height/4);
-    glVertex2i(x1 + 1, y1 + title_height/4);
-    glVertex2i(x1 + 1, y1 + title_height/4);
-    glVertex2i(x2, y1 + title_height/4);
-    GlUtils::SetColor(border_highlight_color_);
-    glVertex2i(x2, y1 + title_height + 1);
-    glVertex2i(x1, y1 + title_height + 1);
-    glEnd();
+    #ifdef IPHONE
+      ASSERT(0);
+    #else
+      glBegin(GL_QUADS);
+      GlUtils::SetColor(border_highlight_color_);
+      glVertex2i(x1 + 1, y1 + 1);
+      glVertex2i(x2, y1 + 1);
+      GlUtils::SetColor(border_lowlight_color_);
+      glVertex2i(x2, y1 + title_height/4);
+      glVertex2i(x1 + 1, y1 + title_height/4);
+      glVertex2i(x1 + 1, y1 + title_height/4);
+      glVertex2i(x2, y1 + title_height/4);
+      GlUtils::SetColor(border_highlight_color_);
+      glVertex2i(x2, y1 + title_height + 1);
+      glVertex2i(x1, y1 + title_height + 1);
+      glEnd();
+    #endif
   }
 
   // Draw the window border
@@ -177,6 +181,9 @@ void DefaultButtonView::OnResize(int rec_width, int rec_height, bool is_down,
 
 void DefaultButtonView::Render(int x1, int y1, int x2, int y2, bool is_down, bool is_primary_focus,
                                const PaddedFrame *padded_inner_frame) const {
+#ifdef IPHONE
+  ASSERT(0);
+#else
   int lpadding = padded_inner_frame->GetLeftPadding(),
       rpadding = padded_inner_frame->GetRightPadding();;
 
@@ -226,6 +233,7 @@ void DefaultButtonView::Render(int x1, int y1, int x2, int y2, bool is_down, boo
     glLineStipple(1, 0xffff);
     glDisable(GL_LINE_STIPPLE);
   }
+#endif
 }
 
 // ArrowView
@@ -244,6 +252,9 @@ void DefaultArrowView::OnResize(int rec_width, int rec_height, Direction directi
 }
 
 void DefaultArrowView::Render(int x1, int y1, int x2, int y2, Direction direction) const {
+#ifdef IPHONE
+  ASSERT(0);
+#else
   int x = 1 + x1 + (x2-x1)/2, y = 1 + y1 + (y2-y1)/2;
   int d = int((x2-x1+1) * 0.35f + 0.5f);
 
@@ -272,6 +283,7 @@ void DefaultArrowView::Render(int x1, int y1, int x2, int y2, Direction directio
       break;
   }
   glEnd();
+#endif
 }
 
 // SliderView
@@ -297,6 +309,9 @@ void DefaultSliderView::Render(int x1, int y1, int x2, int y2, bool is_horizonta
                                bool is_primary_focus, int tab_x1, int tab_y1, int tab_x2,
                                int tab_y2, const GlopFrame *dec_button,
                                const GlopFrame *inc_button) const {
+#ifdef IPHONE
+  ASSERT(0);
+#else
   // Draw the buttons
   dec_button->Render();
   inc_button->Render();
@@ -348,6 +363,7 @@ void DefaultSliderView::Render(int x1, int y1, int x2, int y2, bool is_horizonta
     GlUtils2d::DrawLine(x1, y1, x1, y2);
     GlUtils2d::DrawLine(x2, y1, x2, y2);
   }
+#endif
 }
 
 // MenuView

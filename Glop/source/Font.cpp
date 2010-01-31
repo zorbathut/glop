@@ -287,6 +287,9 @@ void Font::FreeRef(int size, unsigned int flags) const {
 }
 
 void Font::RenderChar(const FontBitmap *bitmap, const Texture *bitmap_texture, char ch) const {
+#ifdef IPHONE
+  ASSERT(0);
+#else
   int x1 = bitmap->GetX1(ch), y1 = bitmap->GetY1(ch),
       x2 = bitmap->GetX2(ch)+1, y2 = bitmap->GetY2(ch)+1;
   float tu1, tv1, tu2, tv2;
@@ -301,6 +304,7 @@ void Font::RenderChar(const FontBitmap *bitmap, const Texture *bitmap_texture, c
   glTexCoord2f(tu1, tv2);
   glVertex2i(x1, y2);
   glEnd();
+#endif
 }
 
 void Font::RenderUnderline(const FontBitmap *bitmap, int x, int y, int len) const {
@@ -312,6 +316,12 @@ void Font::RenderUnderline(const FontBitmap *bitmap, int x, int y, int len) cons
 // ========================
 //
 // A series of display lists that renders each character in a font, advancing the cursor each time.
+#ifdef IPHONE
+class DisplayLists {
+public:
+  DisplayLists(int x) { };
+};
+#endif
 class TextRendererDisplayLists: public DisplayLists {
  public:
   TextRendererDisplayLists(const Font *font, const FontBitmap *bitmap,
@@ -342,7 +352,9 @@ void TextRenderer::FreeRef(TextRenderer *renderer) {
 void TextRenderer::Print(int x, int y, const string &text, const Color &color) const {
   if (text.size() == 0)
     return;
-
+#ifdef IPHONE
+  ASSERT(0);
+#else
   // Set up fog
   bool is_fog_enabled = (glIsEnabled(GL_FOG) == GL_TRUE);
   int fog_mode;
@@ -388,6 +400,7 @@ void TextRenderer::Print(int x, int y, const string &text, const Color &color) c
 	  glFogf(GL_FOG_END, fog_end);
 	  glFogi(GL_FOG_MODE, fog_mode);
   }
+#endif
 }
 
 // Generally, a character reserves the x-coordinates between where it starts rendering, and where
@@ -455,6 +468,9 @@ GradientFont::GradientFont(FontOutline *outline, bool is_outline_owned, float to
 
 void GradientFont::RenderChar(const FontBitmap *bitmap, const Texture *bitmap_texture,
                               char ch) const {
+#ifdef IPHONE
+  ASSERT(0);
+#else
   int x1 = bitmap->GetX1(ch), y1 = bitmap->GetY1(ch),
       x2 = bitmap->GetX2(ch), y2 = bitmap->GetY2(ch);
   vector<int> ypos;
@@ -471,9 +487,13 @@ void GradientFont::RenderChar(const FontBitmap *bitmap, const Texture *bitmap_te
     glVertex3f(float(x2 + 1), float(ypos[i] + (i == 0? 0 : 1)), 1 - yc[i]);
   }
   glEnd();
+#endif
 }
 
 void GradientFont::RenderUnderline(const FontBitmap *bitmap, int x, int y, int len) const {
+#ifdef IPHONE
+  ASSERT(0);
+#else
   int y1 = bitmap->GetUnderlineStart(), y2 = y1 + bitmap->GetUnderlineHeight() - 1;
   vector<int> ypos;
   vector<float> yc;
@@ -484,6 +504,7 @@ void GradientFont::RenderUnderline(const FontBitmap *bitmap, int x, int y, int l
     glVertex3f(float(x + len), y + float(ypos[i] + (i == 0? 0 : 1)), 1 - yc[i]);
   }
   glEnd();
+#endif
 }
 
 void GradientFont::Init(float top_brightness, float bottom_brightness, const vector<float> &mid_pos,
@@ -542,6 +563,9 @@ ShadowFont *ShadowFont::Load(InputStream input, float shadow_dx, float shadow_dy
 
 void ShadowFont::RenderChar(const FontBitmap *bitmap, const Texture *bitmap_texture,
                             char ch) const {
+#ifdef IPHONE
+  ASSERT(0);
+#else
   int x1 = bitmap->GetX1(ch), y1 = bitmap->GetY1(ch),
       x2 = bitmap->GetX2(ch)+1, y2 = bitmap->GetY2(ch)+1;
   float dx = float(GetShadowDx(bitmap)), dy = float(GetShadowDy(bitmap)),
@@ -570,9 +594,13 @@ void ShadowFont::RenderChar(const FontBitmap *bitmap, const Texture *bitmap_text
   glTexCoord2f(tu1, tv2);
   glVertex2i(x1, y2);
   glEnd();
+#endif
 }
 
 void ShadowFont::RenderUnderline(const FontBitmap *bitmap, int x, int y, int len) const {
+#ifdef IPHONE
+  ASSERT(0);
+#else
   int y1 = y + bitmap->GetUnderlineStart(), y2 = y1 + bitmap->GetUnderlineHeight() - 1;
   float dx = float(GetShadowDx(bitmap)), dy = float(GetShadowDy(bitmap)),
         dz = 1 - shadow_brightness_;
@@ -586,6 +614,7 @@ void ShadowFont::RenderUnderline(const FontBitmap *bitmap, int x, int y, int len
   glVertex2i(x + len, y2);
   glVertex2i(x, y2);
   glEnd();
+#endif
 }
 
 int ShadowFont::GetShadowDx(const FontBitmap *bitmap) const {

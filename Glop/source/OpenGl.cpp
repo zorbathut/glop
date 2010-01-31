@@ -53,14 +53,18 @@ void Texture::GlInit() {
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, mag_filter_);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, min_filter_);
 
+  #ifndef IPHONE
   if ((mag_filter_ != GL_NEAREST || mag_filter_ != GL_LINEAR) &&
       (min_filter_ != GL_NEAREST || min_filter_ != GL_LINEAR)) {
     gluBuild2DMipmaps(GL_TEXTURE_2D, format, GetInternalWidth(), GetInternalHeight(), format,
                       GL_UNSIGNED_BYTE, image_->Get());
   } else {
+  #endif
     glTexImage2D(GL_TEXTURE_2D, 0, format, GetInternalWidth(), GetInternalHeight(), 0, format,
                  GL_UNSIGNED_BYTE, image_->Get());
+  #ifndef IPHONE
   }
+  #endif
   glDisable(GL_TEXTURE_2D);
 }
 
@@ -72,7 +76,7 @@ void Texture::GlShutDown() {
 
 // DisplayList class
 // =================
-
+#ifndef IPHONE
 DisplayList::~DisplayList() {
   Clear();
   GlDataManager::UnregisterDisplayList(glop_index_);
@@ -129,12 +133,16 @@ void DisplayLists::Clear() {
 DisplayLists::DisplayLists(int n): n_(n), base_gl_id_(0) {
   glop_index_ = GlDataManager::RegisterDisplayLists(this);
 }
+#endif
 
 // GlUtils2d class
 // ===============
 
 // The end vertices don't always get rendered with GL_LINES
 void GlUtils2d::DrawLine(int x1, int y1, int x2, int y2) {
+#ifdef IPHONE
+  ASSERT(0);
+#else
   glBegin(GL_LINES);
   glVertex2f(x1+0.5f, y1+0.5f);
   glVertex2f(x2+0.5f, y2+0.5f);
@@ -143,18 +151,26 @@ void GlUtils2d::DrawLine(int x1, int y1, int x2, int y2) {
   glVertex2f(x1+0.5f, y1+0.5f);
   glVertex2f(x2+0.5f, y2+0.5f);
   glEnd();
+#endif
 }
 
 void GlUtils2d::DrawRectangle(int x1, int y1, int x2, int y2) {
+#ifdef IPHONE
+  ASSERT(0);
+#else
   glBegin(GL_LINE_LOOP);
   glVertex2f(x1+0.5f, y1+0.5f);
   glVertex2f(x2+0.5f, y1+0.5f);
   glVertex2f(x2+0.5f, y2+0.5f);
   glVertex2f(x1+0.5f, y2+0.5f);
   glEnd();
+#endif
 }
 
 void GlUtils2d::FillRectangle(int x1, int y1, int x2, int y2) {
+#ifdef IPHONE
+  ASSERT(0);
+#else
   int min_x = min(x1, x2), max_x = max(x1, x2);
   int min_y = min(y1, y2), max_y = max(y1, y2);
   glBegin(GL_QUADS);
@@ -163,11 +179,15 @@ void GlUtils2d::FillRectangle(int x1, int y1, int x2, int y2) {
   glVertex2i(max_x + 1, max_y + 1);
   glVertex2i(min_x, max_y + 1);
   glEnd();
+#endif
 }
 
 void GlUtils2d::RenderTexture(int x1, int y1, int x2, int y2,
                               float tu1, float tv1, float tu2, float tv2, bool clamp,
                               const Texture *texture, const Color &color) {
+#ifdef IPHONE
+  ASSERT(0);
+#else
   GlUtils::SetColor(color);
   GlUtils::SetTexture(texture);
   if (clamp) {
@@ -192,7 +212,8 @@ void GlUtils2d::RenderTexture(int x1, int y1, int x2, int y2,
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
   }
-  GlUtils::SetNoTexture(); 
+  GlUtils::SetNoTexture();
+#endif
 }
 
 void GlUtils2d::RenderRotatedTexture(int base_x1, int base_y1, int base_x2, int base_y2,
@@ -206,6 +227,9 @@ void GlUtils2d::RenderRotatedTexture(int base_x1, int base_y1, int base_x2, int 
 void GlUtils2d::RenderRotatedTexture(int base_x1, int base_y1, int base_x2, int base_y2,
                                      float up_x, float up_y, bool horz_flip,
                                      const Texture *texture, const Color &color) {
+#ifdef IPHONE
+  ASSERT(0);
+#else
   GlUtils::SetColor(color);
   GlUtils::SetTexture(texture);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
@@ -232,5 +256,6 @@ void GlUtils2d::RenderRotatedTexture(int base_x1, int base_y1, int base_x2, int 
 
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-  GlUtils::SetNoTexture(); 
+  GlUtils::SetNoTexture();
+#endif
 }

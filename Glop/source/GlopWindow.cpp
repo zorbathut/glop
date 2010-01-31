@@ -56,7 +56,7 @@ bool GlopWindow::Create(int width, int height, bool full_screen,
   // set by default, but it's better to be safe than sorry.
   glEnable(GL_CULL_FACE);
   glEnableClientState(GL_VERTEX_ARRAY);
-  glClearDepth(1.0f);
+  glClearDepthf(1.0f);
   glDepthFunc(GL_LEQUAL);
   glDepthMask(false);
   glEnable(GL_BLEND);
@@ -64,7 +64,9 @@ bool GlopWindow::Create(int width, int height, bool full_screen,
   glDisable(GL_LIGHTING);
   glShadeModel(GL_SMOOTH);
   glEnable(GL_COLOR_MATERIAL);
-  glColorMaterial(GL_FRONT, GL_AMBIENT_AND_DIFFUSE);
+  #ifndef IPHONE
+    glColorMaterial(GL_FRONT, GL_AMBIENT_AND_DIFFUSE);
+  #endif
   glLightModelfv(GL_LIGHT_MODEL_AMBIENT, kBlack.GetData());
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);

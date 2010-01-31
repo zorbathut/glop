@@ -35,9 +35,11 @@ void GlDataManager::GlInitAll() {
 void GlDataManager::GlShutDownAll() {
   for (List<Texture*>::iterator it = textures_.begin(); it != textures_.end(); ++it)
     (*it)->GlShutDown();
+  #ifndef IPHONE
   for (List<DisplayList*>::iterator it = display_lists_.begin(); it != display_lists_.end(); ++it)
     (*it)->Clear();
   for (List<DisplayLists*>::iterator it = multi_display_lists_.begin();
        it != multi_display_lists_.end(); ++it)
     (*it)->Clear();
+  #endif
 }
