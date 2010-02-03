@@ -8,6 +8,7 @@ if type(params) ~= "table" then params = nil end -- whoops commandline input
 
 -- Filename list for Glop core
 local glop_filenames = {"Base", "Input", "GlopFrameBase", "GlopFrameStyle", "GlopWindow", "System", "Utils", "GlopInternalData", "OpenGl", "Collisions", "Font", "GlopFrameWidgets", "Image", "Thread", "Sound", "Stream", "glop3d/Camera", "glop3d/Mesh", "glop3d/Point3"}
+local glop_filenames_objcpp = {}
 
 -- basic initial setup and configuration
 local flags = {}
@@ -59,7 +60,8 @@ do
     ursa.token.rule{"CXXFLAGS", nil, function () return "-D__IPHONE_OS_VERSION_MIN_REQUIRED=30000 -arch i386 -isysroot /Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator3.0.sdk -mmacosx-version-min=10.5 -Fglorp/Glop/build/Glop -DIPHONE -IGlop/OSX -IGlop/source" end}
     ursa.token.rule{"LDFLAGS", nil, function () return "-dynamiclib -arch i386 -isysroot /Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator3.0.sdk -mmacosx-version-min=10.5 -framework Foundation -framework UIKit -framework OpenGLES -framework QuartzCore -LGlop/OSX/lib -ljpeg6b -lfreetype235 -lpng -lz" end}
     
-    table.insert(glop_filenames, "OsIphone")
+    table.insert(glop_filenames_objcpp, "OsIphone")
+    table.insert(glop_filenames_objcpp, "OsIphone_EAGLView")
     
     executable_extension = "app"
     
@@ -90,6 +92,14 @@ end
 local objects = {}
 for _, file in ipairs(glop_filenames) do
   local cpp = "Glop/source/" .. file .. ".cpp"
+  local o = "build/Glop/" .. file .. ".o"
+  local depend = "Glop/" .. file .. " dependencies"
+  
+  ursa.token.rule{depend, ursa.util.token_deferred{depend, default = cpp}, function () return make_dependencies(cpp) end}
+  table.insert(objects, ursa.rule{o, ursa.util.token_deferred{depend}, ursa.util.system_template{("#CC -O2 #CXXFLAGS -o %s -c %s"):format(o, cpp)}})
+end
+for _, file in ipairs(glop_filenames_objcpp) do
+  local cpp = "Glop/source/" .. file .. ".mm"
   local o = "build/Glop/" .. file .. ".o"
   local depend = "Glop/" .. file .. " dependencies"
   

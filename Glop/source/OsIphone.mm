@@ -3,12 +3,83 @@
 
 #include <sys/time.h>
 
+#import <UIKit/UIKit.h>
+#import "OsIphone_EAGLView.h"
+
 struct OsWindowData { };
 
-void Os::Init() { };
+static jmp_buf hatred; // THIS IS THE MOST ACCURATELY NAMED VARIABLE IN THIS ENTIRE CODEBASE
+
+// *********************************************
+//  *                     GlopAppDelegate
+@interface GlopAppDelegate : NSObject <UIApplicationDelegate> {
+}
+@end
+
+@implementation GlopAppDelegate
+- (void) applicationDidFinishLaunching:(UIApplication *)application
+{
+  printf("did finish launching, creating evil\n"); fflush(stdout);
+  longjmp(hatred, 1);
+}
+
+- (void) applicationWillResignActive:(UIApplication *)application
+{
+}
+
+- (void) applicationDidBecomeActive:(UIApplication *)application
+{
+}
+
+- (void)applicationWillTerminate:(UIApplication *)application
+{
+  printf("terminate hit\n"); fflush(stdout);
+}
+@end
+
+
+GlopAppDelegate *glopdelegate;
+NSAutoreleasePool * pool;
+/*
+void *appthread_func(void *) {
+  printf("we are starting the core thing now\n"); fflush(stdout);
+  int retVal = UIApplicationMain(NULL, NULL, nil, nil);
+};
+pthread_t appthread;
+*/
+
+UIWindow *window;
+EAGLView *glView;
+
+void Os::Init() {
+  // hahahaha eeeeevil
+  pool = [[NSAutoreleasePool alloc] init];  // this will never be released ever
+  if(!setjmp(hatred)) {
+    UIApplicationMain(NULL, NULL, NULL, @"GlopAppDelegate");
+  }
+  
+  printf("we made it\n"); fflush(stdout);
+  
+  [UIApplication sharedApplication].statusBarHidden = YES;
+ 
+ 	CGRect					rect = [[UIScreen mainScreen] applicationFrame];
+	CGFloat					components[3];
+
+	//Create a full-screen window
+	window = [[UIWindow alloc] initWithFrame:[[UIScreen mainScreen] bounds]];
+	[window setBackgroundColor:[UIColor blueColor]];
+  
+  glView = [[EAGLView alloc] initWithFrame:rect];
+	[window addSubview:glView];
+};
 void Os::ShutDown() { };
 
-void Os::Think() { };
+void Os::Think() {
+  SInt32 rv;
+  do {
+    rv = CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0, TRUE);
+  } while(rv == kCFRunLoopRunHandledSource);
+};
 void Os::WindowThink(OsWindowData *window) { };
 
 OsWindowData* Os::CreateWindow(const string &title, int x, int y, int width, int height,
