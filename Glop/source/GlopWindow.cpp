@@ -56,7 +56,15 @@ bool GlopWindow::Create(int width, int height, bool full_screen,
   // set by default, but it's better to be safe than sorry.
   glEnable(GL_CULL_FACE);
   glEnableClientState(GL_VERTEX_ARRAY);
-  glClearDepthf(1.0f);
+  
+  // oh man just don't ask. yes this is one function call. TODO: make this not vile like the clinging tendrils of a thousand demons
+  #ifdef IPHONE
+  glClearDepthf
+  #else
+  glClearDepth
+  #endif
+  (1.0f);
+  
   glDepthFunc(GL_LEQUAL);
   glDepthMask(false);
   glEnable(GL_BLEND);

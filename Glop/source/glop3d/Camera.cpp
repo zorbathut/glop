@@ -85,8 +85,15 @@ void CameraFrame::Render() const {
   float near_height = float(tan(GetCamera().GetFieldOfView() * kPi / 360 ) *
                             GetCamera().GetNearPlane());
 	float near_width = near_height * float(GetWidth()) / GetHeight();
-  glFrustumf(-near_width, near_width, -near_height, near_height, camera_.GetNearPlane(),
-            camera_.GetFarPlane());
+  
+  // oh man just don't ask. yes this is one function call. TODO: make this not vile like the clinging tendrils of a thousand demons
+  #ifdef IPHONE
+  glFrustumf
+  #else
+  glFrustum
+  #endif
+  (-near_width, near_width, -near_height, near_height, camera_.GetNearPlane(), camera_.GetFarPlane());
+  
 	glMatrixMode(GL_MODELVIEW);	
 	glPushMatrix();
 	glLoadIdentity();
