@@ -75,10 +75,14 @@ void Os::Init() {
 void Os::ShutDown() { };
 
 void Os::Think() {
+  printf("thinking 1\n"); fflush(stdout);
   SInt32 rv;
   do {
+    printf("thinking 2\n"); fflush(stdout);
     rv = CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0, TRUE);
+    printf("thinking 3\n"); fflush(stdout);
   } while(rv == kCFRunLoopRunHandledSource);
+  printf("thinking 4\n"); fflush(stdout);
 };
 void Os::WindowThink(OsWindowData *window) { };
 
@@ -118,6 +122,9 @@ void Os::SetWindowSize(OsWindowData *window, int width, int height) {
 }
 
 vector<Os::KeyEvent> Os::GetInputEvents(OsWindowData *window) {
+  vector<Os::KeyEvent> rv;
+  rv.push_back(Os::KeyEvent(GetTime(), 0, 0, false, false));  // put the most recent cursor location in here at some point
+  return rv;
 }
 
 void Os::SetMousePosition(int x, int y) {
@@ -138,22 +145,42 @@ vector<string> Os::ListSubdirectories(const string &directory) {
   return vector<string>();
 }
 
-// threading
-void Os::StartThread(void(*thread_function)(void *), void *data) {
-  ASSERT(0);
+// Threading functions
+// ===================
+
+#include <pthread.h>
+
+void Os::StartThread(void(*thread_function)(void*), void* data) {
+  pthread_t thread;
+  if (pthread_create(&thread, NULL, (void*(*)(void*))thread_function, data) != 0) {
+    printf("Error forking thread\n");
+  }
 }
-OsMutex *Os::NewMutex() {
-  ASSERT(0);
+
+struct OsMutex {
+  pthread_mutex_t mutex;
+};
+
+OsMutex* Os::NewMutex() {
+  OsMutex* mutex = new OsMutex;
+  pthread_mutex_init(&mutex->mutex, NULL);
+  return mutex;
 }
-void Os::DeleteMutex(OsMutex *mutex) {
-  ASSERT(0);
+
+void Os::DeleteMutex(OsMutex* mutex) {
+  pthread_mutex_destroy(&mutex->mutex);
+  delete mutex;
 }
-void Os::AcquireMutex(OsMutex *mutex) {
-  ASSERT(0);
+
+void Os::AcquireMutex(OsMutex* mutex) {
+  pthread_mutex_lock(&mutex->mutex);
 }
-void Os::ReleaseMutex(OsMutex *mutex) {
-  ASSERT(0);
+
+void Os::ReleaseMutex(OsMutex* mutex) {
+  pthread_mutex_unlock(&mutex->mutex);
 }
+
+
 
 
 void Os::MessageBox(const string &title, const string &message) {
@@ -165,7 +192,7 @@ vector<pair<int,int> > Os::GetFullScreenModes() {
 }
 
 void Os::Sleep(int t) {
-  //[NSThread sleepForTimeInterval:5.0];
+  usleep(t*1000);
 }
 
 int Os::GetTime() {
