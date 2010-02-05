@@ -114,7 +114,7 @@ local headers = {}
 lib = ursa.rule{"build/Glop/" .. deploy_paths.lib, objects, ursa.util.system_template{"#CC -O2 -o $TARGET $SOURCES #LDFLAGS"}}
 
 -- mirror source files into the appropriate build directory
-ursa.token.rule{"headers", nil, "cd Glop/source && find . -type f | sed s*\\\\./** | grep \\.h"}
+ursa.token.rule{"headers", nil, "cd Glop/source && find . -type f | sed s*\\\\./** | grep \\.h$"}
 for k in ursa.token{"headers"}:gmatch("[^%s]+") do
   table.insert(headers, ursa.rule{"build/Glop/" .. deploy_paths.headers .. "/" .. k, "Glop/source/" .. k, ursa.util.system_template{"cp $SOURCE $TARGET"}})
 end

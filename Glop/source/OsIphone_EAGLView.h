@@ -17,7 +17,7 @@
 // Note that setting the view non-opaque will only work if the EAGL surface has an alpha channel.
 @interface EAGLView : UIView
 {    
-@private
+@public
   EAGLContext *context;
 	
 	// The pixel dimensions of the CAEAGLLayer
