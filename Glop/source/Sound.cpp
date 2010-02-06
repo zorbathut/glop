@@ -1,7 +1,3 @@
-#ifdef IPHONE
-#include "Sound_Iphone.cpp" // horrible horrible hack, fix ASAP (possibly never)
-#else
-
 // Includes
 #include <cstring>
 #include "Sound.h"

@@ -3,6 +3,10 @@
 #ifndef GLOP_SOUND_H__
 #define GLOP_SOUND_H__
 
+#ifdef IPHONE // TODO: remove this horrible horrible hack
+#include "Sound_Iphone.h"
+#else
+
 // Includes
 #include "Base.h"
 #include "Stream.h"
@@ -82,5 +86,7 @@ class SoundManager {
   float volume_;
   DISALLOW_EVIL_CONSTRUCTORS(SoundManager);
 };
+
+#endif // horrible horrible hackery
 
 #endif // GLOP_SOUND_H__

@@ -268,8 +268,6 @@ void Os::SwapBuffers(OsWindowData *window) {
   glBindFramebufferOES(GL_FRAMEBUFFER_OES, glView->defaultFramebuffer);
   glViewport(0, 0, glView->backingWidth, glView->backingHeight);
   
-  printf("swapbuffer\n"); fflush(stdout);
-  
   // This application only creates a single color renderbuffer which is already bound at this point.
   // This call is redundant, but needed if dealing with multiple renderbuffers.
   glBindRenderbufferOES(GL_RENDERBUFFER_OES, glView->colorRenderbuffer);

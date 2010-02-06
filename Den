@@ -7,7 +7,7 @@ local params = ...
 if type(params) ~= "table" then params = nil end -- whoops commandline input
 
 -- Filename list for Glop core
-local glop_filenames = {"Base", "Input", "GlopFrameBase", "GlopFrameStyle", "GlopWindow", "System", "Utils", "GlopInternalData", "OpenGl", "Collisions", "Font", "GlopFrameWidgets", "Image", "Thread", "Sound", "Stream", "glop3d/Camera", "glop3d/Mesh", "glop3d/Point3"}
+local glop_filenames = {"Base", "Input", "GlopFrameBase", "GlopFrameStyle", "GlopWindow", "System", "Utils", "GlopInternalData", "OpenGl", "Collisions", "Font", "GlopFrameWidgets", "Image", "Thread", "Stream", "glop3d/Camera", "glop3d/Mesh", "glop3d/Point3"}
 local glop_filenames_objcpp = {}
 
 -- basic initial setup and configuration
@@ -35,6 +35,7 @@ do
     ursa.token.rule{"LDFLAGS", nil, function () return "-LGlop/cygwin/lib -lkernel32 -luser32 -lgdi32 -lwinspool -lcomdlg32 -ladvapi32 -lshell32 -lole32 -loleaut32 -luuid -lodbc32 -lodbccp32 -lopengl32 -lfreetype -ljpeg -lglu32 -ldinput -ldxguid -lfmodex -lwinmm -lpng -shared" end}
     
     table.insert(glop_filenames, "OsWin32")
+    table.insert(glop_filenames, "Sound")
     
     executable_extension = ".exe"
     
@@ -48,6 +49,7 @@ do
     ursa.token.rule{"LDFLAGS", nil, function () return "-arch i386 -LGlop/OSX/lib -lfmodex -lfreetype235 -ljpeg6b -lpng -lrakneti386 -lz -F/System/Library/Frameworks -framework Carbon -framework AGL -framework OpenGL -framework ApplicationServices -framework IOKit -dynamiclib -Wl,-single_module -compatibility_version 1 -current_version 1 -mmacosx-version-min=10.5 -headerpad_max_install_names -install_name @executable_path/../Frameworks/Glop.framework/Glop" end}
     
     table.insert(glop_filenames, "OsMacOSX")
+    table.insert(glop_filenames, "Sound")
     
     executable_extension = "app"  -- much of this needs to be redesigned
     
@@ -58,10 +60,11 @@ do
     
     ursa.token.rule{"CC", nil, function () return "/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/bin/g++" end}
     ursa.token.rule{"CXXFLAGS", nil, function () return "-D__IPHONE_OS_VERSION_MIN_REQUIRED=30000 -arch i386 -isysroot /Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator3.0.sdk -mmacosx-version-min=10.5 -Fglorp/Glop/build/Glop -DIPHONE -IGlop/OSX -IGlop/source" end}
-    ursa.token.rule{"LDFLAGS", nil, function () return "-dynamiclib -arch i386 -isysroot /Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator3.0.sdk -mmacosx-version-min=10.5 -framework Foundation -framework UIKit -framework OpenGLES -framework QuartzCore -LGlop/OSX/lib -ljpeg6b -lfreetype235 -lpng -lz" end}
+    ursa.token.rule{"LDFLAGS", nil, function () return "-dynamiclib -arch i386 -isysroot /Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator3.0.sdk -mmacosx-version-min=10.5 -framework Foundation -framework UIKit -framework OpenGLES -framework QuartzCore -framework AVFoundation -LGlop/OSX/lib -ljpeg6b -lfreetype235 -lpng -lz" end}
     
     table.insert(glop_filenames_objcpp, "OsIphone")
     table.insert(glop_filenames_objcpp, "OsIphone_EAGLView")
+    table.insert(glop_filenames_objcpp, "Sound_Iphone")
     
     executable_extension = "app"
     
