@@ -252,7 +252,7 @@ struct TouchEvent {
 enum {EVENT_TOUCH, EVENT_MOVE, EVENT_RELEASE};
 
 int os_touch_getCount();
-bool os_touch_getActive();
+bool os_touch_getActive(int id);
 float os_touch_getX(int id);
 float os_touch_getY(int id);
 

@@ -88,6 +88,17 @@ int touch_ids_free_next = 0;
 vector<TouchInfo> touches;
 vector<TouchEvent> events;
 
+int os_touch_getCount() { return touches.size(); }
+bool os_touch_getActive(int id) { return touches[id].active; }
+float os_touch_getX(int id) { return touches[id].x; }
+float os_touch_getY(int id) { return touches[id].y; }
+
+vector<TouchEvent> os_touch_getEvents() {
+  vector<TouchEvent> eve;
+  eve.swap(events);
+  return eve;
+}
+
 @implementation EaterOfTouches
 - (void)touchesBegan:(NSSet *)touches_set withEvent:(UIEvent *)event {
   NSArray *touch = [touches_set allObjects];
