@@ -6,6 +6,11 @@
 #import <UIKit/UIKit.h>
 #import "OsIphone_EAGLView.h"
 
+#include <map>
+#include <vector>
+
+using namespace std;
+
 struct OsWindowData { };
 
 #define SIGNAL_LAUNCHED 1
@@ -18,7 +23,7 @@ static jmp_buf sig;
 static jmp_buf rt;
 
 // *********************************************
-//  *                     GlopAppDelegate
+// *                     GlopAppDelegate
 @interface GlopAppDelegate : NSObject <UIApplicationDelegate> {
 }
 @end
@@ -57,9 +62,118 @@ GlopAppDelegate *gad;
 
 - (void)timerYay
 {
-  printf("timer hit\n"); fflush(stdout);
+  //printf("timer hit\n"); fflush(stdout);
   if(!setjmp(rt))
     longjmp(sig, SIGNAL_TIMER);
+}
+@end
+
+
+// *********************************************
+// *                     EaterOfTouches
+@interface EaterOfTouches : UIWindow {
+}
+
+- (void)touchesBegan:(NSSet *)touches withEvent:(UIEvent *)event;
+- (void)touchesMoved:(NSSet *)touches withEvent:(UIEvent *)event;
+- (void)touchesEnded:(NSSet *)touches withEvent:(UIEvent *)event;
+- (void)touchesCancelled:(NSSet *)touches withEvent:(UIEvent *)event;
+@end
+
+map<UITouch *, int> touch_ids;
+
+vector<int> touch_ids_free;
+int touch_ids_free_next = 0;
+
+vector<TouchInfo> touches;
+vector<TouchEvent> events;
+
+@implementation EaterOfTouches
+- (void)touchesBegan:(NSSet *)touches_set withEvent:(UIEvent *)event {
+  NSArray *touch = [touches_set allObjects];
+  for(int i = 0; i < [touch count]; i++) {
+    UITouch *tt = [touch objectAtIndex:i];
+    ASSERT(!touch_ids.count(tt));
+    
+    int nt;
+    if(touch_ids_free.size()) {
+      nt = touch_ids_free.back();
+      touch_ids_free.pop_back();
+    } else {
+      nt = touch_ids_free_next++;
+      touches.resize(touch_ids_free_next);
+    }
+    
+    touch_ids[tt] = nt;
+    
+    TouchEvent te;
+    te.type = EVENT_TOUCH;
+    te.id = nt;
+    te.x = [tt locationInView:self].x;
+    te.y = [tt locationInView:self].y;
+    events.push_back(te);
+    
+    touches[nt].x = te.x;
+    touches[nt].y = te.y;
+    touches[nt].active = true;
+  }
+}
+- (void)touchesMoved:(NSSet *)touches_set withEvent:(UIEvent *)event {
+  NSArray *touch = [touches_set allObjects];
+  for(int i = 0; i < [touch count]; i++) {
+    UITouch *tt = [touch objectAtIndex:i];
+    ASSERT(touch_ids.count(tt));
+    int nt = touch_ids[tt];
+    
+    TouchEvent te;
+    te.type = EVENT_MOVE;
+    te.id = nt;
+    te.x = [tt locationInView:self].x;
+    te.y = [tt locationInView:self].y;
+    events.push_back(te);
+    
+    printf("%d %f/%f\n", nt, te.x, te.y); fflush(stdout);
+    touches[nt].x = te.x;
+    touches[nt].y = te.y;
+  }
+}
+- (void)touchesEnded:(NSSet *)touches_set withEvent:(UIEvent *)event {
+  NSArray *touch = [touches_set allObjects];
+  for(int i = 0; i < [touch count]; i++) {
+    UITouch *tt = [touch objectAtIndex:i];
+    ASSERT(touch_ids.count(tt));
+    int nt = touch_ids[tt];
+    
+    TouchEvent te;
+    te.type = EVENT_RELEASE;
+    te.id = nt;
+    te.x = [tt locationInView:self].x;
+    te.y = [tt locationInView:self].y;
+    events.push_back(te);
+    
+    touch_ids.erase(tt);
+    touch_ids_free.push_back(nt);
+    touches[nt].active = false;
+  }
+}
+- (void)touchesCancelled:(NSSet *)touches_set withEvent:(UIEvent *)event {
+  NSArray *touch = [touches_set allObjects];
+  for(int i = 0; i < [touch count]; i++) {
+    UITouch *tt = [touch objectAtIndex:i];
+    ASSERT(touch_ids.count(tt));
+    int nt = touch_ids[tt];
+    
+    TouchEvent te;
+    te.type = EVENT_RELEASE;  // good enough
+    te.id = nt;
+    te.x = [tt locationInView:self].x;
+    te.y = [tt locationInView:self].y;
+    events.push_back(te);
+    
+    touch_ids.erase(tt);
+    touch_ids_free.push_back(nt);
+    touches[nt].active = false;
+  }
 }
 @end
 
@@ -98,8 +212,11 @@ void Os::Init() {
 	CGFloat					components[3];
 
 	//Create a full-screen window
-	window = [[UIWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
+	window = [[EaterOfTouches alloc] initWithFrame:[UIScreen mainScreen].bounds];
 	[window setBackgroundColor:[UIColor blueColor]];
+  
+  [window setMultipleTouchEnabled:YES];
+  [window setExclusiveTouch:YES];
   
   glView = [[EAGLView alloc] initWithFrame:window.bounds];
 	[window addSubview:glView];
@@ -120,7 +237,8 @@ void Os::Think() {
     if(!rv)
       longjmp(rt, 1);
     
-    printf("Signal %d\n", rv);
+    if(rv != 5)
+      printf("Signal %d\n", rv);
     
     if(rv == SIGNAL_TIMER)
       break;
