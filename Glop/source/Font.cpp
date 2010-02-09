@@ -293,8 +293,9 @@ void Font::RenderChar(const FontBitmap *bitmap, const Texture *bitmap_texture, c
   float tu1, tv1, tu2, tv2;
   bitmap->GetTexCoords(ch, &tu1, &tv1, &tu2, &tv2);
   
-  glEnable(GL_VERTEX_ARRAY);
-  glEnable(GL_TEXTURE_COORD_ARRAY);
+  glEnableClientState(GL_VERTEX_ARRAY);
+  glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+  glDisable(GL_CULL_FACE);
   
   GLfloat verts[8] = {x1, y1, x2, y1, x2, y2, x1, y2};
   GLfloat texes[8] = {tu1, tv1, tu2, tv1, tu2, tv2, tu1, tv2};
@@ -302,10 +303,11 @@ void Font::RenderChar(const FontBitmap *bitmap, const Texture *bitmap_texture, c
   glVertexPointer(2, GL_FLOAT, 0, verts);
   glTexCoordPointer(2, GL_FLOAT, 0, texes);
   
+  //glColor4f(1.0, 1.0, 1.0, 1.0);
   glDrawArrays(GL_TRIANGLE_FAN, 0, 4); // yes, not GL_QUADS, GL_QUADS doesn't exist in GLES
   
-  glDisable(GL_VERTEX_ARRAY);
-  glDisable(GL_TEXTURE_COORD_ARRAY);
+  glDisableClientState(GL_VERTEX_ARRAY);
+  glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 #else
   int x1 = bitmap->GetX1(ch), y1 = bitmap->GetY1(ch),
       x2 = bitmap->GetX2(ch)+1, y2 = bitmap->GetY2(ch)+1;
@@ -377,9 +379,7 @@ void TextRenderer::FreeRef(TextRenderer *renderer) {
 void TextRenderer::Print(int x, int y, const string &text, const Color &color) const {
   if (text.size() == 0)
     return;
-#ifdef IPHONE
-  ASSERT(0);
-#else
+
   // Set up fog
   bool is_fog_enabled = (glIsEnabled(GL_FOG) == GL_TRUE);
   int fog_mode;
@@ -395,7 +395,7 @@ void TextRenderer::Print(int x, int y, const string &text, const Color &color) c
   glFogfv(GL_FOG_COLOR, kBlack.GetData());
 	glFogf(GL_FOG_START, 0);
 	glFogf(GL_FOG_END, 1);
-	glFogi(GL_FOG_MODE, GL_LINEAR);
+	glFogf(GL_FOG_MODE, GL_LINEAR);
 
   // Adjust so that x and y are the baseline beginning
   x -= GetX1(text[0]);
@@ -410,6 +410,7 @@ void TextRenderer::Print(int x, int y, const string &text, const Color &color) c
   }
 
   // Render the text
+  glMatrixMode(GL_MODELVIEW);
   GlUtils::SetTexture(bitmap_->texture_);
   glPushMatrix();
   glTranslatef(float(x), float(y), 0);
@@ -423,9 +424,8 @@ void TextRenderer::Print(int x, int y, const string &text, const Color &color) c
     glFogfv(GL_FOG_COLOR, fog_color);
 	  glFogf(GL_FOG_START, fog_start);
 	  glFogf(GL_FOG_END, fog_end);
-	  glFogi(GL_FOG_MODE, fog_mode);
+	  glFogf(GL_FOG_MODE, fog_mode);
   }
-#endif
 }
 
 // Generally, a character reserves the x-coordinates between where it starts rendering, and where
