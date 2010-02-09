@@ -176,5 +176,3 @@ void SoundManager::StopAllSources() {
     }
   }
 }
-
-#endif

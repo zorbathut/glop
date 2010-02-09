@@ -287,8 +287,25 @@ void Font::FreeRef(int size, unsigned int flags) const {
 }
 
 void Font::RenderChar(const FontBitmap *bitmap, const Texture *bitmap_texture, char ch) const {
-#ifdef IPHONE
-  ASSERT(0);
+#ifdef IPHONE // This is kind of grim. Display lists don't exist on iPhone, and glDrawArrays doesn't work as you would hope within display lists. On the iPhone I'm dodging the whole "display list" issue entirely, and off iPhone I use the old code. The end result is that the iPhone code here works on the iPhone, but only because some other features are being stubbed out. Basically this entire chunk of code needs some serious work which I don't really plan to do right now. WELP.
+  int x1 = bitmap->GetX1(ch), y1 = bitmap->GetY1(ch),
+      x2 = bitmap->GetX2(ch)+1, y2 = bitmap->GetY2(ch)+1;
+  float tu1, tv1, tu2, tv2;
+  bitmap->GetTexCoords(ch, &tu1, &tv1, &tu2, &tv2);
+  
+  glEnable(GL_VERTEX_ARRAY);
+  glEnable(GL_TEXTURE_COORD_ARRAY);
+  
+  GLfloat verts[8] = {x1, y1, x2, y1, x2, y2, x1, y2};
+  GLfloat texes[8] = {tu1, tv1, tu2, tv1, tu2, tv2, tu1, tv2};
+  
+  glVertexPointer(2, GL_FLOAT, 0, verts);
+  glTexCoordPointer(2, GL_FLOAT, 0, texes);
+  
+  glDrawArrays(GL_TRIANGLE_FAN, 0, 4); // yes, not GL_QUADS, GL_QUADS doesn't exist in GLES
+  
+  glDisable(GL_VERTEX_ARRAY);
+  glDisable(GL_TEXTURE_COORD_ARRAY);
 #else
   int x1 = bitmap->GetX1(ch), y1 = bitmap->GetY1(ch),
       x2 = bitmap->GetX2(ch)+1, y2 = bitmap->GetY2(ch)+1;
@@ -320,6 +337,14 @@ void Font::RenderUnderline(const FontBitmap *bitmap, int x, int y, int len) cons
 class DisplayLists {
 public:
   DisplayLists(int x) { };
+  
+  virtual void Render(int i) const = 0;
+  void Call(int len, int siz, const void *dat) {
+    ASSERT(siz == GL_BYTE);
+    for(int i = 0; i < len; i++) {
+      Render(((unsigned char*)dat)[i]); // okay so this might have some efficiency issues, worry later
+    }
+  }
 };
 #endif
 class TextRendererDisplayLists: public DisplayLists {
