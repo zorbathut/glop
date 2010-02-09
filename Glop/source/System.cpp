@@ -32,8 +32,8 @@ void System::Init() {
   atexit(System::ShutDown);
   Input::InitDerivedKeys();
   InitDefaultFrameStyle(0);
-  SetLogFormatter(SystemDependentLogFormatter);
-  SetFatalErrorHandler(SystemDependentFatalErrorHandler);
+  SetLogFormatter(SystemDependentLogFormatter, true);
+  SetFatalErrorHandler(SystemDependentFatalErrorHandler, true);
 }
 
 void System::ShutDown() {

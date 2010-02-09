@@ -355,6 +355,7 @@ void Os::ReleaseMutex(OsMutex* mutex) {
 
 
 void Os::MessageBox(const string &title, const string &message) {
+  printf("Message box: %s/%s\n", title.c_str(), message.c_str());
 }
 vector<pair<int,int> > Os::GetFullScreenModes() {
   vector<pair<int, int> > out;

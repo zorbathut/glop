@@ -58,8 +58,9 @@ string Format(const char *text, va_list arglist) {
 // Logging utilities
 // =================
 
-void SetLogFormatter(string (*formatter)(const char *filename, int line, const string &message)) {
-  gLogFormatter = formatter;
+void SetLogFormatter(string (*formatter)(const char *filename, int line, const string &message), bool no_override_changed) {
+  if(!no_override_changed || gLogFormatter == ZeroDependencyLogFormatter)
+    gLogFormatter = formatter;
 }
 
 void LogToFile(const string &filename, bool also_log_to_std_err) {
@@ -118,8 +119,9 @@ void __LogfObject::__Logf() { }
 // Error-handling utilities
 // ========================
 
-void SetFatalErrorHandler(void (*handler)(const string &message)) {
-  gFatalErrorHandler = handler;
+void SetFatalErrorHandler(void (*handler)(const string &message), bool no_override_changed) {
+  if(!no_override_changed || gFatalErrorHandler == ZeroDependencyFatalErrorHandler)
+    gFatalErrorHandler = handler;
 }
 
 void FatalError(const string &error) {
