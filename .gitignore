@@ -9,6 +9,7 @@
 .ursa.*
 
 build*/
+release
 
 *.o
 *.pyc
