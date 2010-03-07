@@ -880,7 +880,7 @@ Image *Image::LoadPng(InputStream input) {
   if(info_ptr->color_type == PNG_COLOR_TYPE_PALETTE)
     png_set_palette_to_rgb(png_ptr);
   if(info_ptr->color_type == PNG_COLOR_TYPE_GRAY && info_ptr->bit_depth < 8)
-    png_set_gray_1_2_4_to_8(png_ptr);
+    png_set_expand_gray_1_2_4_to_8(png_ptr);
   if(info_ptr->bit_depth == 16)
     png_set_strip_16(png_ptr);
   if(info_ptr->bit_depth < 8)

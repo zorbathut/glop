@@ -19,6 +19,8 @@ local executable_extension
 
 local deploy_paths = {}
 
+local fmodex_path
+
 do
   if params and params.platform then
     ursa.token.rule{"os_name", "!" .. params.platform, function () return params.platform end}
@@ -32,8 +34,7 @@ do
     local_os = "cygwin"
     
     ursa.token.rule{"CC", nil, function () return "/cygdrive/c/MinGW/bin/g++" end}
-    ursa.token.rule{"CXXFLAGS", nil, function () return "-DWIN32 -D_LIB -D_MBCS -IGlop/source -I. -g" end}
-    ursa.token.rule{"LDFLAGS", nil, function () return "-lkernel32 -luser32 -lgdi32 -lwinspool -lcomdlg32 -ladvapi32 -lshell32 -lole32 -loleaut32 -luuid -lodbc32 -lodbccp32 -lopengl32 -lfreetype -ljpeg -lglu32 -ldinput -ldxguid -lfmodex -lwinmm -lpng -shared" end}
+    ursa.token.rule{"CXXFLAGS_BASE", nil, function () return "-DWIN32 -D_LIB -D_MBCS -IGlop/source -I. -g" end}
     
     ursa.token.rule{"LIBCC", nil, function () return "/cygdrive/c/MinGW/bin/gcc" end}
     ursa.token.rule{"LIBCFLAGS_BASE", nil, function () return "" end}
@@ -43,9 +44,9 @@ do
     table.insert(glop_filenames, "Sound")
     
     executable_extension = ".exe"
+    fmodex_path = "Glop/source/third_party/system_cygwin/lib/libfmodex.a"
     
-    deploy_paths.lib = "glop/lib/libGlop.dll"
-    deploy_paths.headers = "local/include/Glop"
+    deploy_paths.lib_name = "libGlop.a"
   elseif local_os == "Darwin" then
     local_os = "osx"
     
@@ -97,10 +98,16 @@ do
   
   build_prefix = "build/" .. local_os
   release_prefix = "release/" .. local_os
+  
+  deploy_paths.lib = release_prefix .. "/lib/" .. deploy_paths.lib_name
 end
+
+ursa.token.rule{"CXXFLAGS", "#CXXFLAGS_BASE", function () return ursa.token{"CXXFLAGS_BASE"} .. " -Ibuild/" .. local_os .. "/libs_complete/include" end}
 
 ursa.token.rule{"LIBCFLAGS", "#LIBCFLAGS_BASE", function () return ursa.token{"LIBCFLAGS_BASE"} .. " -I../../libs_complete/include" end}
 ursa.token.rule{"LIBLDFLAGS", "#LIBLDFLAGS_BASE", function () return ursa.token{"LIBLDFLAGS_BASE"} end}
+
+local final_libs = {}
 
 -- yo dogg, who likes libraries
 -- first we do zlib
@@ -119,7 +126,7 @@ do
   local lib = ursa.rule{build_prefix .. "/libs/zlib/libz.a", {makefile, zlib_files}, ('cd %s/libs/zlib && make -j5'):format(build_prefix)}
   
   -- now we copy shit to the right place
-  table.insert(zlib, ursa.rule{build_prefix .. "/libs_complete/lib/libz.a", lib, ursa.util.copy{}})
+  final_libs.libz = ursa.rule{build_prefix .. "/libs_complete/lib/libz.a", lib, ursa.util.copy{}}
   table.insert(zlib, ursa.rule{build_prefix .. "/libs_complete/include/zlib.h", build_prefix .. "/libs/zlib/zlib.h", ursa.util.copy{}})
   table.insert(zlib, ursa.rule{build_prefix .. "/libs_complete/include/zconf.h", build_prefix .. "/libs/zlib/zconf.h", ursa.util.copy{}})
 end
@@ -135,12 +142,14 @@ do
     table.insert(libpng_files, ursa.rule{build_prefix .. "/libs/libpng/" .. file, libpng_dir .. "/" .. file, ursa.util.copy{}})
   end
   
-  local makefile = ursa.rule{{build_prefix .. "/libs/libpng/Makefile"}, {libpng_files, zlib}, ursa.util.system_template{('cd %s/libs/libpng && CC=#LIBCC CFLAGS="#LIBCFLAGS" LDFLAGS="#LIBLDFLAGS -L../../libs_complete/lib" ./configure --disable-dependency-tracking'):format(build_prefix)}}
+  local makefile = ursa.rule{{build_prefix .. "/libs/libpng/Makefile"}, {libpng_files, zlib, final_libs.libz}, ursa.util.system_template{('cd %s/libs/libpng && CC=#LIBCC CFLAGS="#LIBCFLAGS" LDFLAGS="#LIBLDFLAGS -L../../libs_complete/lib" ./configure --disable-dependency-tracking'):format(build_prefix)}}
   
-  local lib = ursa.rule{build_prefix .. "/libs/libpng/libpng14.la", {makefile, libpng_files}, ('cd %s/libs/libpng && make -j5'):format(build_prefix)}
+  local lib = ursa.rule{build_prefix .. "/libs/libpng/.libs/libpng14.a", {makefile, libpng_files}, ('cd %s/libs/libpng && make -j5'):format(build_prefix)}
   
   -- now we copy shit to the right place
-  table.insert(libpng, ursa.rule{build_prefix .. "/libs_complete/lib/libpng.la", lib, ursa.util.copy{}})
+  final_libs.libpng = ursa.rule{build_prefix .. "/libs_complete/lib/libpng.a", lib, ursa.util.copy{}}
+  table.insert(libpng, ursa.rule{build_prefix .. "/libs_complete/include/png.h", build_prefix .. "/libs/libpng/png.h", ursa.util.copy{}})
+  table.insert(libpng, ursa.rule{build_prefix .. "/libs_complete/include/pngconf.h", build_prefix .. "/libs/libpng/pngconf.h", ursa.util.copy{}})
 end
 
 -- libjpeg next . . . ish
@@ -154,12 +163,15 @@ do
     table.insert(libjpeg_files, ursa.rule{build_prefix .. "/libs/libjpeg/" .. file, libjpeg_dir .. "/" .. file, ursa.util.copy{}})
   end
   
-  local makefile = ursa.rule{{build_prefix .. "/libs/libjpeg/Makefile"}, libjpeg_files, ursa.util.system_template{('cd %s/libs/libjpeg && CC=#LIBCC CFLAGS="#LIBCFLAGS" LDFLAGS="#LIBLDFLAGS" ./configure --disable-dependency-tracking'):format(build_prefix)}}
+  local makefile = ursa.rule{{build_prefix .. "/libs/libjpeg/Makefile", build_prefix .. "/libs/libjpeg/jconfig.h"}, libjpeg_files, ursa.util.system_template{('cd %s/libs/libjpeg && CC=#LIBCC CFLAGS="#LIBCFLAGS" LDFLAGS="#LIBLDFLAGS" ./configure --disable-dependency-tracking'):format(build_prefix)}}
   
-  local lib = ursa.rule{build_prefix .. "/libs/libjpeg/libjpeg.la", {makefile, libjpeg_files}, ('cd %s/libs/libjpeg && make -j5'):format(build_prefix)}
+  local lib = ursa.rule{build_prefix .. "/libs/libjpeg/.libs/libjpeg.a", {makefile, libjpeg_files}, ('cd %s/libs/libjpeg && make clean && make -j5'):format(build_prefix)}
   
   -- now we copy shit to the right place
-  table.insert(libjpeg, ursa.rule{build_prefix .. "/libs_complete/lib/libjpeg.la", lib, ursa.util.copy{}})
+  final_libs.libjpeg = ursa.rule{build_prefix .. "/libs_complete/lib/libjpeg.a", lib, ursa.util.copy{}}
+  table.insert(libjpeg, ursa.rule{build_prefix .. "/libs_complete/include/jpeglib/jpeglib.h", build_prefix .. "/libs/libjpeg/jpeglib.h", ursa.util.copy{}})
+  table.insert(libjpeg, ursa.rule{build_prefix .. "/libs_complete/include/jpeglib/jconfig.h", build_prefix .. "/libs/libjpeg/jconfig.h", ursa.util.copy{}})
+  table.insert(libjpeg, ursa.rule{build_prefix .. "/libs_complete/include/jpeglib/jmorecfg.h", build_prefix .. "/libs/libjpeg/jmorecfg.h", ursa.util.copy{}})
 end
 
 -- and freetype last, whatever last means
@@ -175,17 +187,35 @@ do
     else
       table.insert(libfreetype_files, ursa.rule{build_prefix .. "/libs/libfreetype/" .. file, libfreetype_dir .. "/" .. file, ursa.util.copy{}})
     end
+    
+    if file:match("^include.*") then
+      table.insert(libfreetype, ursa.rule{build_prefix .. "/libs_complete/include/" .. file:match("include/(.*)"), libfreetype_dir .. "/" .. file, ursa.util.copy{}})
+    end
   end
   
   local makefile = ursa.rule{{build_prefix .. "/libs/libfreetype/builds/unix/freetype-config"}, libfreetype_files, ursa.util.system_template{('cd %s/libs/libfreetype && CC=#LIBCC CFLAGS="#LIBCFLAGS" LDFLAGS="#LIBLDFLAGS" ./configure'):format(build_prefix)}}
   
-  local lib = ursa.rule{build_prefix .. "/libs/libfreetype/objs/libfreetype.la", {makefile, libfreetype_files}, ('cd %s/libs/libfreetype && make -j5'):format(build_prefix)}
+  local lib = ursa.rule{build_prefix .. "/libs/libfreetype/objs/.libs/libfreetype.a", {makefile, libfreetype_files}, ('cd %s/libs/libfreetype && make -j5'):format(build_prefix)}
   
   -- now we copy shit to the right place
-  table.insert(libfreetype, ursa.rule{build_prefix .. "/libs_complete/lib/libfreetype.la", lib, ursa.util.copy{}})
+  final_libs.libfreetype = ursa.rule{build_prefix .. "/libs_complete/lib/libfreetype.a", lib, ursa.util.copy{}}
 end
 
-ursa.token.rule{"testtesttest", {zlib, libpng, libjpeg, libfreetype}, function () return "" end}
+-- we have our "core libraries"
+local core = {}
+do
+  local core_dir = "Glop/source/third_party/system_" .. local_os
+  
+  ursa.token.rule{"core files", nil, ("(cd %s && find . -type f | sed s*\\\\./**) || true"):format(core_dir)}  -- we are assuming this isn't changing
+  local libjpeg_files = {}
+  for file in ursa.token{"core files"}:gmatch("([^\n]+)") do
+    table.insert(core, ursa.rule{build_prefix .. "/libs_complete/" .. file, core_dir .. "/" .. file, ursa.util.copy{}})
+  end
+end
+
+final_libs.libfmodex = fmodex_path
+
+local libs = {zlib, libpng, libjpeg, libfreetype, core}
 
 -- parse the result from g++'s built-in dependency scanner
 local function make_dependencies(srcfile)
@@ -206,18 +236,18 @@ end
 local objects = {}
 for _, file in ipairs(glop_filenames) do
   local cpp = "Glop/source/" .. file .. ".cpp"
-  local o = "build/Glop/" .. file .. ".o"
+  local o = build_prefix .. "/Glop/" .. file .. ".o"
   local depend = "Glop/" .. file .. " dependencies"
   
-  ursa.token.rule{depend, ursa.util.token_deferred{depend, default = cpp}, function () return make_dependencies(cpp) end}
+  ursa.token.rule{depend, {libs, ursa.util.token_deferred{depend, default = cpp}}, function () return make_dependencies(cpp) end}
   table.insert(objects, ursa.rule{o, ursa.util.token_deferred{depend}, ursa.util.system_template{("#CC -O2 #CXXFLAGS -o %s -c %s"):format(o, cpp)}})
 end
 for _, file in ipairs(glop_filenames_objcpp) do
   local cpp = "Glop/source/" .. file .. ".mm"
-  local o = "build/Glop/" .. file .. ".o"
+  local o = build_prefix .. "/Glop/" .. file .. ".o"
   local depend = "Glop/" .. file .. " dependencies"
   
-  ursa.token.rule{depend, ursa.util.token_deferred{depend, default = cpp}, function () return make_dependencies(cpp) end}
+  ursa.token.rule{depend, {libs, ursa.util.token_deferred{depend, default = cpp}}, function () return make_dependencies(cpp) end}
   table.insert(objects, ursa.rule{o, ursa.util.token_deferred{depend}, ursa.util.system_template{("#CC -O2 #CXXFLAGS -o %s -c %s"):format(o, cpp)}})
 end
 
@@ -225,36 +255,23 @@ local lib = nil
 local headers = {}
 
 -- build the glop library
-lib = ursa.rule{"build/Glop/" .. deploy_paths.lib, objects, ursa.util.system_template{"#CC -O2 -o $TARGET $SOURCES #LDFLAGS"}}
+lib = ursa.rule{deploy_paths.lib, {objects, fmodex_path}, ursa.util.system_template{"rm -f $TARGET && ar rcs $TARGET $SOURCES"}}
 
 -- mirror source files into the appropriate build directory
-ursa.token.rule{"headers", nil, "cd Glop/source && find . -type f | sed s*\\\\./** | grep \\.h$"}
+ursa.token.rule{"headers", nil, "cd Glop/source && find . -type f | grep -v third_party | sed s*\\\\./** | grep \\.h$"}
 for k in ursa.token{"headers"}:gmatch("[^%s]+") do
-  table.insert(headers, ursa.rule{"build/Glop/" .. deploy_paths.headers .. "/" .. k, "Glop/source/" .. k, ursa.util.system_template{"cp $SOURCE $TARGET"}})
+  table.insert(headers, ursa.rule{release_prefix .. "/include/Glop/" .. k, "Glop/source/" .. k, ursa.util.copy{}})
+end
+
+-- build the glop sublibraries
+local sublibs = {}
+for k, v in pairs(final_libs) do
+  table.insert(sublibs, ursa.rule{release_prefix .. "/lib/" .. k .. ".a", v, ursa.util.copy{}})
 end
 
 ursa.command{"glop", {lib, headers}}
 
 
-
--- let's have some actual apps
-local applist = {}
-local function BuildApp(appname, files)
-  local objects = {}
-  for _, file in ipairs(files) do
-    local cpp = ("%s/%s.cpp"):format(appname, file)
-    local o = ("build/%s/%s.o"):format(appname, file)
-    local depend = ("%s/%s dependencies"):format(appname, file)
-    
-    ursa.token.rule{depend, {headers, ursa.util.token_deferred{depend, default = cpp}}, function () return make_dependencies(cpp) end}
-    table.insert(objects, ursa.rule{o, {headers, ursa.util.token_deferred{depend}}, ursa.util.system_template{("#CC -O2 #CXXFLAGS -o %s -c %s"):format(o, cpp)}})
-  end
-  
-  local out = "build/" .. appname .. executable_extension
-  table.insert(applist, ursa.rule{out, {objects, lib}, ursa.util.system_template{"#CC -O2 -o $TARGET $SOURCES #LDFLAGS"}})
-end
-
-BuildApp("Tests", {"Tests"})
 
 ursa.command{ursa.command.default, applist}
 
@@ -276,4 +293,4 @@ end}
 ursa.build{...}
 
 
-return {lib = lib, headers = headers, os = local_os, cc = ursa.token{"CC"}} -- just in case we're being shelled by something, here's the glop package data
+return {lib = lib, headers = headers, sublibs = sublibs, os = local_os, cc = ursa.token{"CC"}} -- just in case we're being shelled by something, here's the glop package data
