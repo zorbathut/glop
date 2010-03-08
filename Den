@@ -34,7 +34,7 @@ do
     local_os = "cygwin"
     
     ursa.token.rule{"CC", nil, function () return "/cygdrive/c/MinGW/bin/g++" end}
-    ursa.token.rule{"CXXFLAGS_BASE", nil, function () return "-DWIN32 -D_LIB -D_MBCS -IGlop/source -I. -g" end}
+    ursa.token.rule{"CXXFLAGS_BASE", nil, function () return "-DWIN32 -D_LIB -D_MBCS" end}
     
     ursa.token.rule{"LIBCC", nil, function () return "/cygdrive/c/MinGW/bin/gcc" end}
     ursa.token.rule{"LIBCFLAGS_BASE", nil, function () return "" end}
@@ -51,16 +51,19 @@ do
     local_os = "osx"
     
     ursa.token.rule{"CC", nil, function () return "g++" end}
-    ursa.token.rule{"CXXFLAGS", nil, function () return "-arch i386 -DMACOSX -D_DEBUG -IGlop/source -I. -g" end}
-    ursa.token.rule{"LDFLAGS", nil, function () return "-arch i386 -lfmodex -lfreetype235 -ljpeg6b -lpng -lrakneti386 -lz -F/System/Library/Frameworks -framework Carbon -framework AGL -framework OpenGL -framework ApplicationServices -framework IOKit -Wl,-single_module -compatibility_version 1 -current_version 1 -mmacosx-version-min=10.5 -headerpad_max_install_names" end}
+    ursa.token.rule{"CXXFLAGS_BASE", nil, function () return "-arch i386 -DMACOSX -D_DEBUG" end}
+    
+    ursa.token.rule{"LIBCC", nil, function () return "gcc" end}
+    ursa.token.rule{"LIBCFLAGS_BASE", nil, function () return "-arch i386" end}
+    ursa.token.rule{"LIBLDFLAGS_BASE", nil, function () return "-arch i386" end}
     
     table.insert(glop_filenames, "OsMacOSX")
     table.insert(glop_filenames, "Sound")
     
     executable_extension = "app"  -- much of this needs to be redesigned
+    fmodex_path = "Glop/source/third_party/system_osx/lib/libfmodex.dylib"
     
-    deploy_paths.lib = "Glop.framework/Glop"
-    deploy_paths.headers = "Glop.framework/Headers"
+    deploy_paths.lib_name = "Glop"
   elseif local_os == "iphone_sim" then
     local_os = "iphone_sim"
     
@@ -102,7 +105,7 @@ do
   deploy_paths.lib = release_prefix .. "/lib/" .. deploy_paths.lib_name
 end
 
-ursa.token.rule{"CXXFLAGS", "#CXXFLAGS_BASE", function () return ursa.token{"CXXFLAGS_BASE"} .. " -Ibuild/" .. local_os .. "/libs_complete/include" end}
+ursa.token.rule{"CXXFLAGS", "#CXXFLAGS_BASE", function () return ursa.token{"CXXFLAGS_BASE"} .. " -Ibuild/" .. local_os .. "/libs_complete/include -IGlop/source -I. -g" end}
 
 ursa.token.rule{"LIBCFLAGS", "#LIBCFLAGS_BASE", function () return ursa.token{"LIBCFLAGS_BASE"} .. " -I../../libs_complete/include" end}
 ursa.token.rule{"LIBLDFLAGS", "#LIBLDFLAGS_BASE", function () return ursa.token{"LIBLDFLAGS_BASE"} end}
@@ -182,11 +185,11 @@ do
   ursa.token.rule{"libfreetype files", nil, ("cd %s && find . -type f | sed s*\\\\./**"):format(libfreetype_dir)}  -- we are assuming this isn't changing
   local libfreetype_files = {}
   for file in ursa.token{"libfreetype files"}:gmatch("([^\n]+)") do
-    if file == "builds/unix/unix-def.in" then
-      table.insert(libfreetype_files, ursa.rule{build_prefix .. "/libs/libfreetype/" .. file, libfreetype_dir .. "/" .. file, ursa.util.system_template{'sed "s/TOP_DIR := .*/TOP_DIR := ./" $SOURCE > $TARGET'}})
-    else
+    --if file == "builds/unix/unix-def.in" then
+      --table.insert(libfreetype_files, ursa.rule{build_prefix .. "/libs/libfreetype/" .. file, libfreetype_dir .. "/" .. file, ursa.util.system_template{'sed "s/TOP_DIR := .*/TOP_DIR := ./" $SOURCE > $TARGET'}})
+    --else
       table.insert(libfreetype_files, ursa.rule{build_prefix .. "/libs/libfreetype/" .. file, libfreetype_dir .. "/" .. file, ursa.util.copy{}})
-    end
+    --end
     
     if file:match("^include.*") then
       table.insert(libfreetype, ursa.rule{build_prefix .. "/libs_complete/include/" .. file:match("include/(.*)"), libfreetype_dir .. "/" .. file, ursa.util.copy{}})
