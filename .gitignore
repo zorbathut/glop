@@ -8,7 +8,7 @@
 *.sconsign.dblite
 .ursa.*
 
-build*/
+build
 release
 
 *.o
