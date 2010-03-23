@@ -68,8 +68,13 @@ do
     local_os = "iphone_sim"
     
     ursa.token.rule{"CC", nil, function () return "/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/bin/g++" end}
-    ursa.token.rule{"CXXFLAGS", nil, function () return "-D__IPHONE_OS_VERSION_MIN_REQUIRED=30000 -arch i386 -isysroot /Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator3.0.sdk -mmacosx-version-min=10.5 -DIPHONE -IGlop/source" end}
-    ursa.token.rule{"LDFLAGS", nil, function () return "-arch i386 -isysroot /Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator3.0.sdk -mmacosx-version-min=10.5 -framework Foundation -framework UIKit -framework OpenGLES -framework QuartzCore -framework AVFoundation -ljpeg6b -lfreetype235 -lpng -lz" end}
+    ursa.token.rule{"CXXFLAGS_BASE", nil, function () return "-D__IPHONE_OS_VERSION_MIN_REQUIRED=30000 -arch i386 -isysroot /Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator3.0.sdk -mmacosx-version-min=10.5 -DIPHONE -IGlop/source" end}
+    
+    ursa.token.rule{"LIBCC", nil, function () return "/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/bin/gcc" end}
+    ursa.token.rule{"LIBCFLAGS_BASE", nil, function () return "-arch i386 -isysroot /Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator3.0.sdk -mmacosx-version-min=10.5" end}
+    ursa.token.rule{"LIBLDFLAGS_BASE", nil, function () return "-arch i386 -isysroot /Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator3.0.sdk -mmacosx-version-min=10.5" end}
+    
+    --ursa.token.rule{"LDFLAGS", nil, function () return "-arch i386 -isysroot /Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator3.0.sdk -mmacosx-version-min=10.5 -framework Foundation -framework UIKit -framework OpenGLES -framework QuartzCore -framework AVFoundation -ljpeg6b -lfreetype235 -lpng -lz" end}
     
     table.insert(glop_filenames_objcpp, "OsIphone")
     table.insert(glop_filenames_objcpp, "OsIphone_EAGLView")
@@ -77,8 +82,7 @@ do
     
     executable_extension = "app"
     
-    deploy_paths.lib = "Glop.framework/Glop"
-    deploy_paths.headers = "Glop.framework/Headers"
+    deploy_paths.lib_name = "Glop"
   elseif local_os == "iphone_dev" then
     local_os = "iphone_dev"
     
@@ -258,7 +262,7 @@ local lib = nil
 local headers = {}
 
 -- build the glop library
-lib = ursa.rule{deploy_paths.lib, {objects, fmodex_path}, ursa.util.system_template{"rm -f $TARGET && ar rcs $TARGET $SOURCES"}}
+lib = ursa.rule{deploy_paths.lib, {objects, (fmodex_path or {})}, ursa.util.system_template{"rm -f $TARGET && ar rcs $TARGET $SOURCES"}}
 
 -- mirror source files into the appropriate build directory
 ursa.token.rule{"headers", nil, "cd Glop/source && find . -type f | grep -v third_party | sed s*\\\\./** | grep \\.h$"}
