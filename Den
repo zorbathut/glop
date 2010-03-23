@@ -300,4 +300,4 @@ end}
 ursa.build{...}
 
 
-return {lib = lib, headers = headers, sublibs = sublibs, os = local_os, cc = ursa.token{"CC"}} -- just in case we're being shelled by something, here's the glop package data
+return {lib = lib, headers = headers, sublibs = sublibs, os = local_os, cc = ursa.token{"CC"}, libcc = ursa.token{"LIBCC"}} -- just in case we're being shelled by something, here's the glop package data
