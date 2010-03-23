@@ -343,7 +343,7 @@ void Os::Think() {
 LRESULT CALLBACK HandleMessage(HWND window_handle, UINT message, WPARAM wparam, LPARAM lparam) {
   // Extract information from the parameters
   if (!gWindowMap.count(window_handle))
-    return DefWindowProc(window_handle, message, wparam, lparam);
+    return DefWindowProcW(window_handle, message, wparam, lparam);
   OsWindowData *os_window = gWindowMap[window_handle];
   unsigned short wparam1 = LOWORD(wparam), wparam2 = HIWORD(wparam);
   unsigned short lparam1 = LOWORD(lparam), lparam2 = HIWORD(lparam);
@@ -403,7 +403,7 @@ LRESULT CALLBACK HandleMessage(HWND window_handle, UINT message, WPARAM wparam, 
 
   // Pass on remaining messages to the default handler
   
-  return DefWindowProc(window_handle, message, wparam, lparam);
+  return DefWindowProcW(window_handle, message, wparam, lparam);
 }
 
 void Os::WindowThink(OsWindowData *window) {}
@@ -469,14 +469,14 @@ HICON CreateIcon(OsWindowData *data, const Image *image) {
 OsWindowData *Os::CreateWindow(const string &title, int x, int y,
                                int width, int height, bool full_screen, short stencil_bits,
                                const Image *icon, bool is_resizable) {
-  const char *const kClassName = "GlopWin32";
+  const wchar_t *const kClassName = L"GlopWin32";
   static bool is_class_initialized = false;
   OsWindowData *result = new OsWindowData();
   
   // Create a window class. This is essentially used by Windows to group together several windows
   // for various purposes.
   if (!is_class_initialized) {
-    WNDCLASS window_class;
+    WNDCLASSW window_class;
     window_class.style = CS_OWNDC;
     window_class.lpfnWndProc = HandleMessage;
     window_class.cbClsExtra = 0;
@@ -487,7 +487,7 @@ OsWindowData *Os::CreateWindow(const string &title, int x, int y,
     window_class.hbrBackground = 0;
     window_class.lpszMenuName = 0;
     window_class.lpszClassName = kClassName;
-    if (!RegisterClass(&window_class)) {
+    if (!RegisterClassW(&window_class)) {
       DestroyWindow(result);
       return 0;
     }
@@ -524,8 +524,8 @@ OsWindowData *Os::CreateWindow(const string &title, int x, int y,
   }
 
   // Create the window
-  result->window_handle = CreateWindowEx(0,
-                                         kClassName, title.c_str(),
+  result->window_handle = CreateWindowExW(0,
+                                         kClassName, L"Glop window",
                                          window_style,
                                          x, y,
                                          window_rectangle.right - window_rectangle.left, 
@@ -538,6 +538,9 @@ OsWindowData *Os::CreateWindow(const string &title, int x, int y,
     DestroyWindow(result);
     return 0;
   }
+  
+  SetTitle(result, title);
+  
   gWindowMap[result->window_handle] = result;
 
   // Set the icon
@@ -698,6 +701,16 @@ void Os::GetWindowSize(const OsWindowData *window, int *width, int *height) {
 
 void Os::SetTitle(OsWindowData *window, const string &title) {
   SetWindowText(window->window_handle, title.c_str());
+  
+  // Very sorry about this.
+  if(title == "K0R.") {
+    LOGF("k0r SetTitle");
+    wchar_t korname[10] = L"K0R.";
+    korname[1] = 0x00D8;
+    korname[2] = 0x042f;
+    LOGF("%d %d %d %d", korname[0], korname[1], korname[2], korname[3]);
+    SetWindowTextW(window->window_handle, korname);
+  }
 }
 
 void Os::SetIcon(OsWindowData *window, const Image *icon) {

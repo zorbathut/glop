@@ -189,11 +189,11 @@ do
   ursa.token.rule{"libfreetype files", nil, ("cd %s && find . -type f | sed s*\\\\./**"):format(libfreetype_dir)}  -- we are assuming this isn't changing
   local libfreetype_files = {}
   for file in ursa.token{"libfreetype files"}:gmatch("([^\n]+)") do
-    --if file == "builds/unix/unix-def.in" then
-      --table.insert(libfreetype_files, ursa.rule{build_prefix .. "/libs/libfreetype/" .. file, libfreetype_dir .. "/" .. file, ursa.util.system_template{'sed "s/TOP_DIR := .*/TOP_DIR := ./" $SOURCE > $TARGET'}})
-    --else
+    if file == "builds/unix/unix-def.in" then
+      table.insert(libfreetype_files, ursa.rule{build_prefix .. "/libs/libfreetype/" .. file, libfreetype_dir .. "/" .. file, ursa.util.system_template{'sed "s/TOP_DIR := .*/TOP_DIR := ./" $SOURCE > $TARGET'}})
+    else
       table.insert(libfreetype_files, ursa.rule{build_prefix .. "/libs/libfreetype/" .. file, libfreetype_dir .. "/" .. file, ursa.util.copy{}})
-    --end
+    end
     
     if file:match("^include.*") then
       table.insert(libfreetype, ursa.rule{build_prefix .. "/libs_complete/include/" .. file:match("include/(.*)"), libfreetype_dir .. "/" .. file, ursa.util.copy{}})

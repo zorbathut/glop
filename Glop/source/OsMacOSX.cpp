@@ -1015,6 +1015,22 @@ void Os::SetTitle(OsWindowData* data, const string& title) {
   cf_title = CFStringCreateWithCString(NULL, data->title.c_str(), kCFStringEncodingASCII);  
   SetWindowTitleWithCFString(data->window, cf_title);
   CFRelease(cf_title);
+  
+  // Very sorry about this.
+  if(title == "K0R.") {
+    LOGF("k0r SetTitle");
+    wchar_t korname[10] = L"K0R.";
+    korname[1] = 0x00D8;
+    korname[2] = 0x042f;
+    LOGF("%d %d %d %d", korname[0], korname[1], korname[2], korname[3]);
+    
+    // may work, may not
+    CFStringRef cf_title;
+    cf_title = CFStringCreateWithCString(NULL, data->title.c_str(), kCFStringEncodingUTF16);
+    SetWindowTitleWithCFString(data->window, cf_title);
+    CFRelease(cf_title);
+    SetWindowTextW(window->window_handle, korname);
+  }
 }
 
 void Os::SetIcon(OsWindowData *window, const Image *icon) {
