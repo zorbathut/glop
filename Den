@@ -276,6 +276,19 @@ for k, v in pairs(final_libs) do
   table.insert(sublibs, ursa.rule{release_prefix .. "/lib/" .. k .. ".a", v, ursa.util.copy{}})
 end
 
+-- include sublibrary headers. this is kind of nasty right now because we're using find to, well, find them
+ursa.token.rule{"release_lib_headers", libs, ("cd %s/libs_complete/include && find . -type f | sed s*\\\\./**"):format(build_prefix)}
+ursa.token.rule{"release_lib_headers_copy", "#release_lib_headers", function ()
+  local rlhc = {}
+  for k in ursa.token{"release_lib_headers"}:gmatch("[^\n]+") do
+    table.insert(rlhc, ursa.rule{release_prefix .. "/include/" .. k, build_prefix .. "/libs_complete/include/" .. k, ursa.util.copy{}})
+  end
+  return rlhc
+end, always_rebuild = true}
+table.insert(headers, ursa.util.token_deferred{"release_lib_headers_copy"})
+
+
+
 ursa.command{"glop", {lib, headers}}
 
 
