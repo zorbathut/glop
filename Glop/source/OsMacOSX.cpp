@@ -1026,10 +1026,9 @@ void Os::SetTitle(OsWindowData* data, const string& title) {
     
     // may work, may not
     CFStringRef cf_title;
-    cf_title = CFStringCreateWithCString(NULL, data->title.c_str(), kCFStringEncodingUTF16);
+    cf_title = CFStringCreateWithCString(NULL, (char*)korname, kCFStringEncodingUTF16);
     SetWindowTitleWithCFString(data->window, cf_title);
     CFRelease(cf_title);
-    SetWindowTextW(window->window_handle, korname);
   }
 }
 
