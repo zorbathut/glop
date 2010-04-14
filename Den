@@ -133,7 +133,7 @@ do
   local lib = ursa.rule{build_prefix .. "/libs/zlib/libz.a", {makefile, zlib_files}, ('cd %s/libs/zlib && make -j5'):format(build_prefix)}
   
   -- now we copy shit to the right place
-  final_libs.libz = ursa.rule{build_prefix .. "/libs_complete/lib/libz.a", lib, ursa.util.copy{}}
+  final_libs.zlib = ursa.rule{build_prefix .. "/libs_complete/lib/libz.a", lib, ursa.util.copy{}}
   table.insert(zlib, ursa.rule{build_prefix .. "/libs_complete/include/zlib.h", build_prefix .. "/libs/zlib/zlib.h", ursa.util.copy{}})
   table.insert(zlib, ursa.rule{build_prefix .. "/libs_complete/include/zconf.h", build_prefix .. "/libs/zlib/zconf.h", ursa.util.copy{}})
 end
@@ -149,7 +149,7 @@ do
     table.insert(libpng_files, ursa.rule{build_prefix .. "/libs/libpng/" .. file, libpng_dir .. "/" .. file, ursa.util.copy{}})
   end
   
-  local makefile = ursa.rule{{build_prefix .. "/libs/libpng/Makefile"}, {libpng_files, zlib, final_libs.libz}, ursa.util.system_template{('cd %s/libs/libpng && CC=#LIBCC CFLAGS="#LIBCFLAGS" LDFLAGS="#LIBLDFLAGS -L../../libs_complete/lib" ./configure --disable-dependency-tracking'):format(build_prefix)}}
+  local makefile = ursa.rule{{build_prefix .. "/libs/libpng/Makefile"}, {libpng_files, zlib, final_libs.zlib}, ursa.util.system_template{('cd %s/libs/libpng && CC=#LIBCC CFLAGS="#LIBCFLAGS" LDFLAGS="#LIBLDFLAGS -L../../libs_complete/lib" ./configure --disable-dependency-tracking'):format(build_prefix)}}
   
   local lib = ursa.rule{build_prefix .. "/libs/libpng/.libs/libpng14.a", {makefile, libpng_files}, ('cd %s/libs/libpng && make -j5'):format(build_prefix)}
   
@@ -261,9 +261,6 @@ end
 local lib = nil
 local headers = {}
 
--- build the glop library
-lib = ursa.rule{deploy_paths.lib, {objects, (fmodex_path or {})}, ursa.util.system_template{"rm -f $TARGET && ar rcs $TARGET $SOURCES"}}
-
 -- mirror source files into the appropriate build directory
 ursa.token.rule{"headers", nil, "cd Glop/source && find . -type f | grep -v third_party | sed s*\\\\./** | grep \\.h$"}
 for k in ursa.token{"headers"}:gmatch("[^%s]+") do
@@ -271,12 +268,15 @@ for k in ursa.token{"headers"}:gmatch("[^%s]+") do
 end
 
 -- build the glop sublibraries
-local sublibs = {}
+local outlibs = {}
 for k, v in pairs(final_libs) do
-  table.insert(sublibs, ursa.rule{release_prefix .. "/lib/" .. k .. ".a", v, ursa.util.copy{}})
+  outlibs[k] = ursa.rule{release_prefix .. "/lib/" .. k .. ".a", v, ursa.util.copy{}}
 end
 
--- include sublibrary headers. this is kind of nasty right now because we're using find to, well, find them
+-- build the glop library
+outlibs.glop = ursa.rule{deploy_paths.lib, {objects, (fmodex_path or {})}, ursa.util.system_template{"rm -f $TARGET && ar rcs $TARGET $SOURCES"}}
+
+-- include sublibrary headers. this is kind of nasty right now because we're using find to, well, find them. this would be very bad if we weren't using all libraries reliably, but right now we are, so this is okay (sorta)
 ursa.token.rule{"release_lib_headers", libs, ("cd %s/libs_complete/include && find . -type f | sed s*\\\\./**"):format(build_prefix)}
 ursa.token.rule{"release_lib_headers_copy", "#release_lib_headers", function ()
   local rlhc = {}
@@ -289,7 +289,7 @@ table.insert(headers, ursa.util.token_deferred{"release_lib_headers_copy"})
 
 
 
-ursa.command{"glop", {lib, headers}}
+ursa.command{"glop", {outlibs.glop, headers}}
 
 
 
@@ -313,4 +313,4 @@ end}
 ursa.build{...}
 
 
-return {lib = lib, headers = headers, sublibs = sublibs, os = local_os, cc = ursa.token{"CC"}, libcc = ursa.token{"LIBCC"}, libcflags = ursa.token{"LIBCFLAGS"}, libldflags = ursa.token{"LIBLDFLAGS"}} -- just in case we're being shelled by something, here's the glop package data
+return {libs = outlibs, headers = headers, os = local_os, cc = ursa.token{"CC"}, libcc = ursa.token{"LIBCC"}, libcflags = ursa.token{"LIBCFLAGS"}, libldflags = ursa.token{"LIBLDFLAGS"}} -- just in case we're being shelled by something, here's the glop package data
