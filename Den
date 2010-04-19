@@ -259,7 +259,7 @@ for _, file in ipairs(glop_filenames_objcpp) do
 end
 
 local lib = nil
-local headers = {}
+local headers = {libs}
 
 -- mirror source files into the appropriate build directory
 ursa.token.rule{"headers", nil, "cd Glop/source && find . -type f | grep -v third_party | sed s*\\\\./** | grep \\.h$"}
