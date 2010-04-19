@@ -226,7 +226,7 @@ local libs = {zlib, libpng, libjpeg, libfreetype, core}
 
 -- parse the result from g++'s built-in dependency scanner
 local function make_dependencies(srcfile)
-  local deps = ursa.util.system{("%s %s -MM %s"):format(ursa.token{"CC"}, ursa.token{"CXXFLAGS"}, srcfile)}
+  local deps = ursa.system{("%s %s -MM %s"):format(ursa.token{"CC"}, ursa.token{"CXXFLAGS"}, srcfile)}
   deps = deps:match("^.*: (.*)$")
   
   local dependencies = {}
