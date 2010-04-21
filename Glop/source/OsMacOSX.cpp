@@ -77,9 +77,9 @@ struct OsWindowData {
       agl_context(NULL) {
   }
   ~OsWindowData() {
-    printf("destroyed\n");
+    //printf("destroyed\n");
     if (window != NULL) {
-      printf("thundered\n");
+      //printf("thundered\n");
       DisposeWindow(window);
     }
     if (agl_context != NULL) {
@@ -144,7 +144,7 @@ OSStatus GlopEventHandler(EventHandlerCallRef next_handler, EventRef the_event, 
   OSStatus result = eventNotHandledErr;
   int event_class = GetEventClass(the_event);
   int event_kind = GetEventKind(the_event);
-  printf("EventTime: %f\n", GetEventTime(the_event));
+  //printf("EventTime: %f\n", GetEventTime(the_event));
   if (event_class == kEventClassGlop && event_kind == kEventGlopBreak) {
     ok_to_exit = false;
     QuitApplicationEventLoop();
@@ -175,7 +175,7 @@ OSStatus GlopEventHandler(EventHandlerCallRef next_handler, EventRef the_event, 
     	    NULL,
           &command);
       if (command.commandID == kEventGlopToggleFullScreen) {
-        printf("Toggle\n");
+        //printf("Toggle\n");
         GlopToggleFullScreen();
         result = noErr;
       }
@@ -205,8 +205,8 @@ OSStatus GlopEventHandler(EventHandlerCallRef next_handler, EventRef the_event, 
     	    sizeof(key),
     	    NULL,
           &key);
-      printf("KeyDown: %d %x\n", key, key);
-      printf("Array: %d\n",key_map[key].index);
+      //printf("KeyDown: %d %x\n", key, key);
+      //printf("Array: %d\n",key_map[key].index);
 //      printf("%s\n", key_map[key].GetName().c_str());
       if (key_map[key].index != 0)
       raw_events.push_back(
@@ -222,7 +222,7 @@ OSStatus GlopEventHandler(EventHandlerCallRef next_handler, EventRef the_event, 
     	    sizeof(key),
     	    NULL,
           &key);
-      printf("KeyUp  : %d %x\n", key, key);
+      //printf("KeyUp  : %d %x\n", key, key);
       if (key_map[key].index != 0)
       raw_events.push_back(
           GlopOSXEvent(GetEventTime(the_event), key_map[key], false));
@@ -237,9 +237,9 @@ OSStatus GlopEventHandler(EventHandlerCallRef next_handler, EventRef the_event, 
     	    sizeof(modifiers),
     	    NULL,
           &modifiers);
-      printf("Modifiers: %d\t%x\n", modifiers, modifiers);
-      printf("GetCurren: %d\t%x\n", GetCurrentEventKeyModifiers(), GetCurrentEventKeyModifiers());
-      printf("KeyModifs: %d\t%x\n", GetCurrentKeyModifiers(), GetCurrentKeyModifiers());
+      //printf("Modifiers: %d\t%x\n", modifiers, modifiers);
+      //printf("GetCurren: %d\t%x\n", GetCurrentEventKeyModifiers(), GetCurrentEventKeyModifiers());
+      //printf("KeyModifs: %d\t%x\n", GetCurrentKeyModifiers(), GetCurrentKeyModifiers());
     }
   }
   if (event_class == kEventClassMouse) {
@@ -296,7 +296,7 @@ OSStatus GlopEventHandler(EventHandlerCallRef next_handler, EventRef the_event, 
         &current_delta);
       mouse_delta.x += current_delta.x;
       mouse_delta.y += current_delta.y;
-      printf("Mouse Moved: %f %f\n", mouse_delta.x, mouse_delta.y);
+      //printf("Mouse Moved: %f %f\n", mouse_delta.x, mouse_delta.y);
       raw_events.push_back(
           GlopOSXEvent(GetEventTime(the_event), current_delta.x, current_delta.y, 0));
     }
@@ -490,7 +490,7 @@ static void GlopProcessJoysticks(const void* value, void* context) {
         while (index < joystick_devices.size() && joystick_devices[index] != device_ref) {
           index++;
         }
-        printf("1index: %d\n", index);
+        //printf("1index: %d\n", index);
         if (index == joystick_devices.size()) {
           for (int j = 0; j < joystick_devices.size(); j++) {
             if (joystick_devices[j] == NULL) {
@@ -501,14 +501,14 @@ static void GlopProcessJoysticks(const void* value, void* context) {
               break;
             }
           }
-          printf("2index: %d\n", index);
+          //printf("2index: %d\n", index);
           if (index == joystick_devices.size()) {
             index = joystick_queues.size();
             joystick_queues.push_back(
                 IOHIDQueueCreate(NULL, device_ref, 100, kIOHIDOptionsTypeNone));
             joystick_devices.push_back(device_ref);
           }
-          printf("3index: %d\n", index);
+          //printf("3index: %d\n", index);
         }
       }
       if (index != -1 &&
@@ -533,7 +533,7 @@ static void GlopHandleNewModifierHIDs() {
       CFRelease(old_modifier_queues[i]);
     }
 	} else {
-    printf("Error: Tried to handle new HIDs, but there are no HIDs.\n");
+    //printf("Error: Tried to handle new HIDs, but there are no HIDs.\n");
 	}
   for (int i = 0; i < modifier_queues.size(); i++) {
     IOHIDQueueStart(modifier_queues[i]);
@@ -550,7 +550,7 @@ static void GlopHandleNewJoysticks() {
     for (int i = 0; i < joystick_devices.size(); i++) {
       if (joystick_queues[i] == NULL) {
         if (joystick_devices[i] != NULL) {
-          printf("Removed joystick %d\n", i);
+          //printf("Removed joystick %d\n", i);
         }
         joystick_devices[i] = NULL;
       }
@@ -558,7 +558,7 @@ static void GlopHandleNewJoysticks() {
 		CFSetApplyFunction(set_ref, GlopProcessJoysticks, NULL);
     ExtractEvents(&old_joystick_queues, &joystick_events);
 	} else {
-    printf("Error: Tried to handle new HIDs, but there are no HIDs.\n");
+    //printf("Error: Tried to handle new HIDs, but there are no HIDs.\n");
 	}
   for (int i = 0; i < joystick_queues.size(); i++) {
     if (joystick_queues[i] != NULL) {
@@ -677,7 +677,7 @@ void Os::Think() {
       modifier_map[0xE6] = kKeyRightAlt;
       modifier_map[0xE7] = kKeyRightGui;
     }
-    printf("Modifier: %f %d %d %d\n", event->timestamp, event->page, event->usage, event->value);
+    //printf("Modifier: %f %d %d %d\n", event->timestamp, event->page, event->usage, event->value);
     raw_events.push_back(
         GlopOSXEvent(event->timestamp,modifier_map[event->usage], (bool)event->value));
   }
@@ -689,12 +689,12 @@ void Os::Think() {
   //  printf("Num Joystick Queues: %d\n", joystick_queues.size());
 
   for (event = joystick_events.begin(); event != joystick_events.end(); event++) {
-    printf("Event: %f %d %d %d\n", event->timestamp, event->page, event->usage, event->value);
+    //printf("Event: %f %d %d %d\n", event->timestamp, event->page, event->usage, event->value);
     static map<pair<UInt32, UInt32>, int> joystick_map;
     if (joystick_map.size() == 0) {
 //      joystick_map[pair<UInt32, UInt32>(0x09,)] = 0;
     }
-    printf("page: 0x%x\tusage: 0x%x\n", event->page, event->usage);
+    //printf("page: 0x%x\tusage: 0x%x\n", event->page, event->usage);
     if (event->page == 0x09) {
       raw_events.push_back(
           GlopOSXEvent(
@@ -702,10 +702,10 @@ void Os::Think() {
               GetJoystickButton(event->usage - 1, event->queue),
               (bool)event->value));
     } else if (event->page == 0x01 && event->usage >= 0x30 && event->usage <= 0x35) {
-      printf("value: %d\n", event->value);
-      printf("queue: %d\n", event->queue);
+      //printf("value: %d\n", event->value);
+      //printf("queue: %d\n", event->queue);
       if (event->value < 127) {
-        LOGF("Negative axis event %d", event->usage);
+        //LOGF("Negative axis event %d", event->usage);
         raw_events.push_back(
             GlopOSXEvent(
                 event->timestamp,
@@ -713,14 +713,14 @@ void Os::Think() {
                 1.f - (event->value/128.f)));
       } else
       if (event->value > 128) {
-        LOGF("Positive axis event %d", event->usage);
+        //LOGF("Positive axis event %d", event->usage);
         raw_events.push_back(
             GlopOSXEvent(
                 event->timestamp,
                 GetJoystickAxisPos(event->usage - 0x30, event->queue),
                 (event->value - 127) / 128.f));
       } else {
-        LOGF("Zero axis event %d", event->usage);
+        //LOGF("Zero axis event %d", event->usage);
         raw_events.push_back(
             GlopOSXEvent(
                 event->timestamp,
@@ -733,7 +733,7 @@ void Os::Think() {
                 0.f));
       }
     } else if (event->page == 0x01 && event->usage >= 0x39) {
-      printf("rawr!\n");
+      //printf("rawr!\n");
       raw_events.push_back(
           GlopOSXEvent(
               event->timestamp,
@@ -810,7 +810,7 @@ bool GlopCreateAGLContext(OsWindowData* data) {
   	      data->full_screen_dimensions.bottom - data->full_screen_dimensions.top,
   	      65,
   	      &exact_match);
-        printf("boolean_t = %d\n", exact_match);
+        //printf("boolean_t = %d\n", exact_match);
    	if (!exact_match) {
       return false;
   	}
@@ -819,21 +819,21 @@ bool GlopCreateAGLContext(OsWindowData* data) {
 
   pixel_format = aglChoosePixelFormat(&gdhDisplay, 1, attributes);
 //  err = aglReportError();
-  printf("Pixel  format: %d\n", pixel_format);
+  //printf("Pixel  format: %d\n", pixel_format);
   if (pixel_format) {
     data->agl_context = aglCreateContext(pixel_format, NULL);
     err = aglReportError();
     aglDestroyPixelFormat(pixel_format);
 //    SetPort(GetWindowPort(data->window));
   } else {
-    printf("No valid pixel format found.\n");
+    //printf("No valid pixel format found.\n");
   }
 //  aglSetHIViewRef(data->agl_context, HIViewGetRoot(data->window));
   if (data->full_screen) {
 		if (!aglSetCurrentContext (data->agl_context))
 			err = aglReportError ();
     int n = aglSetFullScreen(data->agl_context, 0, 0, 0, 0);
-    printf("aglsetfullscreen error: %d\n", n);
+    //printf("aglsetfullscreen error: %d\n", n);
 //    aglSetDrawable(data->agl_context, GetWindowPort(data->window));
   } else {
     aglSetDrawable(data->agl_context, GetWindowPort(data->window));
@@ -905,16 +905,16 @@ void GlopToggleFullScreen() {
   if (full_screen_data != NULL) {
     data = full_screen_data;
   }
-  printf("GlopToggleFullScreen(%s)\n", data->title.c_str());
+  //printf("GlopToggleFullScreen(%s)\n", data->title.c_str());
 //  aglSetDrawable(NULL, NULL);
   data->full_screen = !data->full_screen;
   if (!data->full_screen) {
-    printf("Currently fullscreen, making windowed\n");
+    //printf("Currently fullscreen, making windowed\n");
     aglDestroyContext(data->agl_context);
     data->agl_context = NULL;
     GlopOpenWindow(data);
   } else {
-    printf("Currently windowed, making fullscreen\n");
+    //printf("Currently windowed, making fullscreen\n");
     DisposeWindow(data->window);
     aglDestroyContext(data->agl_context);
     GlopEnterFullScreen(data);
@@ -1048,9 +1048,9 @@ void Os::SetWindowSize(OsWindowData *window, int width, int height) {
 
 vector<Os::KeyEvent> Os::GetInputEvents(OsWindowData *window) {
   vector<Os::KeyEvent> ret;
-  printf("RawEvents: %d\n", raw_events.size());
+  //printf("RawEvents: %d\n", raw_events.size());
   for (int i = 0; i < raw_events.size(); i++) {
-    LOGF("Event: %s : %f (%d)\n", raw_events[i].event.key.GetName().c_str(), raw_events[i].event.press_amount, raw_events[i].event.timestamp);
+    //LOGF("Event: %s : %f (%d)\n", raw_events[i].event.key.GetName().c_str(), raw_events[i].event.press_amount, raw_events[i].event.timestamp);
   }
   stable_sort(raw_events.begin(), raw_events.end());
   ret.reserve(raw_events.size());
@@ -1058,7 +1058,7 @@ vector<Os::KeyEvent> Os::GetInputEvents(OsWindowData *window) {
     ret.push_back(raw_events[i].event);
   }
   if (raw_events.size())
-  printf("------\n");
+  //printf("------\n");
   raw_events.resize(0);
   mouse_delta.x = 0;
   mouse_delta.y = 0;
@@ -1072,7 +1072,7 @@ vector<Os::KeyEvent> Os::GetInputEvents(OsWindowData *window) {
           false));
 //  printf("%f\n", last_time);
   for (int i = 0; i  < ret.size() - 1; i++) {
-    printf("Event: %s : %f\n", ret[i].key.GetName().c_str(), ret[i].press_amount);
+    //printf("Event: %s : %f\n", ret[i].key.GetName().c_str(), ret[i].press_amount);
   }
   return ret;
 }
