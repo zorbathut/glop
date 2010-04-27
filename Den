@@ -44,7 +44,7 @@ do
     table.insert(glop_filenames, "Sound")
     
     executable_extension = ".exe"
-    fmodex_path = "Glop/source/third_party/system_cygwin/lib/libfmodex.a"
+    fmodex_path = "Glop/third_party/system_cygwin/lib/libfmodex.a"
     
     deploy_paths.lib_name = "libGlop.a"
   elseif local_os == "Darwin" then
@@ -61,14 +61,14 @@ do
     table.insert(glop_filenames, "Sound")
     
     executable_extension = "app"  -- much of this needs to be redesigned
-    fmodex_path = "Glop/source/third_party/system_osx/lib/libfmodex.dylib"
+    fmodex_path = "Glop/third_party/system_osx/lib/libfmodex.dylib"
     
     deploy_paths.lib_name = "Glop"
   elseif local_os == "iphone_sim" then
     local_os = "iphone_sim"
     
     ursa.token.rule{"CC", nil, function () return "/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/bin/g++" end}
-    ursa.token.rule{"CXXFLAGS_BASE", nil, function () return "-D__IPHONE_OS_VERSION_MIN_REQUIRED=30000 -arch i386 -isysroot /Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator3.0.sdk -mmacosx-version-min=10.5 -DIPHONE -IGlop/source" end}
+    ursa.token.rule{"CXXFLAGS_BASE", nil, function () return "-D__IPHONE_OS_VERSION_MIN_REQUIRED=30000 -arch i386 -isysroot /Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator3.0.sdk -mmacosx-version-min=10.5 -DIPHONE -IGlop" end}
     
     ursa.token.rule{"LIBCC", nil, function () return "/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/bin/gcc" end}
     ursa.token.rule{"LIBCFLAGS_BASE", nil, function () return "-arch i386 -isysroot /Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator3.0.sdk -mmacosx-version-min=10.5" end}
@@ -87,7 +87,7 @@ do
     local_os = "iphone_dev"
     
     ursa.token.rule{"CC", nil, function () return "/Developer/Platforms/iPhoneOS.platform/Developer/usr/bin/gcc-4.2" end}
-    ursa.token.rule{"CXXFLAGS", nil, function () return "-D__IPHONE_OS_VERSION_MIN_REQUIRED=30000 -arch armv6 -isysroot /Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS3.1.2.sdk -DIPHONE -IGlop/source" end}
+    ursa.token.rule{"CXXFLAGS", nil, function () return "-D__IPHONE_OS_VERSION_MIN_REQUIRED=30000 -arch armv6 -isysroot /Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS3.1.2.sdk -DIPHONE -IGlop" end}
     ursa.token.rule{"LDFLAGS", nil, function () return "-arch armv6 -isysroot /Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS3.1.2.sdk -framework Foundation -framework UIKit -framework OpenGLES -framework QuartzCore -framework AVFoundation -ljpeg6b -lfreetype235 -lpng -lz" end}
     
     table.insert(glop_filenames_objcpp, "OsIphone")
@@ -109,7 +109,7 @@ do
   deploy_paths.lib = release_prefix .. "/lib/" .. deploy_paths.lib_name
 end
 
-ursa.token.rule{"CXXFLAGS", "#CXXFLAGS_BASE", function () return ursa.token{"CXXFLAGS_BASE"} .. " -Ibuild/" .. local_os .. "/libs_complete/include -IGlop/source -I. -g" end}
+ursa.token.rule{"CXXFLAGS", "#CXXFLAGS_BASE", function () return ursa.token{"CXXFLAGS_BASE"} .. " -Ibuild/" .. local_os .. "/libs_complete/include -IGlop -I. -g" end}
 
 ursa.token.rule{"LIBCFLAGS", "#LIBCFLAGS_BASE", function () return ursa.token{"LIBCFLAGS_BASE"} .. " -I../../libs_complete/include" end}
 ursa.token.rule{"LIBLDFLAGS", "#LIBLDFLAGS_BASE", function () return ursa.token{"LIBLDFLAGS_BASE"} end}
@@ -120,7 +120,7 @@ local final_libs = {}
 -- first we do zlib
 local zlib = {} -- filled with everything needed to consider "zlib" to be functional
 do
-  local zlib_dir = "Glop/source/third_party/zlib-1.2.3"
+  local zlib_dir = "Glop/third_party/zlib-1.2.3"
   
   ursa.token.rule{"zlib files", nil, ("cd %s && find . -type f | sed s*\\\\./**"):format(zlib_dir)}  -- we are assuming this isn't changing
   local zlib_files = {}
@@ -141,7 +141,7 @@ end
 -- libpng next
 local libpng = {} -- filled with everything needed to consider "libpng" to be functional
 do
-  local libpng_dir = "Glop/source/third_party/libpng-1.4.1"
+  local libpng_dir = "Glop/third_party/libpng-1.4.1"
   
   ursa.token.rule{"libpng files", nil, ("cd %s && find . -type f | sed s*\\\\./**"):format(libpng_dir)}  -- we are assuming this isn't changing
   local libpng_files = {}
@@ -162,7 +162,7 @@ end
 -- libjpeg next . . . ish
 local libjpeg = {} -- filled with everything needed to consider "libjpeg" to be functional
 do
-  local libjpeg_dir = "Glop/source/third_party/jpeg-8a"
+  local libjpeg_dir = "Glop/third_party/jpeg-8a"
   
   ursa.token.rule{"libjpeg files", nil, ("cd %s && find . -type f | sed s*\\\\./**"):format(libjpeg_dir)}  -- we are assuming this isn't changing
   local libjpeg_files = {}
@@ -184,7 +184,7 @@ end
 -- and freetype last, whatever last means
 local libfreetype = {} -- filled with everything needed to consider "libfreetype" to be functional
 do
-  local libfreetype_dir = "Glop/source/third_party/freetype-2.3.12"
+  local libfreetype_dir = "Glop/third_party/freetype-2.3.12"
   
   ursa.token.rule{"libfreetype files", nil, ("cd %s && find . -type f | sed s*\\\\./**"):format(libfreetype_dir)}  -- we are assuming this isn't changing
   local libfreetype_files = {}
@@ -211,7 +211,7 @@ end
 -- we have our "core libraries"
 local core = {}
 do
-  local core_dir = "Glop/source/third_party/system_" .. local_os
+  local core_dir = "Glop/third_party/system_" .. local_os
   
   ursa.token.rule{"core files", nil, ("(cd %s && find . -type f | sed s*\\\\./**) || true"):format(core_dir)}  -- we are assuming this isn't changing
   local libjpeg_files = {}
@@ -242,7 +242,7 @@ end
 -- build the source files
 local objects = {}
 for _, file in ipairs(glop_filenames) do
-  local cpp = "Glop/source/" .. file .. ".cpp"
+  local cpp = "Glop/" .. file .. ".cpp"
   local o = build_prefix .. "/Glop/" .. file .. ".o"
   local depend = "Glop/" .. file .. " dependencies"
   
@@ -250,7 +250,7 @@ for _, file in ipairs(glop_filenames) do
   table.insert(objects, ursa.rule{o, ursa.util.token_deferred{depend}, ursa.util.system_template{("#CC -O2 #CXXFLAGS -o %s -c %s"):format(o, cpp)}})
 end
 for _, file in ipairs(glop_filenames_objcpp) do
-  local cpp = "Glop/source/" .. file .. ".mm"
+  local cpp = "Glop/" .. file .. ".mm"
   local o = build_prefix .. "/Glop/" .. file .. ".o"
   local depend = "Glop/" .. file .. " dependencies"
   
@@ -262,9 +262,9 @@ local lib = nil
 local headers = {libs}
 
 -- mirror source files into the appropriate build directory
-ursa.token.rule{"headers", nil, "cd Glop/source && find . -type f | grep -v third_party | sed s*\\\\./** | grep \\.h$"}
+ursa.token.rule{"headers", nil, "cd Glop && find . -type f | grep -v third_party | sed s*\\\\./** | grep \\.h$"}
 for k in ursa.token{"headers"}:gmatch("[^%s]+") do
-  table.insert(headers, ursa.rule{release_prefix .. "/include/Glop/" .. k, "Glop/source/" .. k, ursa.util.copy{}})
+  table.insert(headers, ursa.rule{release_prefix .. "/include/Glop/" .. k, "Glop/" .. k, ursa.util.copy{}})
 end
 
 -- build the glop sublibraries
