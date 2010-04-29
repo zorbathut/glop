@@ -122,7 +122,8 @@ local zlib = {} -- filled with everything needed to consider "zlib" to be functi
 do
   local zlib_dir = "Glop/third_party/zlib-1.2.3"
   
-  ursa.token.rule{"zlib files", nil, ("cd %s && find . -type f | sed s*\\\\./**"):format(zlib_dir)}  -- we are assuming this isn't changing
+  --ursa.token.rule{"zlib files", nil, ("cd %s && find . -type f | sed s*\\\\./**"):format(zlib_dir)}  -- we are assuming this isn't changing
+  ursa.token.rule{"zlib files", nil, ("cd %s && ls"):format(zlib_dir)}  -- we are assuming this isn't changing
   local zlib_files = {}
   for file in ursa.token{"zlib files"}:gmatch("([^\n]+)") do
     table.insert(zlib_files, ursa.rule{build_prefix .. "/libs/zlib/" .. file, zlib_dir .. "/" .. file, ursa.util.copy{}})
@@ -143,7 +144,8 @@ local libpng = {} -- filled with everything needed to consider "libpng" to be fu
 do
   local libpng_dir = "Glop/third_party/libpng-1.4.1"
   
-  ursa.token.rule{"libpng files", nil, ("cd %s && find . -type f | sed s*\\\\./**"):format(libpng_dir)}  -- we are assuming this isn't changing
+  --ursa.token.rule{"libpng files", nil, ("cd %s && find . -type f | sed s*\\\\./**"):format(libpng_dir)}  -- we are assuming this isn't changing
+  ursa.token.rule{"libpng files", nil, ("cd %s && ls"):format(libpng_dir)}  -- we are assuming this isn't changing
   local libpng_files = {}
   for file in ursa.token{"libpng files"}:gmatch("([^\n]+)") do
     table.insert(libpng_files, ursa.rule{build_prefix .. "/libs/libpng/" .. file, libpng_dir .. "/" .. file, ursa.util.copy{}})
@@ -186,7 +188,9 @@ local libfreetype = {} -- filled with everything needed to consider "libfreetype
 do
   local libfreetype_dir = "Glop/third_party/freetype-2.3.12"
   
-  ursa.token.rule{"libfreetype files", nil, ("cd %s && find . -type f | sed s*\\\\./**"):format(libfreetype_dir)}  -- we are assuming this isn't changing
+  --ursa.token.rule{"libfreetype files", nil, ("cd %s && find . -type f | sed s*\\\\./**"):format(libfreetype_dir)}  -- we are assuming this isn't changing
+  ursa.token.rule{"libfreetype files", nil, ("cd %s && ((find . -type f | grep -v builds | grep -v docs | sed s*\\\\./**) && find builds/ -maxdepth 1 -type f && find builds/unix/ -type f)"):format(libfreetype_dir)}  -- we are assuming this isn't changing
+  
   local libfreetype_files = {}
   for file in ursa.token{"libfreetype files"}:gmatch("([^\n]+)") do
     if file == "builds/unix/unix-def.in" then
