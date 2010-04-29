@@ -123,7 +123,7 @@ do
   local zlib_dir = "Glop/third_party/zlib-1.2.3"
   
   --ursa.token.rule{"zlib files", nil, ("cd %s && find . -type f | sed s*\\\\./**"):format(zlib_dir)}  -- we are assuming this isn't changing
-  ursa.token.rule{"zlib files", nil, ("cd %s && ls"):format(zlib_dir)}  -- we are assuming this isn't changing
+  ursa.token.rule{"zlib files", nil, ("cd %s && find . -maxdepth 1 -type f | sed s*\\\\./**"):format(zlib_dir)}  -- we are assuming this isn't changing
   local zlib_files = {}
   for file in ursa.token{"zlib files"}:gmatch("([^\n]+)") do
     table.insert(zlib_files, ursa.rule{build_prefix .. "/libs/zlib/" .. file, zlib_dir .. "/" .. file, ursa.util.copy{}})
@@ -145,7 +145,7 @@ do
   local libpng_dir = "Glop/third_party/libpng-1.4.1"
   
   --ursa.token.rule{"libpng files", nil, ("cd %s && find . -type f | sed s*\\\\./**"):format(libpng_dir)}  -- we are assuming this isn't changing
-  ursa.token.rule{"libpng files", nil, ("cd %s && ls"):format(libpng_dir)}  -- we are assuming this isn't changing
+  ursa.token.rule{"libpng files", nil, ("cd %s && find . -maxdepth 1 -type f | sed s*\\\\./**"):format(libpng_dir)}  -- we are assuming this isn't changing
   local libpng_files = {}
   for file in ursa.token{"libpng files"}:gmatch("([^\n]+)") do
     table.insert(libpng_files, ursa.rule{build_prefix .. "/libs/libpng/" .. file, libpng_dir .. "/" .. file, ursa.util.copy{}})
