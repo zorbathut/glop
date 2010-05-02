@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
+#include <cstdio>
 #include <stdarg.h>
 
 // Zero-dependency logging formatter and display message handler. These are used before
