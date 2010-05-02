@@ -7,46 +7,112 @@
 #include <map>
 #include <algorithm>
 #include <cstdio>
+
+#include <X11/Xlib.h>
+#include <GL/glx.h>
+
 using namespace std;
 
-#include <GL/gl.h>
+Display *display = NULL;
+int screen = 0;
+XIM xim = NULL;
+
 
 
 struct OsWindowData {
-  OsWindowData() { fprintf(stderr,"OsWindowData()\n"); }
-  ~OsWindowData() { fprintf(stderr, "~OsWindowData()\n"); }
+  OsWindowData() { window = NULL; }
+  ~OsWindowData() {}
+  
+  Window window;
+  GLXContext context;
 };
 
 
 void Os::Init() {
-  fprintf(stderr,"Os::Init()\n");
+  display = XOpenDisplay(NULL);
+  ASSERT(display);
+  
+  screen = DefaultScreen(display);
+  
+  xim = XOpenIM(display, NULL, NULL, NULL);
+  ASSERT(xim);
 }
-
 void Os::ShutDown() {
-  fprintf(stderr,"Os::ShutDown()\n");
+  XCloseIM(xim);
+  XCloseDisplay(display);
 }
 
-void Os::Think() {
+Bool EventTester(Display *display, XEvent *event, XPointer arg) {
+  return true; // hurrr
 }
-
+void Os::Think() { } // we don't actually do anything here
 void Os::WindowThink(OsWindowData* data) {
+  XEvent event;
+  while(XCheckIfEvent(display, &event, &EventTester, NULL)) {
+    LOGF("Event incoming!\n");
+  }
 }
 
 
-OsWindowData* Os::CreateWindow(
-    const string& title,
-    int x,
-    int y,
-    int width,
-    int height,
-    bool full_screen,
-    short stencil_bits,
-    const Image* icon,
-    bool is_resizable) {
-  return new OsWindowData();
+OsWindowData* Os::CreateWindow(const string& title, int x, int y, int width, int height, bool full_screen, short stencil_bits, const Image* icon, bool is_resizable) {
+  OsWindowData *nw = new OsWindowData();
+  
+  // this is bad
+  if(x == -1) x = 100;
+  if(y == -1) y = 100;
+  
+  // I think there's a way to specify more of this but I'll be damned if I can find it
+  XVisualInfo vinfo_template;
+  vinfo_template.screen = screen;
+  int vinfo_ct;
+  XVisualInfo *visualinfo = XGetVisualInfo(display, VisualScreenMask, &vinfo_template, &vinfo_ct);
+  ASSERT(visualinfo);
+  ASSERT(vinfo_ct);
+  
+  XVisualInfo vinfo;
+  bool found = false;
+  for(int i = 0; i < vinfo_ct; i++) {
+    int use_gl, rgba, doublebuffer, red_size, green_size, blue_size, alpha_size;
+    glXGetConfig(display, &visualinfo[i], GLX_USE_GL, &use_gl);
+    glXGetConfig(display, &visualinfo[i], GLX_RGBA, &rgba);
+    glXGetConfig(display, &visualinfo[i], GLX_DOUBLEBUFFER, &doublebuffer);
+    glXGetConfig(display, &visualinfo[i], GLX_RED_SIZE, &red_size);
+    glXGetConfig(display, &visualinfo[i], GLX_GREEN_SIZE, &green_size);
+    glXGetConfig(display, &visualinfo[i], GLX_BLUE_SIZE, &blue_size);
+    glXGetConfig(display, &visualinfo[i], GLX_ALPHA_SIZE, &alpha_size);
+    //LOGF("%d %d %d %d %d %d %d", use_gl, rgba, doublebuffer, red_size, green_size, blue_size, alpha_size);
+    
+    
+    if(use_gl && rgba && doublebuffer && red_size == 8 && green_size == 8 && blue_size == 8 && alpha_size == 8) {
+      LOGF("Found something!");
+      found = true;
+      vinfo = visualinfo[i]; // I'm just going to hope the rest of the values are appropriate, because, really, who knows
+      break;
+    }
+  }
+  
+  ASSERT(found);
+  
+  nw->context = glXCreateContext(display, &vinfo, NULL, True);
+  ASSERT(nw->context);
+  
+  nw->window = XCreateWindow(display, RootWindow(display, screen), x, y, width, height, 0, vinfo.depth, InputOutput, vinfo.visual, 0, NULL); // I don't know if I need anything further here
+  
+  XStoreName(display, nw->window, title.c_str());
+  
+  XMapWindow(display, nw->window);
+  
+  while(true) {
+      WindowThink(nw);
+  }
+  
+  XFree(visualinfo);
+  
+  return nw;
 }
 
 void Os::SetCurrentContext(OsWindowData* data) {
+  glXMakeCurrent(display, data->window, data->context);
 }
 
 
