@@ -8,6 +8,8 @@
 #include <algorithm>
 #include <cstdio>
 
+#include <sys/time.h>
+
 #include <X11/Xlib.h>
 #include <GL/glx.h>
 
@@ -21,10 +23,15 @@ XIM xim = NULL;
 
 struct OsWindowData {
   OsWindowData() { window = NULL; }
-  ~OsWindowData() {}
+  ~OsWindowData() {
+    glXDestroyContext(display, context);
+    XDestroyIC(inputcontext);
+    XDestroyWindow(display, window);
+  }
   
   Window window;
   GLXContext context;
+  XIC inputcontext;
 };
 
 
@@ -41,6 +48,8 @@ void Os::ShutDown() {
   XCloseIM(xim);
   XCloseDisplay(display);
 }
+
+vector<Os::KeyEvent> events;
 
 Bool EventTester(Display *display, XEvent *event, XPointer arg) {
   return true; // hurrr
@@ -98,15 +107,18 @@ OsWindowData* Os::CreateWindow(const string& title, int x, int y, int width, int
   
   nw->window = XCreateWindow(display, RootWindow(display, screen), x, y, width, height, 0, vinfo.depth, InputOutput, vinfo.visual, 0, NULL); // I don't know if I need anything further here
   
-  XStoreName(display, nw->window, title.c_str());
+  SetTitle(nw, title);
+  
+  // I think in here is where we're meant to set window styles and stuff
+  
+  nw->inputcontext = XCreateIC(xim, XNInputStyle, XIMPreeditNothing | XIMStatusNothing, XNClientWindow, nw->window, XNFocusWindow, nw->window, NULL);
+  ASSERT(nw->inputcontext);
+  
+  XFree(visualinfo);
   
   XMapWindow(display, nw->window);
   
-  while(true) {
-      WindowThink(nw);
-  }
-  
-  XFree(visualinfo);
+  SetCurrentContext(nw);
   
   return nw;
 }
@@ -131,26 +143,29 @@ void Os::GetWindowFocusState(OsWindowData* data, bool* is_in_focus, bool* focus_
 }
 
 void Os::GetWindowPosition(const OsWindowData* data, int* x, int* y) {
-  *x = 0;
-  *y = 0;
+  XWindowAttributes attrs;
+  XGetWindowAttributes(display, data->window, &attrs);
+  *x = attrs.x;
+  *y = attrs.y;
 }
 
 void Os::GetWindowSize(const OsWindowData* data, int* width, int* height) {
-  fprintf(stderr, "Os::GetWindowSize(%p, %p, %p)\n", data, width, height);
-  *width  = 320;
-  *height = 200;
+  XWindowAttributes attrs;
+  XGetWindowAttributes(display, data->window, &attrs);
+  *width  = attrs.width;
+  *height = attrs.height;
 }
 
 void Os::SetTitle(OsWindowData* data, const string& title) {
-  fprintf(stderr, "Os::SetTitle(%p,%p)\n", data, title.c_str());
+  XStoreName(display, data->window, title.c_str());
 }
 
 void Os::SetIcon(OsWindowData *window, const Image *icon) {
-  fprintf(stderr, "Os::SetIcon(%p, %p)\n", window, icon);
+  fprintf(stderr, "Os::SetIcon(%p, %p)\n", window, icon); // TBI
 }
 
 void Os::SetWindowSize(OsWindowData *window, int width, int height) {
-  fprintf(stderr, "Os::SetWindowSize(%p, %d, %d)\n", window, width, height);
+  fprintf(stderr, "Os::SetWindowSize(%p, %d, %d)\n", window, width, height); // TBI
 }
 
 
@@ -160,20 +175,29 @@ void Os::SetWindowSize(OsWindowData *window, int width, int height) {
 // See Os.h
 
 vector<Os::KeyEvent> Os::GetInputEvents(OsWindowData *window) {
-  vector<Os::KeyEvent> ret;
+  vector<Os::KeyEvent> ret; // weeeeeeeeeeee
+  ret.swap(events);
+  
+  Window root, child;
+  int x, y, winx, winy;
+  unsigned int mask;
+  XQueryPointer(display, window->window, &root, &child, &x, &y, &winx, &winy, &mask);
+  
+  ret.push_back(Os::KeyEvent(GetTime(), x, y, mask & (1 << 4), mask & LockMask));
+  
   return ret;
 }
 
-void Os::SetMousePosition(int x, int y) {
+void Os::SetMousePosition(int x, int y) { // TBI
 }
 
-void Os::ShowMouseCursor(bool is_shown) {
+void Os::ShowMouseCursor(bool is_shown) { // TBI
 }
 
-void Os::RefreshJoysticks(OsWindowData *window) {
+void Os::RefreshJoysticks(OsWindowData *window) { // TBI
 }
 
-int Os::GetNumJoysticks(OsWindowData *window) {
+int Os::GetNumJoysticks(OsWindowData *window) { // TBI
   return 0;
 }
 
@@ -215,12 +239,12 @@ void Os::ReleaseMutex(OsMutex* mutex) {
 // Miscellaneous functions
 // =======================
 
-void Os::MessageBox(const string& title, const string& message) {
+void Os::MessageBox(const string& title, const string& message) { // TBI
   fprintf(stderr,"MessageBox [%s]: [%s]\n", title.c_str(), message.c_str());
 }
 
-vector<pair<int, int> > Os::GetFullScreenModes() {
-  return vector<pair<int, int> >(1,pair<int, int>(320,200));
+vector<pair<int, int> > Os::GetFullScreenModes() { // TBI
+  return vector<pair<int, int> >(1,pair<int, int>(640,480));
 }
 
 
@@ -229,35 +253,35 @@ void Os::Sleep(int t) {
 }
 
 int Os::GetTime() {
-  static int thetime = 0;
-  return thetime++;
+  return GetTimeMicro() / 1000;
 }
 long long Os::GetTimeMicro() {
-  static long long thetime = 0;
-  return thetime++;
+  struct timeval tv;
+  gettimeofday(&tv, NULL);
+  return (long long)tv.tv_sec * 1000000 + tv.tv_usec;
 }
 
 
 void Os::SwapBuffers(OsWindowData* data) {
-  fprintf(stderr,"OS::SwapBuffers()\n");
+  glXSwapBuffers(display, data->window);
 }
 
-int Os::GetRefreshRate() {
-  fprintf(stderr,"OS::GetRefreshRate()\n");
+int Os::GetRefreshRate() { // TBI
+  //fprintf(stderr,"OS::GetRefreshRate()\n");
   return 60;
 }
 
-void Os::EnableVSync(bool is_enable) {
+void Os::EnableVSync(bool is_enable) { // TBI
   fprintf(stderr,"OS::EnableVSync(%d)\n", is_enable);
 }
 
 
-vector<string> Os::ListFiles(const string &directory) {
+vector<string> Os::ListFiles(const string &directory) { // TBI
   fprintf(stderr,"OS::ListFiles(%s)\n", directory.c_str());
   return vector<string>();
 }
 
-vector<string> Os::ListSubdirectories(const string &directory) {
+vector<string> Os::ListSubdirectories(const string &directory) { // TBI
   fprintf(stderr,"OS::ListSubdirectories(%s)\n", directory.c_str());
   return vector<string>();
 }
