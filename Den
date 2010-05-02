@@ -15,8 +15,6 @@ local flags = {}
 local local_os
 local build_prefix
 
-local executable_extension
-
 local deploy_paths = {}
 
 local fmodex_path
@@ -43,7 +41,6 @@ do
     table.insert(glop_filenames, "OsWin32")
     table.insert(glop_filenames, "Sound")
     
-    executable_extension = ".exe"
     fmodex_path = "Glop/third_party/system_cygwin/lib/libfmodex.a"
     
     deploy_paths.lib_name = "libGlop.a"
@@ -60,10 +57,25 @@ do
     table.insert(glop_filenames, "OsMacOSX")
     table.insert(glop_filenames, "Sound")
     
-    executable_extension = "app"  -- much of this needs to be redesigned
     fmodex_path = "Glop/third_party/system_osx/lib/libfmodex.dylib"
     
     deploy_paths.lib_name = "Glop"
+  elseif local_os == "GNU/Linux" then
+    local_os = "linux"
+    
+    ursa.token.rule{"CC", nil, function () return "g++" end}
+    ursa.token.rule{"CXXFLAGS_BASE", nil, function () return "-m32 -DLINUX" end}
+    
+    ursa.token.rule{"LIBCC", nil, function () return "gcc" end}
+    ursa.token.rule{"LIBCFLAGS_BASE", nil, function () return "-m32" end}
+    ursa.token.rule{"LIBLDFLAGS_BASE", nil, function () return "-m32" end}
+    
+    table.insert(glop_filenames, "OsLinux")
+    table.insert(glop_filenames, "Sound")
+    
+    fmodex_path = "Glop/third_party/system_linux/lib/libfmodex.so"
+    
+    deploy_paths.lib_name = "libGlop.a"
   elseif local_os == "iphone_sim" then
     local_os = "iphone_sim"
     
@@ -80,8 +92,6 @@ do
     table.insert(glop_filenames_objcpp, "OsIphone_EAGLView")
     table.insert(glop_filenames_objcpp, "Sound_Iphone")
     
-    executable_extension = "app"
-    
     deploy_paths.lib_name = "Glop"
   elseif local_os == "iphone_dev" then
     local_os = "iphone_dev"
@@ -93,8 +103,6 @@ do
     table.insert(glop_filenames_objcpp, "OsIphone")
     table.insert(glop_filenames_objcpp, "OsIphone_EAGLView")
     table.insert(glop_filenames_objcpp, "Sound_Iphone")
-    
-    executable_extension = "app"
     
     deploy_paths.lib = "Glop.framework/Glop"
     deploy_paths.headers = "Glop.framework/Headers"
@@ -265,7 +273,7 @@ end
 local lib = nil
 local headers = {libs}
 
--- mirror source files into the appropriate build directory
+-- mirror headers into the appropriate build directory
 ursa.token.rule{"headers", nil, "cd Glop && find . -type f | grep -v third_party | sed s*\\\\./** | grep \\.h$"}
 for k in ursa.token{"headers"}:gmatch("[^%s]+") do
   table.insert(headers, ursa.rule{release_prefix .. "/include/Glop/" .. k, "Glop/" .. k, ursa.util.copy{}})

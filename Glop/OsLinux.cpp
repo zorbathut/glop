@@ -6,6 +6,7 @@
 #include <set>
 #include <map>
 #include <algorithm>
+#include <cstdio>
 using namespace std;
 
 #include <GL/gl.h>
@@ -163,6 +164,10 @@ void Os::Sleep(int t) {
 
 int Os::GetTime() {
   static int thetime = 0;
+  return thetime++;
+}
+long long Os::GetTimeMicro() {
+  static long long thetime = 0;
   return thetime++;
 }
 

@@ -6,8 +6,8 @@ extern "C" {
 }
 #include <cstdlib>
 #include <cstring>
-#include <setjmp.h>  // For LoadJpg error handling
 #include <png.h>
+#include <setjmp.h>  // For LoadJpg error handling
 
 #include <vector>
 
