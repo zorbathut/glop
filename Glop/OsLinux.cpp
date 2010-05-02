@@ -19,7 +19,14 @@ Display *display = NULL;
 int screen = 0;
 XIM xim = NULL;
 
-
+static long long gtm() {
+  struct timeval tv;
+  gettimeofday(&tv, NULL);
+  return (long long)tv.tv_sec * 1000000 + tv.tv_usec;
+}
+static int gt() {
+  return gtm() / 1000;
+}
 
 struct OsWindowData {
   OsWindowData() { window = NULL; }
@@ -50,6 +57,161 @@ void Os::ShutDown() {
 }
 
 vector<Os::KeyEvent> events;
+static bool SynthKey(const KeySym &sym, bool pushed, const XEvent &event, Window window, Os::KeyEvent *ev) {
+  // mostly ignored
+  Window root, child;
+  int x, y, winx, winy;
+  unsigned int mask;
+  XQueryPointer(display, window, &root, &child, &x, &y, &winx, &winy, &mask);
+  
+  KeySym throwaway_lower, key;
+  XConvertCase(sym, &throwaway_lower, &key);
+
+  GlopKey ki = 0;
+  switch(key) {
+    case XK_A: ki = tolower('A'); break;
+    case XK_B: ki = tolower('B'); break;
+    case XK_C: ki = tolower('C'); break;
+    case XK_D: ki = tolower('D'); break;
+    case XK_E: ki = tolower('E'); break;
+    case XK_F: ki = tolower('F'); break;
+    case XK_G: ki = tolower('G'); break;
+    case XK_H: ki = tolower('H'); break;
+    case XK_I: ki = tolower('I'); break;
+    case XK_J: ki = tolower('J'); break;
+    case XK_K: ki = tolower('K'); break;
+    case XK_L: ki = tolower('L'); break;
+    case XK_M: ki = tolower('M'); break;
+    case XK_N: ki = tolower('N'); break;
+    case XK_O: ki = tolower('O'); break;
+    case XK_P: ki = tolower('P'); break;
+    case XK_Q: ki = tolower('Q'); break;
+    case XK_R: ki = tolower('R'); break;
+    case XK_S: ki = tolower('S'); break;
+    case XK_T: ki = tolower('T'); break;
+    case XK_U: ki = tolower('U'); break;
+    case XK_V: ki = tolower('V'); break;
+    case XK_W: ki = tolower('W'); break;
+    case XK_X: ki = tolower('X'); break;
+    case XK_Y: ki = tolower('Y'); break;
+    case XK_Z: ki = tolower('Z'); break;
+    
+    case XK_0: ki = '0'; break;
+    case XK_1: ki = '1'; break;
+    case XK_2: ki = '2'; break;
+    case XK_3: ki = '3'; break;
+    case XK_4: ki = '4'; break;
+    case XK_5: ki = '5'; break;
+    case XK_6: ki = '6'; break;
+    case XK_7: ki = '7'; break;
+    case XK_8: ki = '8'; break;
+    case XK_9: ki = '9'; break;
+    
+    case XK_F1: ki = kKeyF1; break;
+    case XK_F2: ki = kKeyF2; break;
+    case XK_F3: ki = kKeyF3; break;
+    case XK_F4: ki = kKeyF4; break;
+    case XK_F5: ki = kKeyF5; break;
+    case XK_F6: ki = kKeyF6; break;
+    case XK_F7: ki = kKeyF7; break;
+    case XK_F8: ki = kKeyF8; break;
+    case XK_F9: ki = kKeyF9; break;
+    case XK_F10: ki = kKeyF10; break;
+    case XK_F11: ki = kKeyF11; break;
+    case XK_F12: ki = kKeyF12; break;
+    
+    case XK_KP_0: ki = kKeyPad0; break;
+    case XK_KP_1: ki = kKeyPad1; break;
+    case XK_KP_2: ki = kKeyPad2; break;
+    case XK_KP_3: ki = kKeyPad3; break;
+    case XK_KP_4: ki = kKeyPad4; break;
+    case XK_KP_5: ki = kKeyPad5; break;
+    case XK_KP_6: ki = kKeyPad6; break;
+    case XK_KP_7: ki = kKeyPad7; break;
+    case XK_KP_8: ki = kKeyPad8; break;
+    case XK_KP_9: ki = kKeyPad9; break;
+    
+    case XK_Left: ki = kKeyLeft; break;
+    case XK_Right: ki = kKeyRight; break;
+    case XK_Up: ki = kKeyUp; break;
+    case XK_Down: ki = kKeyDown; break;
+    
+    case XK_BackSpace: ki = kKeyBackspace; break;
+    case XK_Tab: ki = kKeyTab; break;
+    case XK_KP_Enter: ki = kKeyPadEnter; break;
+    case XK_Return: ki = kKeyReturn; break;
+    case XK_Escape: ki = kKeyEscape; break;
+    
+    case XK_Shift_L: ki = kKeyLeftShift; break;
+    case XK_Shift_R: ki = kKeyRightShift; break;
+    case XK_Control_L: ki = kKeyLeftControl; break;
+    case XK_Control_R: ki = kKeyRightControl; break;
+    case XK_Alt_L: ki = kKeyLeftAlt; break;
+    case XK_Alt_R: ki = kKeyRightAlt; break;
+    case XK_Super_L: ki = kKeyLeftGui; break;
+    case XK_Super_R: ki = kKeyRightGui; break;
+    
+    case XK_KP_Divide: ki = kKeyPadDivide; break;
+    case XK_KP_Multiply: ki = kKeyPadMultiply; break;
+    case XK_KP_Subtract: ki = kKeyPadSubtract; break;
+    case XK_KP_Add: ki = kKeyPadAdd; break;
+    
+    case XK_dead_grave: ki = '`'; break;
+    case XK_minus: ki = '-'; break;
+    case XK_equal: ki = '='; break;
+    case XK_bracketleft: ki = '['; break;
+    case XK_bracketright: ki = ']'; break;
+    case XK_backslash: ki = '\\'; break;
+    case XK_semicolon: ki = ';'; break;
+    case XK_dead_acute: ki = '\''; break;
+    case XK_comma: ki = ','; break;
+    case XK_period: ki = '.'; break;
+    case XK_slash: ki = '/'; break;
+    case XK_space: ki = '/'; break;
+  }
+  
+  if(ki == 0)
+    return false;
+  
+  *ev = Os::KeyEvent(ki, pushed, gt(), winx, winy, event.xkey.state & (1 << 4), event.xkey.state & LockMask);
+  return true;
+}
+static bool SynthButton(int button, bool pushed, const XEvent &event, Window window, Os::KeyEvent *ev) {
+  // mostly ignored
+  Window root, child;
+  int x, y, winx, winy;
+  unsigned int mask;
+  XQueryPointer(display, window, &root, &child, &x, &y, &winx, &winy, &mask);
+  
+  GlopKey ki;
+  if(button == Button1)
+    ki = kMouseLButton;
+  else if(button == Button2)
+    ki = kMouseMButton;
+  else if(button == Button3)
+    ki = kMouseRButton;
+  /*
+  else if(button == Button4)
+    ki = kMouseWheelUp;   // these might be inverted so they're disabled for now
+  else if(button == Button5)
+    ki = kMouseWheelDown;*/
+  else
+    return false;
+  
+  *ev = Os::KeyEvent(ki, pushed, gt(), winx, winy, event.xkey.state & (1 << 4), event.xkey.state & LockMask);
+  return true;
+}
+
+static bool SynthMotion(int dx, int dy, const XEvent &event, Window window, Os::KeyEvent *ev) {
+  // mostly ignored
+  Window root, child;
+  int x, y, winx, winy;
+  unsigned int mask;
+  XQueryPointer(display, window, &root, &child, &x, &y, &winx, &winy, &mask);
+  
+  *ev = Os::KeyEvent(dx, dy, gt(), winx, winy, event.xkey.state & (1 << 4), event.xkey.state & LockMask);
+  return true;
+}
 
 Bool EventTester(Display *display, XEvent *event, XPointer arg) {
   return true; // hurrr
@@ -58,7 +220,57 @@ void Os::Think() { } // we don't actually do anything here
 void Os::WindowThink(OsWindowData* data) {
   XEvent event;
   while(XCheckIfEvent(display, &event, &EventTester, NULL)) {
-    LOGF("Event incoming!\n");
+    Os::KeyEvent ev(0, 0, 0, 0, 0); // fffff
+    switch(event.type) {
+      case KeyPress: {
+        LOGF("keypress");
+        char buf[2];
+        KeySym sym;
+        XComposeStatus status;
+        
+        XLookupString(&event.xkey, buf, sizeof(buf), &sym, &status);
+        
+        if(SynthKey(sym, true, event, data->window, &ev))
+          events.push_back(ev);
+        break;
+      }
+      
+      case KeyRelease: {
+        char buf[2];
+        KeySym sym;
+        XComposeStatus status;
+        
+        XLookupString(&event.xkey, buf, sizeof(buf), &sym, &status);
+        
+        if(SynthKey(sym, false, event, data->window, &ev))
+          events.push_back(ev);
+        break;
+      }
+      
+      case ButtonPress:
+        LOGF("buttonpress");
+        if(SynthButton(event.xbutton.button, true, event, data->window, &ev))
+          events.push_back(ev);
+        break;
+      
+      case ButtonRelease:
+        if(SynthButton(event.xbutton.button, false, event, data->window, &ev))
+          events.push_back(ev);
+        break;
+
+      case MotionNotify:
+        if(SynthMotion(event.xmotion.x, event.xmotion.y, event, data->window, &ev))
+          events.push_back(ev);
+        break;
+      
+      case FocusIn:
+        XSetICFocus(data->inputcontext);
+        break;
+      
+      case FocusOut:
+        XUnsetICFocus(data->inputcontext);
+        break;
+    }
   }
 }
 
@@ -105,7 +317,10 @@ OsWindowData* Os::CreateWindow(const string& title, int x, int y, int width, int
   nw->context = glXCreateContext(display, &vinfo, NULL, True);
   ASSERT(nw->context);
   
-  nw->window = XCreateWindow(display, RootWindow(display, screen), x, y, width, height, 0, vinfo.depth, InputOutput, vinfo.visual, 0, NULL); // I don't know if I need anything further here
+  // Define the window attributes
+  XSetWindowAttributes attribs;
+  attribs.event_mask = KeyPressMask | KeyReleaseMask | ButtonPressMask | ButtonReleaseMask | ButtonMotionMask | PointerMotionMask | FocusChangeMask;
+  nw->window = XCreateWindow(display, RootWindow(display, screen), x, y, width, height, 0, vinfo.depth, InputOutput, vinfo.visual, CWEventMask, &attribs); // I don't know if I need anything further here
   
   SetTitle(nw, title);
   
@@ -183,7 +398,10 @@ vector<Os::KeyEvent> Os::GetInputEvents(OsWindowData *window) {
   unsigned int mask;
   XQueryPointer(display, window->window, &root, &child, &x, &y, &winx, &winy, &mask);
   
-  ret.push_back(Os::KeyEvent(GetTime(), x, y, mask & (1 << 4), mask & LockMask));
+  if(ret.size())
+    LOGF("%d events\n", ret.size());
+  
+  ret.push_back(Os::KeyEvent(gt(), winx, winy, mask & (1 << 4), mask & LockMask));
   
   return ret;
 }
@@ -253,12 +471,10 @@ void Os::Sleep(int t) {
 }
 
 int Os::GetTime() {
-  return GetTimeMicro() / 1000;
+  return gt();
 }
 long long Os::GetTimeMicro() {
-  struct timeval tv;
-  gettimeofday(&tv, NULL);
-  return (long long)tv.tv_sec * 1000000 + tv.tv_usec;
+  return gtm();
 }
 
 
