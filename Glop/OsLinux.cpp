@@ -198,6 +198,8 @@ static bool SynthButton(int button, bool pushed, const XEvent &event, Window win
   else
     return false;
   
+  LOGF("but abs %d/%d, win %d/%d", x, y, winx, winy);
+    
   *ev = Os::KeyEvent(ki, pushed, gt(), winx, winy, event.xkey.state & (1 << 4), event.xkey.state & LockMask);
   return true;
 }
@@ -322,6 +324,72 @@ OsWindowData* Os::CreateWindow(const string& title, int x, int y, int width, int
   attribs.event_mask = KeyPressMask | KeyReleaseMask | ButtonPressMask | ButtonReleaseMask | ButtonMotionMask | PointerMotionMask | FocusChangeMask;
   nw->window = XCreateWindow(display, RootWindow(display, screen), x, y, width, height, 0, vinfo.depth, InputOutput, vinfo.visual, CWEventMask, &attribs); // I don't know if I need anything further here
   
+  {
+    Atom WMHintsAtom = XInternAtom(display, "_MOTIF_WM_HINTS", false);
+    if (WMHintsAtom) {
+      static const unsigned long MWM_HINTS_FUNCTIONS   = 1 << 0;
+      static const unsigned long MWM_HINTS_DECORATIONS = 1 << 1;
+
+      //static const unsigned long MWM_DECOR_ALL         = 1 << 0;
+      static const unsigned long MWM_DECOR_BORDER      = 1 << 1;
+      static const unsigned long MWM_DECOR_RESIZEH     = 1 << 2;
+      static const unsigned long MWM_DECOR_TITLE       = 1 << 3;
+      static const unsigned long MWM_DECOR_MENU        = 1 << 4;
+      static const unsigned long MWM_DECOR_MINIMIZE    = 1 << 5;
+      static const unsigned long MWM_DECOR_MAXIMIZE    = 1 << 6;
+
+      //static const unsigned long MWM_FUNC_ALL          = 1 << 0;
+      static const unsigned long MWM_FUNC_RESIZE       = 1 << 1;
+      static const unsigned long MWM_FUNC_MOVE         = 1 << 2;
+      static const unsigned long MWM_FUNC_MINIMIZE     = 1 << 3;
+      static const unsigned long MWM_FUNC_MAXIMIZE     = 1 << 4;
+      static const unsigned long MWM_FUNC_CLOSE        = 1 << 5;
+
+      struct WMHints
+      {
+          unsigned long Flags;
+          unsigned long Functions;
+          unsigned long Decorations;
+          long          InputMode;
+          unsigned long State;
+      };
+
+      WMHints Hints;
+      Hints.Flags       = MWM_HINTS_FUNCTIONS | MWM_HINTS_DECORATIONS;
+      Hints.Decorations = 0;
+      Hints.Functions   = 0;
+
+      if (true)
+      {
+          Hints.Decorations |= MWM_DECOR_BORDER | MWM_DECOR_TITLE | MWM_DECOR_MINIMIZE /*| MWM_DECOR_MENU*/;
+          Hints.Functions   |= MWM_FUNC_MOVE | MWM_FUNC_MINIMIZE;
+      }
+      if (false)
+      {
+          Hints.Decorations |= MWM_DECOR_MAXIMIZE | MWM_DECOR_RESIZEH;
+          Hints.Functions   |= MWM_FUNC_MAXIMIZE | MWM_FUNC_RESIZE;
+      }
+      if (true)
+      {
+          Hints.Decorations |= 0;
+          Hints.Functions   |= MWM_FUNC_CLOSE;
+      }
+
+      const unsigned char* HintsPtr = reinterpret_cast<const unsigned char*>(&Hints);
+      XChangeProperty(display, nw->window, WMHintsAtom, WMHintsAtom, 32, PropModeReplace, HintsPtr, 5);
+    }
+    
+    // This is a hack to force some windows managers to disable resizing
+    if(true)
+    {
+        XSizeHints XSizeHints;
+        XSizeHints.flags      = PMinSize | PMaxSize;
+        XSizeHints.min_width  = XSizeHints.max_width  = width;
+        XSizeHints.min_height = XSizeHints.max_height = height;
+        XSetWMNormalHints(display, nw->window, &XSizeHints); 
+    }
+  }
+  
   SetTitle(nw, title);
   
   // I think in here is where we're meant to set window styles and stuff
@@ -358,10 +426,12 @@ void Os::GetWindowFocusState(OsWindowData* data, bool* is_in_focus, bool* focus_
 }
 
 void Os::GetWindowPosition(const OsWindowData* data, int* x, int* y) {
-  XWindowAttributes attrs;
-  XGetWindowAttributes(display, data->window, &attrs);
-  *x = attrs.x;
-  *y = attrs.y;
+  //XWindowAttributes attrs;
+  //XGetWindowAttributes(display, data->window, &attrs);
+  //*x = attrs.x;
+  //*y = attrs.y;
+  *x = 0;
+  *y = 0; // lol
 }
 
 void Os::GetWindowSize(const OsWindowData* data, int* width, int* height) {
@@ -400,6 +470,8 @@ vector<Os::KeyEvent> Os::GetInputEvents(OsWindowData *window) {
   
   if(ret.size())
     LOGF("%d events\n", ret.size());
+  
+  LOGF("lup abs %d/%d, win %d/%d", x, y, winx, winy);
   
   ret.push_back(Os::KeyEvent(gt(), winx, winy, mask & (1 << 4), mask & LockMask));
   
