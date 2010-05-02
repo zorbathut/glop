@@ -362,8 +362,8 @@ LRESULT CALLBACK HandleMessage(HWND window_handle, UINT message, WPARAM wparam, 
       window()->Destroy();  // this is certainly not going to fail hideously
       return 0;
     case WM_MOVE:
-      os_window->x = lparam1;
-      os_window->y = lparam2;
+      os_window->x = (signed short)lparam1;
+      os_window->y = (signed short)lparam2;
       break;
     case WM_SIZE:
       // Set the resolution if a full-screen window was alt-tabbed into.
