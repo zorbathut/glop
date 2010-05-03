@@ -42,6 +42,7 @@ do
     table.insert(glop_filenames, "Sound")
     
     fmodex_path = "Glop/third_party/system_cygwin/lib/libfmodex.a"
+    fmodex_copy = true
     
     deploy_paths.lib_name = "libGlop.a"
   elseif local_os == "Darwin" then
@@ -283,7 +284,9 @@ end
 -- build the glop sublibraries
 local outlibs = {}
 for k, v in pairs(final_libs) do
-  outlibs[k] = ursa.rule{release_prefix .. "/lib/" .. k .. ".a", v, ursa.util.copy{}}
+  local items = ursa.relative_from{v}
+  if type(items) == "table" then items = items[1] end
+  outlibs[k] = ursa.rule{release_prefix .. "/lib/" .. k .. "." .. items:match(".*%.(%a+)$"), v, ursa.util.copy{}}
 end
 
 -- build the glop library
