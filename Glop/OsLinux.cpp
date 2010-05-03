@@ -178,7 +178,7 @@ static bool SynthKey(const KeySym &sym, bool pushed, const XEvent &event, Window
   if(ki == 0)
     return false;
   
-  *ev = Os::KeyEvent(ki, pushed, gt(), winx, winy, event.xkey.state & (1 << 4), event.xkey.state & LockMask);
+  *ev = Os::KeyEvent(ki, pushed, gt(), x, y, event.xkey.state & (1 << 4), event.xkey.state & LockMask);
   return true;
 }
 static bool SynthButton(int button, bool pushed, const XEvent &event, Window window, Os::KeyEvent *ev) {
@@ -203,7 +203,7 @@ static bool SynthButton(int button, bool pushed, const XEvent &event, Window win
   else
     return false;
     
-  *ev = Os::KeyEvent(ki, pushed, gt(), winx, winy, event.xkey.state & (1 << 4), event.xkey.state & LockMask);
+  *ev = Os::KeyEvent(ki, pushed, gt(), x, y, event.xkey.state & (1 << 4), event.xkey.state & LockMask);
   return true;
 }
 
@@ -214,7 +214,7 @@ static bool SynthMotion(int dx, int dy, const XEvent &event, Window window, Os::
   unsigned int mask;
   XQueryPointer(display, window, &root, &child, &x, &y, &winx, &winy, &mask);
   
-  *ev = Os::KeyEvent(dx, dy, gt(), winx, winy, event.xkey.state & (1 << 4), event.xkey.state & LockMask);
+  *ev = Os::KeyEvent(dx, dy, gt(), x, y, event.xkey.state & (1 << 4), event.xkey.state & LockMask);
   return true;
 }
 
@@ -479,10 +479,20 @@ void Os::GetWindowFocusState(OsWindowData* data, bool* is_in_focus, bool* focus_
 void Os::GetWindowPosition(const OsWindowData* data, int* x, int* y) {
   //XWindowAttributes attrs;
   //XGetWindowAttributes(display, data->window, &attrs);
-  //*x = attrs.x;
-  //*y = attrs.y;
-  *x = 0;
-  *y = 0; // lol
+  // You'd think these functions would do something useful. Problem is, they work relative to the parent window. The parent window is the window that contains the titlebar, nothing more.
+  
+  // What we really want to do is to get the absolute offset. The easiest way, as stupid as it is, is to get the cursor position - both relative to window and to world - and subtract.
+  
+  // The irony, of course, is that Glop only cares so it can then subtract *again* and get the exact data that we're throwing away right now.
+  
+  // mostly ignored
+  Window root, child;
+  int tx, ty, winx, winy;
+  unsigned int mask;
+  XQueryPointer(display, data->window, &root, &child, &tx, &ty, &winx, &winy, &mask);
+  
+  *x = tx - winx;
+  *y = ty - winy;
 }
 
 void Os::GetWindowSize(const OsWindowData* data, int* width, int* height) {
@@ -519,7 +529,7 @@ vector<Os::KeyEvent> Os::GetInputEvents(OsWindowData *window) {
   unsigned int mask;
   XQueryPointer(display, window->window, &root, &child, &x, &y, &winx, &winy, &mask);
   
-  ret.push_back(Os::KeyEvent(gt(), winx, winy, mask & (1 << 4), mask & LockMask));
+  ret.push_back(Os::KeyEvent(gt(), x, y, mask & (1 << 4), mask & LockMask));
   
   return ret;
 }
