@@ -13,11 +13,14 @@
 #include <X11/Xlib.h>
 #include <GL/glx.h>
 
+#include "OsLinux_TerribleXPassthrough.h"
+
 using namespace std;
 
 Display *display = NULL;
 int screen = 0;
 XIM xim = NULL;
+Atom close_atom;
 
 static long long gtm() {
   struct timeval tv;
@@ -50,6 +53,8 @@ void Os::Init() {
   
   xim = XOpenIM(display, NULL, NULL, NULL);
   ASSERT(xim);
+  
+  close_atom = XInternAtom(display, "WM_DELETE_WINDOW", false);
 }
 void Os::ShutDown() {
   XCloseIM(xim);
@@ -197,8 +202,6 @@ static bool SynthButton(int button, bool pushed, const XEvent &event, Window win
     ki = kMouseWheelDown;*/
   else
     return false;
-  
-  LOGF("but abs %d/%d, win %d/%d", x, y, winx, winy);
     
   *ev = Os::KeyEvent(ki, pushed, gt(), winx, winy, event.xkey.state & (1 << 4), event.xkey.state & LockMask);
   return true;
@@ -218,8 +221,11 @@ static bool SynthMotion(int dx, int dy, const XEvent &event, Window window, Os::
 Bool EventTester(Display *display, XEvent *event, XPointer arg) {
   return true; // hurrr
 }
-void Os::Think() { } // we don't actually do anything here
-void Os::WindowThink(OsWindowData* data) {
+OsWindowData *windowdata = NULL;
+void Os::Think() {
+  if(!windowdata) return;
+  
+  OsWindowData *data = windowdata;
   XEvent event;
   int last_botched_release = -1;
   int last_botched_time = -1;
@@ -252,7 +258,6 @@ void Os::WindowThink(OsWindowData* data) {
     Os::KeyEvent ev(0, 0, 0, 0, 0); // fffff
     switch(event.type) {
       case KeyPress: {
-        LOGF("keypress");
         char buf[2];
         KeySym sym;
         XComposeStatus status;
@@ -277,7 +282,6 @@ void Os::WindowThink(OsWindowData* data) {
       }
       
       case ButtonPress:
-        LOGF("buttonpress");
         if(SynthButton(event.xbutton.button, true, event, data->window, &ev))
           events.push_back(ev);
         break;
@@ -299,13 +303,28 @@ void Os::WindowThink(OsWindowData* data) {
       case FocusOut:
         XUnsetICFocus(data->inputcontext);
         break;
+      
+      case DestroyNotify:
+        WindowDashDestroy(); // ffffff
+        LOGF("destroed\n");
+        return;
+    
+      case ClientMessage :
+        if(event.xclient.format == 32 && event.xclient.data.l[0] == static_cast<long>(close_atom)) {
+            WindowDashDestroy();
+            LOGF("destroj\n");
+            return;
+        }
     }
   }
 }
+void Os::WindowThink(OsWindowData* data) { }
 
 
 OsWindowData* Os::CreateWindow(const string& title, int x, int y, int width, int height, bool full_screen, short stencil_bits, const Image* icon, bool is_resizable) {
   OsWindowData *nw = new OsWindowData();
+  ASSERT(!windowdata);
+  windowdata = nw;
   
   // this is bad
   if(x == -1) x = 100;
@@ -348,7 +367,11 @@ OsWindowData* Os::CreateWindow(const string& title, int x, int y, int width, int
   
   // Define the window attributes
   XSetWindowAttributes attribs;
-  attribs.event_mask = KeyPressMask | KeyReleaseMask | ButtonPressMask | ButtonReleaseMask | ButtonMotionMask | PointerMotionMask | FocusChangeMask;
+  attribs.event_mask = KeyPressMask | KeyReleaseMask | ButtonPressMask | ButtonReleaseMask | ButtonMotionMask | PointerMotionMask | FocusChangeMask |
+  
+  FocusChangeMask | ButtonPressMask | ButtonReleaseMask | ButtonMotionMask |
+                                                    PointerMotionMask | KeyPressMask | KeyReleaseMask | StructureNotifyMask |
+                                                    EnterWindowMask | LeaveWindowMask;
   nw->window = XCreateWindow(display, RootWindow(display, screen), x, y, width, height, 0, vinfo.depth, InputOutput, vinfo.visual, CWEventMask, &attribs); // I don't know if I need anything further here
   
   {
@@ -419,6 +442,7 @@ OsWindowData* Os::CreateWindow(const string& title, int x, int y, int width, int
   
   SetTitle(nw, title);
   
+  XSetWMProtocols(display, nw->window, &close_atom, 1);
   // I think in here is where we're meant to set window styles and stuff
   
   nw->inputcontext = XCreateIC(xim, XNInputStyle, XIMPreeditNothing | XIMStatusNothing, XNClientWindow, nw->window, XNFocusWindow, nw->window, NULL);
@@ -494,11 +518,6 @@ vector<Os::KeyEvent> Os::GetInputEvents(OsWindowData *window) {
   int x, y, winx, winy;
   unsigned int mask;
   XQueryPointer(display, window->window, &root, &child, &x, &y, &winx, &winy, &mask);
-  
-  if(ret.size())
-    LOGF("%d events\n", ret.size());
-  
-  LOGF("lup abs %d/%d, win %d/%d", x, y, winx, winy);
   
   ret.push_back(Os::KeyEvent(gt(), winx, winy, mask & (1 << 4), mask & LockMask));
   
