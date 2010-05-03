@@ -122,7 +122,7 @@ end
 ursa.token.rule{"CXXFLAGS", "#CXXFLAGS_BASE", function () return ursa.token{"CXXFLAGS_BASE"} .. " -Ibuild/" .. local_os .. "/libs_complete/include -IGlop -I. -g" end}
 
 ursa.token.rule{"LIBCFLAGS", "#LIBCFLAGS_BASE", function () return ursa.token{"LIBCFLAGS_BASE"} .. " -I../../libs_complete/include" end}
-ursa.token.rule{"LIBLDFLAGS", "#LIBLDFLAGS_BASE", function () return ursa.token{"LIBLDFLAGS_BASE"} end}
+ursa.token.rule{"LIBLDFLAGS", "#LIBLDFLAGS_BASE", function () return ursa.token{"LIBLDFLAGS_BASE"} .. " -L../../libs_complete/lib" end}
 
 local final_libs = {}
 
@@ -161,7 +161,7 @@ do
     table.insert(libpng_files, ursa.rule{build_prefix .. "/libs/libpng/" .. file, libpng_dir .. "/" .. file, ursa.util.copy{}})
   end
   
-  local makefile = ursa.rule{{build_prefix .. "/libs/libpng/Makefile"}, {libpng_files, zlib, final_libs.zlib}, ursa.util.system_template{('cd %s/libs/libpng && CC=#LIBCC CFLAGS="#LIBCFLAGS" LDFLAGS="#LIBLDFLAGS -L../../libs_complete/lib" ./configure --disable-dependency-tracking'):format(build_prefix)}}
+  local makefile = ursa.rule{{build_prefix .. "/libs/libpng/Makefile"}, {libpng_files, zlib, final_libs.zlib}, ursa.util.system_template{('cd %s/libs/libpng && CC=#LIBCC CFLAGS="#LIBCFLAGS" LDFLAGS="#LIBLDFLAGS" ./configure --disable-dependency-tracking'):format(build_prefix)}}
   
   local lib = ursa.rule{build_prefix .. "/libs/libpng/.libs/libpng14.a", {makefile, libpng_files}, ('cd %s/libs/libpng && make -j5'):format(build_prefix)}
   
@@ -286,7 +286,7 @@ local outlibs = {}
 for k, v in pairs(final_libs) do
   local items = ursa.relative_from{v}
   if type(items) == "table" then items = items[1] end
-  outlibs[k] = ursa.rule{release_prefix .. "/lib/" .. k .. "." .. items:match(".*%.(%a+)$"), v, ursa.util.copy{}}
+  outlibs[k] = ursa.rule{release_prefix .. "/lib/" .. items:match(".*/([^/]+)$"), v, ursa.util.copy{}}
 end
 
 -- build the glop library
