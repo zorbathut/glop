@@ -221,7 +221,34 @@ Bool EventTester(Display *display, XEvent *event, XPointer arg) {
 void Os::Think() { } // we don't actually do anything here
 void Os::WindowThink(OsWindowData* data) {
   XEvent event;
+  int last_botched_release = -1;
+  int last_botched_time = -1;
   while(XCheckIfEvent(display, &event, &EventTester, NULL)) {
+    if((event.type == KeyPress || event.type == KeyRelease) && event.xkey.keycode < 256) {
+      // X is kind of a cock and likes to send us hardware repeat messages for people holding buttons down. Why do you do this, X? Why do you have to make me hate you?
+      
+      // So here's an algorithm ripped from some other source
+      char kiz[32];
+      XQueryKeymap(display, kiz);
+      if(kiz[event.xkey.keycode >> 3] & (1 << (event.xkey.keycode % 8))) {
+        if(event.type == KeyRelease) {
+          last_botched_release = event.xkey.keycode;
+          last_botched_time = event.xkey.time;
+          continue;
+        } else {
+          if(last_botched_release == event.xkey.keycode && last_botched_time == event.xkey.time) {
+            // ffffffffff
+            last_botched_release = -1;
+            last_botched_time = -1;
+            continue;
+          }
+        }
+      }
+    }
+    
+    last_botched_release = -1;
+    last_botched_time = -1;
+    
     Os::KeyEvent ev(0, 0, 0, 0, 0); // fffff
     switch(event.type) {
       case KeyPress: {
