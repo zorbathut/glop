@@ -47,6 +47,7 @@ bool SoundSource::IsStopped() const {
 SoundSample *SoundSample::Load(InputStream in, bool store_compressed, float base_volume) {
   // Load the data into memory - we could eventually switch to using extra_info.fileoffset or
   // FMOD_OPENUSER mode instead but this is good for now.
+  LOGF("SSLA %d, %d\n", in.IsValid(), sound_manager()->IsInitialized());
   if (!in.IsValid() || !sound_manager()->IsInitialized())
     return 0;
   char *data;
@@ -66,6 +67,7 @@ SoundSample *SoundSample::Load(InputStream in, bool store_compressed, float base
     result = FMOD_System_CreateSound(sound_manager()->GetSystem(),
       data, FMOD_DEFAULT | FMOD_OPENMEMORY | FMOD_SOFTWARE | FMOD_LOOP_NORMAL, &extra_info, &sound);
   }
+  LOGF("SSLB %d, %d\n", result, FMOD_OK);
   
   // Store the result or return error
   delete[] data;
