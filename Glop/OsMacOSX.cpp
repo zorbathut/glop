@@ -60,7 +60,7 @@ const GlopKey key_map[] = {
   kKeyPad8, kKeyPad9, 0, 0, 0,
   0, kKeyF5, kKeyF6, kKeyF7, kKeyF3,
   kKeyF8, kKeyF9, 0, kKeyF11, 0,                    // 100
-  0, 0, 0, 0, kKeyF10,
+  kKeyPrintScreen, 0, 0, 0, kKeyF10,
   0, kKeyF12, 0, 0, kKeyHelp,
   kKeyHome, kKeyPageUp, kKeyDelete, kKeyF4, kKeyEnd,
   kKeyF2, kKeyPageDown, kKeyF1, kKeyLeft, kKeyRight,
@@ -208,9 +208,13 @@ OSStatus GlopEventHandler(EventHandlerCallRef next_handler, EventRef the_event, 
       //printf("KeyDown: %d %x\n", key, key);
       //printf("Array: %d\n",key_map[key].index);
 //      printf("%s\n", key_map[key].GetName().c_str());
-      if (key_map[key].index != 0)
+      if (key_map[key].index != 0) {
       raw_events.push_back(
           GlopOSXEvent(GetEventTime(the_event), key_map[key], true));
+        LOGF("known key pressed %d\n", key);
+      } else {
+          LOGF("unknown key pressed %d\n", key);
+      }
     }
     if (event_kind == kEventRawKeyUp) {
       UInt32 key;
