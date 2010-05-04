@@ -104,30 +104,45 @@ SoundManager::SoundManager()
 : system_(0), volume_(1) {
   // Create the system object and check versions
   const int kNumChannels = 128;
-  if (FMOD_System_Create(&system_) != FMOD_OK)
+  FMOD_RESULT result = FMOD_System_Create(&system_);
+  if (result != FMOD_OK) {
+    LOGF("Sound driver initialization failed, result %d\n", result);
     return;
+  }
   unsigned int version;
-  if (FMOD_System_GetVersion(system_, &version) != FMOD_OK || version < FMOD_VERSION)
+  if (FMOD_System_GetVersion(system_, &version) != FMOD_OK || version < FMOD_VERSION) {
+    LOGF("Sound driver version checking failed\n");
     goto error;
+  }
 
   // Fix bad initialization options. FMOD documentation strongly recommends doing this for Windows.
   FMOD_CAPS caps;
   FMOD_SPEAKERMODE speaker_mode;
-  if (FMOD_System_GetDriverCaps(system_, 0, &caps, 0, 0, &speaker_mode) != FMOD_OK)
+  if (FMOD_System_GetDriverCaps(system_, 0, &caps, 0, 0, &speaker_mode) != FMOD_OK) {
+    LOGF("Sound driver capability checking failed\n");
     goto error;
-  if (FMOD_System_SetSpeakerMode(system_, speaker_mode) != FMOD_OK)
+  }
+  if (FMOD_System_SetSpeakerMode(system_, speaker_mode) != FMOD_OK) {
+    LOGF("Sound driver speaker setting failed\n");
     goto error;
+  }
   if (caps & FMOD_CAPS_HARDWARE_EMULATED) {
-    if (FMOD_System_SetDSPBufferSize(system_, 1024, 10) != FMOD_OK)
+    if (FMOD_System_SetDSPBufferSize(system_, 1024, 10) != FMOD_OK) {
+      LOGF("Sound driver DSP buffer set failed\n");
       goto error;
+    }
   }
 
   // Initialize
   if (FMOD_System_Init(system_, kNumChannels, FMOD_INIT_NORMAL, 0) != FMOD_OK) {
-    if (FMOD_System_SetSpeakerMode(system_, FMOD_SPEAKERMODE_STEREO) != FMOD_OK)
+    if (FMOD_System_SetSpeakerMode(system_, FMOD_SPEAKERMODE_STEREO) != FMOD_OK) {
+      LOGF("Sound driver speaker mode set failed\n");
       goto error;
-    if (FMOD_System_Init(system_, kNumChannels, FMOD_INIT_NORMAL, 0) != FMOD_OK)
+    }
+    if (FMOD_System_Init(system_, kNumChannels, FMOD_INIT_NORMAL, 0) != FMOD_OK) {
+      LOGF("Sound driver system init set failed\n");
       goto error;
+    }
   }
 
   // Success
