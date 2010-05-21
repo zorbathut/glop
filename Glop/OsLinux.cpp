@@ -330,49 +330,34 @@ OsWindowData* Os::CreateWindow(const string& title, int x, int y, int width, int
   if(x == -1) x = 100;
   if(y == -1) y = 100;
   
-  // I think there's a way to specify more of this but I'll be damned if I can find it
-  XVisualInfo vinfo_template;
-  vinfo_template.screen = screen;
-  int vinfo_ct;
-  XVisualInfo *visualinfo = XGetVisualInfo(display, VisualScreenMask, &vinfo_template, &vinfo_ct);
-  ASSERT(visualinfo);
-  ASSERT(vinfo_ct);
   
-  XVisualInfo vinfo;
-  bool found = false;
-  for(int i = 0; i < vinfo_ct; i++) {
-    int use_gl, rgba, doublebuffer, red_size, green_size, blue_size, alpha_size;
-    glXGetConfig(display, &visualinfo[i], GLX_USE_GL, &use_gl);
-    glXGetConfig(display, &visualinfo[i], GLX_RGBA, &rgba);
-    glXGetConfig(display, &visualinfo[i], GLX_DOUBLEBUFFER, &doublebuffer);
-    glXGetConfig(display, &visualinfo[i], GLX_RED_SIZE, &red_size);
-    glXGetConfig(display, &visualinfo[i], GLX_GREEN_SIZE, &green_size);
-    glXGetConfig(display, &visualinfo[i], GLX_BLUE_SIZE, &blue_size);
-    glXGetConfig(display, &visualinfo[i], GLX_ALPHA_SIZE, &alpha_size);
-    //LOGF("%d %d %d %d %d %d %d", use_gl, rgba, doublebuffer, red_size, green_size, blue_size, alpha_size);
-    
-    
-    if(use_gl && rgba && doublebuffer && red_size == 8 && green_size == 8 && blue_size == 8 && alpha_size == 8) {
-      LOGF("Found something!");
-      found = true;
-      vinfo = visualinfo[i]; // I'm just going to hope the rest of the values are appropriate, because, really, who knows
-      break;
-    }
-  }
+  int glxcv_params[] = {
+    GLX_RGBA,
+    GLX_DOUBLEBUFFER,
+    GLX_DEPTH_SIZE, 8,
+  };
+  XVisualInfo *vinfo = glXChooseVisual(display, screen, glxcv_params);
+  ASSERT(vinfo);
   
-  ASSERT(found);
-  
-  nw->context = glXCreateContext(display, &vinfo, NULL, True);
+  nw->context = glXCreateContext(display, vinfo, NULL, True);
   ASSERT(nw->context);
   
   // Define the window attributes
   XSetWindowAttributes attribs;
-  attribs.event_mask = KeyPressMask | KeyReleaseMask | ButtonPressMask | ButtonReleaseMask | ButtonMotionMask | PointerMotionMask | FocusChangeMask |
-  
+  /*attribs.event_mask = KeyPressMask | KeyReleaseMask | ButtonPressMask | ButtonReleaseMask | ButtonMotionMask | PointerMotionMask | FocusChangeMask |
   FocusChangeMask | ButtonPressMask | ButtonReleaseMask | ButtonMotionMask |
                                                     PointerMotionMask | KeyPressMask | KeyReleaseMask | StructureNotifyMask |
-                                                    EnterWindowMask | LeaveWindowMask;
-  nw->window = XCreateWindow(display, RootWindow(display, screen), x, y, width, height, 0, vinfo.depth, InputOutput, vinfo.visual, CWEventMask, &attribs); // I don't know if I need anything further here
+                                                    EnterWindowMask | LeaveWindowMask;*/
+  attribs.event_mask = 0;
+  
+  Visual *defvis = DefaultVisual(display,screen);
+  
+
+  nw->window = XCreateWindow(display, RootWindow(display, screen), x, y, width, height, 0, vinfo->depth, InputOutput, vinfo->visual, CWEventMask, &attribs); // I don't know if I need anything further here
+  //LOGF("%d, %d, %d, %d, %d", x, y, width, height, vinfo.depth);
+  //LOGF("%d", vinfo.visual);
+  
+
   
   {
     Atom WMHintsAtom = XInternAtom(display, "_MOTIF_WM_HINTS", false);
@@ -447,8 +432,6 @@ OsWindowData* Os::CreateWindow(const string& title, int x, int y, int width, int
   
   nw->inputcontext = XCreateIC(xim, XNInputStyle, XIMPreeditNothing | XIMStatusNothing, XNClientWindow, nw->window, XNFocusWindow, nw->window, NULL);
   ASSERT(nw->inputcontext);
-  
-  XFree(visualinfo);
   
   XMapWindow(display, nw->window);
   
