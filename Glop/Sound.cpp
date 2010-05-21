@@ -29,7 +29,6 @@ bool SoundSource::IsPaused() const {
 }
 
 void SoundSource::Stop() {
-  LOGF("stopped");
   if (channel_ != 0)
     FMOD_Channel_Stop(channel_);
 }

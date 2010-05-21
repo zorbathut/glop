@@ -48,12 +48,13 @@ do
   elseif local_os == "Darwin" then
     local_os = "osx"
     
+    -- complexity is obviously for support of OSX 10.5
     ursa.token.rule{"CC", nil, function () return "g++" end}
-    ursa.token.rule{"CXXFLAGS_BASE", nil, function () return "-arch i386 -DMACOSX -D_DEBUG" end}
+    ursa.token.rule{"CXXFLAGS_BASE", nil, function () return "-isysroot /Developer/SDKs/MacOSX10.5.sdk -mmacosx-version-min=10.5 -arch i386 -DMACOSX -D_DEBUG" end}
     
     ursa.token.rule{"LIBCC", nil, function () return "gcc" end}
-    ursa.token.rule{"LIBCFLAGS_BASE", nil, function () return "-arch i386" end}
-    ursa.token.rule{"LIBLDFLAGS_BASE", nil, function () return "-arch i386" end}
+    ursa.token.rule{"LIBCFLAGS_BASE", nil, function () return "-isysroot /Developer/SDKs/MacOSX10.5.sdk -mmacosx-version-min=10.5 -arch i386" end}
+    ursa.token.rule{"LIBLDFLAGS_BASE", nil, function () return "-isysroot /Developer/SDKs/MacOSX10.5.sdk -mmacosx-version-min=10.5 -arch i386" end}
     
     table.insert(glop_filenames, "OsMacOSX")
     table.insert(glop_filenames, "Sound")
