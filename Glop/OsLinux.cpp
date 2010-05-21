@@ -325,7 +325,7 @@ OsWindowData* Os::CreateWindow(const string& title, int x, int y, int width, int
   OsWindowData *nw = new OsWindowData();
   ASSERT(!windowdata);
   windowdata = nw;
-  
+     
   // this is bad
   if(x == -1) x = 100;
   if(y == -1) y = 100;
@@ -333,29 +333,26 @@ OsWindowData* Os::CreateWindow(const string& title, int x, int y, int width, int
   
   int glxcv_params[] = {
     GLX_RGBA,
+    GLX_RED_SIZE, 1,
+    GLX_GREEN_SIZE, 1,
+    GLX_BLUE_SIZE, 1,
     GLX_DOUBLEBUFFER,
-    GLX_DEPTH_SIZE, 8,
+    GLX_DEPTH_SIZE, 1,
   };
   XVisualInfo *vinfo = glXChooseVisual(display, screen, glxcv_params);
   ASSERT(vinfo);
   
-  nw->context = glXCreateContext(display, vinfo, NULL, True);
-  ASSERT(nw->context);
-  
   // Define the window attributes
   XSetWindowAttributes attribs;
-  /*attribs.event_mask = KeyPressMask | KeyReleaseMask | ButtonPressMask | ButtonReleaseMask | ButtonMotionMask | PointerMotionMask | FocusChangeMask |
+  attribs.event_mask = KeyPressMask | KeyReleaseMask | ButtonPressMask | ButtonReleaseMask | ButtonMotionMask | PointerMotionMask | FocusChangeMask |
+  
   FocusChangeMask | ButtonPressMask | ButtonReleaseMask | ButtonMotionMask |
                                                     PointerMotionMask | KeyPressMask | KeyReleaseMask | StructureNotifyMask |
-                                                    EnterWindowMask | LeaveWindowMask;*/
-  attribs.event_mask = 0;
-  
-  Visual *defvis = DefaultVisual(display,screen);
+                                                    EnterWindowMask | LeaveWindowMask;  
+  attribs.colormap = XCreateColormap( display, RootWindow(display, screen), vinfo->visual, AllocNone);
   
 
-  nw->window = XCreateWindow(display, RootWindow(display, screen), x, y, width, height, 0, vinfo->depth, InputOutput, vinfo->visual, CWEventMask, &attribs); // I don't know if I need anything further here
-  //LOGF("%d, %d, %d, %d, %d", x, y, width, height, vinfo.depth);
-  //LOGF("%d", vinfo.visual);
+  nw->window = XCreateWindow(display, RootWindow(display, screen), x, y, width, height, 0, vinfo->depth, InputOutput, vinfo->visual, CWColormap | CWEventMask, &attribs); // I don't know if I need anything further here
   
 
   
@@ -434,6 +431,9 @@ OsWindowData* Os::CreateWindow(const string& title, int x, int y, int width, int
   ASSERT(nw->inputcontext);
   
   XMapWindow(display, nw->window);
+  
+  nw->context = glXCreateContext(display, vinfo, NULL, True);
+  ASSERT(nw->context);
   
   SetCurrentContext(nw);
   
