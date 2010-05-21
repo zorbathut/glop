@@ -315,11 +315,8 @@ ursa.command{ursa.command.default, applist}
 -- clean things up properly
 
 if not clean_dirs then clean_dirs = {} end
-table.insert(clean_dirs, "build/Glop/glop3d")
-table.insert(clean_dirs, "build/Glop")
-table.insert(clean_dirs, "build/Tests")
 table.insert(clean_dirs, "build")
-
+table.insert(clean_dirs, "release")
 ursa.command{"clean", function ()
   ursa.util.clean()
   for _, v in ipairs(clean_dirs) do
