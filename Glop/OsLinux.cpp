@@ -338,6 +338,7 @@ OsWindowData* Os::CreateWindow(const string& title, int x, int y, int width, int
     GLX_BLUE_SIZE, 1,
     GLX_DOUBLEBUFFER,
     GLX_DEPTH_SIZE, 1,
+    None
   };
   XVisualInfo *vinfo = glXChooseVisual(display, screen, glxcv_params);
   ASSERT(vinfo);
