@@ -310,7 +310,7 @@ ursa.command{"glop", {outlibs.glop, headers}}
 
 
 
-ursa.command{ursa.command.default, applist}
+ursa.command{ursa.command.default, {outlibs.glop, headers}}
 
 -- clean things up properly
 
@@ -324,7 +324,9 @@ ursa.command{"clean", function ()
   end
 end}
 
-ursa.build{...}
+if not params then
+  ursa.build{...}
+end
 
 
 return {libs = outlibs, headers = headers, os = local_os, cc = ursa.token{"CC"}, libcc = ursa.token{"LIBCC"}, libcflags = ursa.token{"LIBCFLAGS"}, libldflags = ursa.token{"LIBLDFLAGS"}} -- just in case we're being shelled by something, here's the glop package data
