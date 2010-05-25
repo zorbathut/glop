@@ -858,15 +858,16 @@ bool GlopEnterFullScreen(OsWindowData* data) {
   return true;
 }
 
-void GlopOpenWindow(OsWindowData* data) {
+void GlopOpenWindow(OsWindowData* data, bool is_resizable) {
 //  OSStatus result =
+  int resize_bit = is_resizable ? kWindowResizableAttribute : 0;
   CreateNewWindow(
       kDocumentWindowClass,
           kWindowCollapseBoxAttribute |
           kWindowResizableAttribute |
-          kWindowStandardHandlerAttribute |
           kWindowAsyncDragAttribute |
-          kWindowLiveResizeAttribute,
+          kWindowLiveResizeAttribute |
+          resize_bit,
   &data->bounds,
   &data->window);
 
@@ -916,7 +917,7 @@ void GlopToggleFullScreen() {
     //printf("Currently fullscreen, making windowed\n");
     aglDestroyContext(data->agl_context);
     data->agl_context = NULL;
-    GlopOpenWindow(data);
+    GlopOpenWindow(data, false);
   } else {
     //printf("Currently windowed, making fullscreen\n");
     DisposeWindow(data->window);
@@ -957,7 +958,7 @@ OsWindowData* Os::CreateWindow(
       SetRect(&data->bounds, x, y, x + width, y + height);
     }
     SetRect(&data->full_screen_dimensions, 0, 0, 1600, 1050);
-    GlopOpenWindow(data);
+    GlopOpenWindow(data, is_resizable);
   }
   if (data != NULL) {
     all_windows.insert(data);
