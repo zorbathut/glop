@@ -95,6 +95,9 @@ class Os {
   // Changes the icon for the window to match the given icon.
   // icon may be NULL, in which case a default icon should be used.
   // The image may be of any size and type - the Os class must scale it as required.
+  // HEY THIS INTERFACE SUCKS
+  // SERIOUSLY IT IS REALLY BAD
+  // Talk to Zorba about making it unsucky
   static void SetIcon(OsWindowData *window, const Image *icon);
 
   // Changes the size of a non full-screen window.

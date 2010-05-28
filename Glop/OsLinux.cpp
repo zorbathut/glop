@@ -22,6 +22,9 @@ int screen = 0;
 XIM xim = NULL;
 Atom close_atom;
 
+Display *get_x_display() { return display; }
+int get_x_screen() { return screen; }
+
 static long long gtm() {
   struct timeval tv;
   gettimeofday(&tv, NULL);
@@ -222,6 +225,10 @@ Bool EventTester(Display *display, XEvent *event, XPointer arg) {
   return true; // hurrr
 }
 OsWindowData *windowdata = NULL;
+Window get_x_window() {
+  ASSERT(windowdata);
+  return windowdata->window;
+}
 void Os::Think() {
   if(!windowdata) return;
   

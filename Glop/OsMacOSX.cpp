@@ -1040,6 +1040,8 @@ void Os::SetTitle(OsWindowData* data, const string& title) {
 void Os::SetIcon(OsWindowData *window, const Image *icon) {
   // TODO(jwills): Figure out exactly how this should work considering that it needs to run on PCs
   // and on macs
+  
+  // Talk to Zorba about making it unsucky, I know more about icons now than I really want to
 }
 
 void Os::SetWindowSize(OsWindowData *window, int width, int height) {

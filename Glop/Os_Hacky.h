@@ -31,4 +31,11 @@ vector<TouchEvent> os_touch_getEvents();  // clears the event list in the proces
 HWND get_first_handle();
 #endif
 
+#ifdef LINUX
+#include <X11/Xlib.h>
+Display *get_x_display();
+int get_x_screen();
+Window get_x_window();
+#endif
+
 #endif
