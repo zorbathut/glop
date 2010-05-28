@@ -237,26 +237,4 @@ class Os {
   static void SetCurrentContext(OsWindowData* window);
 };
 
-#ifdef IPHONE
-// this is a horrible hack until I figure out how to build it into glop better
-struct TouchInfo {
-  bool active;
-  float x, y;
-};
-struct TouchEvent {
-  int type;
-  int id;
-  
-  float x, y;
-};
-enum {EVENT_TOUCH, EVENT_MOVE, EVENT_RELEASE};
-
-int os_touch_getCount();
-bool os_touch_getActive(int id);
-float os_touch_getX(int id);
-float os_touch_getY(int id);
-
-vector<TouchEvent> os_touch_getEvents();  // clears the event list in the process
-#endif
-
 #endif // GLOP_OS_H__

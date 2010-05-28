@@ -117,6 +117,11 @@ const GlopKey kDIToGlopKeyIndex[] = {0,
 // Globals
 static LARGE_INTEGER gTimerFrequency;
 static map<HWND, OsWindowData*> gWindowMap;
+  
+HWND get_first_handle() {
+  ASSERT(gWindowMap.size());
+  return gWindowMap.begin()->first;
+}
 
 // InputPollingThread
 // ==================
