@@ -1,0 +1,13 @@
+Glop is a cross-platform gaming library similar to SDL. It includes a UI layer and a sound layer. It currently supports Windows, OSX 10.5+, and Linux. It is *extremely* unfinished and is provided mostly so that people can inspect it. Usage may be tricky due to the lack of documentation, and building it may prove difficult as well.
+
+Build instructions (look below for some Windows-specific stuff):
+
+First, you'll need a working installation of Lua. You'll also need LuaRocks. Install those on your own. Use LuaRocks to install the md5 package ("luarocks install md5"). Download Ursa (http://github.com/zorbathut/ursa), change to its directory, and type "luarocks make".
+
+Now change to the Glop directory and type "./Den glop". This will build a working Glop package, as well as necessary libraries, in the release/(your_os)/ directory. You'll need to link in all the libraries that it builds.
+
+The test program is provided and should give you some basic ideas on how to use the library. I personally don't use any of the complex UI layer - it should not be considered mandatory, and future versions of the library will include a switch to disable it entirely.
+
+WINDOWS-SPECIFIC:
+
+You'll need to install both cygwin *and* mingw - cygwin is used for the build environment, mingw is used to actually build the software. Last I checked, Luarocks had problems building things compatibly. You may run into strange crash errors with Ursa, which will make it extremely difficult to build Glop. If you run into these problems, let me know and I'll write up a guide on how to fix it (they may have been fixed since.)
