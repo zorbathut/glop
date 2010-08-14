@@ -153,7 +153,7 @@ end
 -- libpng next
 local libpng = {} -- filled with everything needed to consider "libpng" to be functional
 do
-  local libpng_dir = "Glop/third_party/libpng-1.4.1"
+  local libpng_dir = "Glop/third_party/libpng-1.4.3"
   
   --ursa.token.rule{"libpng files", nil, ("cd %s && find . -type f | sed s*\\\\./**"):format(libpng_dir)}  -- we are assuming this isn't changing
   ursa.token.rule{"libpng files", nil, ("cd %s && find . -maxdepth 1 -type f | sed s*\\\\./**"):format(libpng_dir)}  -- we are assuming this isn't changing
