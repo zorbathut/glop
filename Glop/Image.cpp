@@ -29,6 +29,7 @@ Image::Image(int width, int height, int bpp)
 
 Image::Image(unsigned char *data, int width, int height, int bpp)
 : data_(0), width_(width), height_(height), bpp_(bpp) {
+  LOGF("making img %d %d %d", width, height, bpp);
   // Store the values
   ASSERT(bpp_ > 0 && bpp_ <= 32 && bpp%8 == 0);
   internal_width_ = NextPow2(width);
@@ -879,51 +880,42 @@ Image *Image::LoadPng(InputStream input) {
   
   if(png_get_color_type(png_ptr, info_ptr) == PNG_COLOR_TYPE_PALETTE) {
     png_set_palette_to_rgb(png_ptr);
-    png_read_update_info(png_ptr, info_ptr);
   }
-  if(png_get_color_type(png_ptr, info_ptr) == PNG_COLOR_TYPE_GRAY && info_ptr->bit_depth < 8) {
+  if(png_get_color_type(png_ptr, info_ptr) == PNG_COLOR_TYPE_GRAY && png_get_bit_depth(png_ptr, info_ptr) < 8) {
     png_set_expand_gray_1_2_4_to_8(png_ptr);
-    png_read_update_info(png_ptr, info_ptr);
   }
   if(png_get_bit_depth(png_ptr, info_ptr) == 16) {
     png_set_strip_16(png_ptr);
-    png_read_update_info(png_ptr, info_ptr);
   }
   if(png_get_bit_depth(png_ptr, info_ptr) < 8) {
     png_set_packing(png_ptr);
-    png_read_update_info(png_ptr, info_ptr);
   }
   if(png_get_color_type(png_ptr, info_ptr) == PNG_COLOR_TYPE_GRAY || png_get_color_type(png_ptr, info_ptr) == PNG_COLOR_TYPE_GRAY_ALPHA) {
-    png_set_filler(png_ptr, 0xff, PNG_FILLER_AFTER);
     png_set_gray_to_rgb(png_ptr);
-    png_set_filler(png_ptr, 0xff, PNG_FILLER_AFTER);
-    png_read_update_info(png_ptr, info_ptr);
   }
-  LOGF("CTYPE %d %d %d %d %d\n", png_get_color_type(png_ptr, info_ptr), PNG_COLOR_TYPE_GRAY, PNG_COLOR_TYPE_GRAY_ALPHA, PNG_COLOR_TYPE_RGB, PNG_COLOR_TYPE_RGBA);
-  if(png_get_color_type(png_ptr, info_ptr) == PNG_COLOR_TYPE_RGB) {
-    LOGF("wut wut fillering");
-    png_set_filler(png_ptr, 0xff, PNG_FILLER_AFTER);
-    png_read_update_info(png_ptr, info_ptr);
+  if(png_get_color_type(png_ptr, info_ptr) == PNG_COLOR_TYPE_RGB || png_get_color_type(png_ptr, info_ptr) == PNG_COLOR_TYPE_GRAY) {
+    png_set_add_alpha(png_ptr, 0xff, PNG_FILLER_AFTER);
   }
   
   png_read_update_info(png_ptr, info_ptr);
-  LOGF("CTYPE %d %d %d %d %d\n", png_get_color_type(png_ptr, info_ptr), PNG_COLOR_TYPE_GRAY, PNG_COLOR_TYPE_GRAY_ALPHA, PNG_COLOR_TYPE_RGB, PNG_COLOR_TYPE_RGBA);
-
-  ASSERT(info_ptr->bit_depth == 8);
-  ASSERT(png_get_color_type(png_ptr, info_ptr) == PNG_COLOR_TYPE_RGBA);
   
-  unsigned char *pixels = new unsigned char[info_ptr->width * info_ptr->height * 4];
+  ASSERT(png_get_bit_depth(png_ptr, info_ptr) == 8);
+  ASSERT(png_get_channels(png_ptr, info_ptr) == 4 || png_get_channels(png_ptr, info_ptr) == 3);
+  ASSERT(png_get_color_type(png_ptr, info_ptr) == PNG_COLOR_TYPE_RGBA || png_get_color_type(png_ptr, info_ptr) == PNG_COLOR_TYPE_RGB);
+  
+  unsigned char *pixels = new unsigned char[png_get_image_width(png_ptr, info_ptr) * png_get_image_height(png_ptr, info_ptr) * 4];
   
   vector<unsigned char *> ul;
-  for(int i = 0; i < info_ptr->height; i++)
-    ul.push_back(pixels + i * info_ptr->width * 4);
-  
+  for(int i = 0; i < png_get_image_height(png_ptr, info_ptr); i++)
+    ul.push_back(pixels + i * png_get_image_width(png_ptr, info_ptr) * 4);
   png_read_image(png_ptr, (png_byte**)&ul[0]);
   
-  Image *q = new Image(pixels, info_ptr->width, info_ptr->height, 32);
-
+  Image *q = new Image(pixels, png_get_image_width(png_ptr, info_ptr), png_get_image_height(png_ptr, info_ptr), 32);
+  
   png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
   
+  delete [] pixels;
+
   return q;
 }
 
