@@ -31,10 +31,10 @@ do
   if local_os == "Cygwin" then
     local_os = "cygwin"
     
-    ursa.token.rule{"CC", nil, function () return "/cygdrive/c/MinGW/bin/g++" end}
+    ursa.token.rule{"CC", nil, function () return "/cygdrive/c/Qt/2010.04/mingw/bin/g++" end}
     ursa.token.rule{"CXXFLAGS_BASE", nil, function () return "-DWIN32 -D_LIB -D_MBCS" end}
     
-    ursa.token.rule{"LIBCC", nil, function () return "/cygdrive/c/MinGW/bin/gcc" end}
+    ursa.token.rule{"LIBCC", nil, function () return "/cygdrive/c/Qt/2010.04/mingw/bin/gcc" end}
     ursa.token.rule{"LIBCFLAGS_BASE", nil, function () return "" end}
     ursa.token.rule{"LIBLDFLAGS_BASE", nil, function () return "" end}
     
