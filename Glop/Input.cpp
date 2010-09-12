@@ -8,7 +8,7 @@
 // Constants
 const float kBaseMouseSensitivity = 3.0f;
 const float kJoystickAxisThreshold = 0.2f;
-const int kDoublePressThreshold = 200;
+const int kDoublePressThreshold = -1;
 const int kJoystickRefreshDelay = 250;
 const char *const kKeyNames[] = {
   "None", "Any",
