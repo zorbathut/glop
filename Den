@@ -120,7 +120,7 @@ do
   deploy_paths.lib = release_prefix .. "/lib/" .. deploy_paths.lib_name
 end
 
-ursa.token.rule{"CXXFLAGS", "#CXXFLAGS_BASE", function () return ursa.token{"CXXFLAGS_BASE"} .. " -Ibuild/" .. local_os .. "/libs_complete/include -IGlop -I. -g" end}
+ursa.token.rule{"CXXFLAGS", {"#CXXFLAGS_BASE", (params.minimal and "!minimal" or "!full")}, function () return ursa.token{"CXXFLAGS_BASE"} .. " -Ibuild/" .. local_os .. "/libs_complete/include -IGlop -I. -g" .. (params.minimal and " -DGLOP_LEAN_AND_MEAN" or "") end}
 
 ursa.token.rule{"LIBCFLAGS", "#LIBCFLAGS_BASE", function () return ursa.token{"LIBCFLAGS_BASE"} .. " -I../../libs_complete/include" end}
 ursa.token.rule{"LIBLDFLAGS", "#LIBLDFLAGS_BASE", function () return ursa.token{"LIBLDFLAGS_BASE"} .. " -L../../libs_complete/lib" end}
