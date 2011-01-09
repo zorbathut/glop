@@ -170,6 +170,9 @@ class Os {
   // Glop will ensure this function is not called redundantly.
   static void ShowMouseCursor(bool is_shown);
 
+  // Locks the mouse cursor to a window.
+  static void LockMouseCursor(bool locked);
+  
   // Updates the given window so that its joystick information is completely up to date (i.e.,
   // if a user plugs in a joystick, RefreshJoysticks should update data based on the change). This
   // should be reflected both in GetNumJoysticks() and in joystick notifications from System. If
