@@ -9,6 +9,8 @@
 #ifndef GLOP_GLOP3D_MESH_H__
 #define GLOP_GLOP3D_MESH_H__
 
+#ifndef GLOP_LEAN_AND_MEAN
+
 // Includes
 #include "../Base.h"
 #include "../Color.h"
@@ -121,5 +123,7 @@ class StockMeshes {
  private:
   DISALLOW_EVIL_CONSTRUCTORS(StockMeshes);
 };
+
+#endif // GLOP_LEAN_AND_MEAN
 
 #endif // GLOP_GLOP3D_MESH_H__

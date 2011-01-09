@@ -7,6 +7,8 @@
 #include "System.h"
 #include "Utils.h"
 
+#ifndef GLOP_LEAN_AND_MEAN
+
 // Constants
 const int kSearchTermResetTime = 300;
 
@@ -2275,3 +2277,5 @@ DialogWidget::Result DialogWidget::DoIntegerPrompt(
   window()->PopFocus();
   return result;
 }
+
+#endif // GLOP_LEAN_AND_MEAN

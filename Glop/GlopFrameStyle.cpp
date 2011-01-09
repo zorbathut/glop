@@ -5,6 +5,8 @@
 #include "GlopWindow.h"
 #include "OpenGl.h"
 
+#ifndef GLOP_LEAN_AND_MEAN
+
 // GuiTextStyle
 // ============
 
@@ -442,3 +444,5 @@ void InitDefaultFrameStyle(Font *font) {
   gDialogView = new DefaultDialogView(gInputBoxView, gTextPromptView, gWindowView, gButtonView,
                                       gSliderView, font);
 }
+
+#endif // GLOP_LEAN_AND_MEAN

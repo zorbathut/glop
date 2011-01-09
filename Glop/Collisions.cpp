@@ -1,6 +1,8 @@
 #include "Collisions.h"
 #include "MathUtil.h"
 
+#ifndef GLOP_LEAN_AND_MEAN
+
 Box::Box(float x, float y, float width, float height) : _x(x), _y(y), _width(width), _height(height) {
 	_x2 = _x + _width;
 	_y2 = _y + _height;
@@ -69,3 +71,6 @@ bool Circle::Collides(const Circle& circle) const {
 bool Circle::Collides(const Box& box) const {
 	return box.Collides(*this);
 }
+
+#endif // GLOP_LEAN_AND_MEAN
+

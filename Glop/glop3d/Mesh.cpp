@@ -4,6 +4,8 @@
 #include "OpenGl.h"
 #include <cmath>
 
+#ifndef GLOP_LEAN_AND_MEAN
+
 Mesh::Mesh(int num_points_allocated, int num_triangles_allocated, bool has_normals,
            bool has_colors, bool has_textures)
 : num_points_allocated_(num_points_allocated),
@@ -323,3 +325,5 @@ Mesh *StockMeshes::NewSphereMesh(float width, float height, float depth, const C
   }
   return result;
 }
+
+#endif // GLOP_LEAN_AND_MEAN

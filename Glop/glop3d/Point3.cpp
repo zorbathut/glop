@@ -2,6 +2,8 @@
 #include "glop3d/Point3.h"
 #include <cmath>
 
+#ifndef GLOP_LEAN_AND_MEAN
+
 // Point3
 // ======
 
@@ -79,3 +81,5 @@ void Viewpoint::FillTransformationMatrix(float *matrix) const {
   matrix[14] = position_[2];
   matrix[15] = 1;
 }
+
+#endif // GLOP_LEAN_AND_MEAN

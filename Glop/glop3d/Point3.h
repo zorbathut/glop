@@ -6,6 +6,8 @@
 #ifndef GLOP_GLOP3D_POINT3_H__
 #define GLOP_GLOP3D_POINT3_H__
 
+#ifndef GLOP_LEAN_AND_MEAN
+
 // Includes
 #include "../Base.h"
 
@@ -234,5 +236,7 @@ class Viewpoint {
 	Point3 position_;
   Vec3 forward_vector_, up_vector_, right_vector_;
 };
+
+#endif // GLOP_LEAN_AND_MEAN
 
 #endif // GLOP_GLOP3D_POINT3_H__

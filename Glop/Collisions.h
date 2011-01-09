@@ -1,5 +1,7 @@
-#ifndef COLLLISIONS_H__
-#define COLLLISIONS_H__
+#ifndef COLLISIONS_H__
+#define COLLISIONS_H__
+
+#ifndef GLOP_LEAN_AND_MEAN
 
 class Box;
 class Circle;
@@ -53,6 +55,6 @@ public:
 	bool Collides(const Box& Box) const;
 };
 
+#endif // GLOP_LEAN_AND_MEAN
 
-
-#endif // COLLLISIONS_H__
+#endif // COLLISIONS_H__

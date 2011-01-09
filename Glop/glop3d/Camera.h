@@ -7,6 +7,8 @@
 #ifndef GLOP_GLOP3D_CAMERA_H__
 #define GLOP_GLOP3D_CAMERA_H__
 
+#ifndef GLOP_LEAN_AND_MEAN
+
 // Includes
 #include "Point3.h"
 #include "../Color.h"
@@ -122,5 +124,7 @@ class CameraFrame: public GlopFrame {
   Vec3 front_normal_, back_normal_, left_normal_, right_normal_, top_normal_, bottom_normal_;
   DISALLOW_EVIL_CONSTRUCTORS(CameraFrame);
 };
+
+#endif // GLOP_LEAN_AND_MEAN
 
 #endif // GLOP_GLOP3D_CAMERA_H__

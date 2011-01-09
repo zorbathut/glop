@@ -4,6 +4,8 @@
 #include "OpenGl.h"
 #include <cmath>
 
+#ifndef GLOP_LEAN_AND_MEAN
+
 void Camera::LookAt(const Point3 &top_left, const Point3 &top_right, const Point3 &bottom_left) {
   float vert_dist = Dist(top_left, bottom_left);
   float eye_dist = (vert_dist / 2) / float(tan(GetFieldOfView() * kPi / 360));
@@ -181,3 +183,5 @@ void CameraFrame::UpdateNormals() {
 	bottom_normal_ = Normalize(-GetCamera().GetNearPlane()*GetCamera().up() +
                              GetCamera().forwards()*near_height);
 }
+
+#endif // GLOP_LEAN_AND_MEAN

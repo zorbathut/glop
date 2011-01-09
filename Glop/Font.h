@@ -26,6 +26,8 @@
 #ifndef GLOP_FONT_H__
 #define GLOP_FONT_H__
 
+#ifndef GLOP_LEAN_AND_MEAN
+
 // Includes
 #include "Base.h"
 #include "Color.h"
@@ -300,5 +302,7 @@ class ShadowFont: public Font {
   float shadow_dx_, shadow_dy_, shadow_brightness_;
   DISALLOW_EVIL_CONSTRUCTORS(ShadowFont);
 };
+
+#endif // GLOP_LEAN_AND_MEAN
 
 #endif // GLOP_FONT_H__

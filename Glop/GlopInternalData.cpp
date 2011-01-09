@@ -4,10 +4,14 @@
 #include "freetype/ftglyph.h"
 
 // Globals
+#ifndef GLOP_LEAN_AND_MEAN
 void *FreeTypeLibrary::library_ = 0;
+#endif // GLOP_LEAN_AND_MEAN
 List<Texture*> GlDataManager::textures_;
 List<DisplayList*> GlDataManager::display_lists_;
 List<DisplayLists*> GlDataManager::multi_display_lists_;
+
+#ifndef GLOP_LEAN_AND_MEAN
 
 // FreeTypeLibrary
 // ===============
@@ -24,6 +28,9 @@ void FreeTypeLibrary::ShutDown() {
   if (library_ != 0)
     FT_Done_FreeType((FT_Library)library_);
 }
+
+#endif // GLOP_LEAN_AND_MEAN
+
 // GlDataManager
 // =============
 

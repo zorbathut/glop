@@ -60,6 +60,8 @@
 #ifndef GLOP_GLOP_FRAME_WIDGETS_H__
 #define GLOP_GLOP_FRAME_WIDGETS_H__
 
+#ifndef GLOP_LEAN_AND_MEAN
+
 // Includes
 #include "Color.h"
 #include "Font.h"
@@ -1377,5 +1379,7 @@ class DialogWidget {
   static List<GlopKey> yes_keys_, no_keys_, okay_keys_, cancel_keys_;
   DISALLOW_EVIL_CONSTRUCTORS(DialogWidget);
 };
+
+#endif // GLOP_LEAN_AND_MEAN
 
 #endif // GLOP_GLOP_FRAME_WIDGETS_H__

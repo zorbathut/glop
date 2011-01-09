@@ -6,6 +6,8 @@
 #include <algorithm>
 using namespace std;
 
+#ifndef GLOP_LEAN_AND_MEAN
+
 // Constants
 const int kClipInfinity = 1000000000;
 const int kClipMinusInfinity = -kClipInfinity;
@@ -1326,3 +1328,5 @@ void ScrollingFrame::PageUp() {Scroller()->PageUp();}
 void ScrollingFrame::PageRight() {Scroller()->PageRight();}
 void ScrollingFrame::PageDown() {Scroller()->PageDown();}
 void ScrollingFrame::PageLeft() {Scroller()->PageLeft();}
+
+#endif // GLOP_LEAN_AND_MEAN

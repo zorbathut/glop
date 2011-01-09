@@ -31,7 +31,9 @@ void System::Init() {
   gSystem = new System();
   atexit(System::ShutDown);
   Input::InitDerivedKeys();
+  #ifndef GLOP_LEAN_AND_MEAN
   InitDefaultFrameStyle(0);
+  #endif // GLOP_LEAN_AND_MEAN
   SetLogFormatter(SystemDependentLogFormatter, true);
   SetFatalErrorHandler(SystemDependentFatalErrorHandler, true);
 }
@@ -177,9 +179,11 @@ System::System()
 System::~System() {
   delete sound_manager_;
   delete window_;
+  #ifndef GLOP_LEAN_AND_MEAN
   if (free_type_library_ != 0)
     FT_Done_FreeType((FT_Library)free_type_library_);
   FreeTypeLibrary::ShutDown();
   ClearFrameStyle();
+  #endif // GLOP_LEAN_AND_MEAN
   Os::ShutDown();
 }

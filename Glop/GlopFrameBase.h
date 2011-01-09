@@ -86,6 +86,8 @@
 #ifndef GLOP_GLOP_FRAME_BASE_H__
 #define GLOP_GLOP_FRAME_BASE_H__
 
+#ifndef GLOP_LEAN_AND_MEAN
+
 // Includes
 #include "Base.h"
 #include "GlopFrameStyle.h"
@@ -1272,5 +1274,7 @@ class ScrollingFrame: public FocusFrame {
   UnfocusableScrollingFrame *scroller_;
   DISALLOW_EVIL_CONSTRUCTORS(ScrollingFrame);
 };
+
+#endif // GLOP_LEAN_AND_MEAN
 
 #endif // GLOP_GLOP_FRAME_BASE_H__

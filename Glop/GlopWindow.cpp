@@ -8,6 +8,7 @@
 #include "System.h"
 #include "GlopInternalData.h"
 #include "Os.h"
+#include "ThinLayer.h"
 #include <cmath>
 #include <set>
 
@@ -16,7 +17,9 @@ const char *const kDefaultTitle = "Glop Window";
 
 // Globals
 GlopWindow *window() {return system()->window();}
+#ifndef GLOP_LEAN_AND_MEAN
 List<GlopFrame::Ping*> GlopWindow::ping_list_;
+#endif // GLOP_LEAN_AND_MEAN
 
 // Window mutators
 // ===============
@@ -94,6 +97,9 @@ bool GlopWindow::Create(int width, int height, bool full_screen,
     width_ = width;
     height_ = height;
   }
+  
+  thinlayer_ = NULL;
+  
   return was_success;
 }
 
@@ -117,6 +123,8 @@ void GlopWindow::SetTitle(const string &title) {
     Os::SetTitle(os_data_, title);
   title_ = title;
 }
+
+#ifndef GLOP_LEAN_AND_MEAN
 
 // Frame accessors
 // ===============
@@ -159,6 +167,8 @@ GlopFrame *GlopWindow::RemoveFrameNoDelete(ListId id) {
 void GlopWindow::RemoveFrame(ListId id) {frame_->RemoveChild(id);}
 void GlopWindow::ClearFrames() {frame_->ClearChildren();}
 
+#endif // GLOP_LEAN_AND_MEAN
+
 // Internal logic
 // ==============
 
@@ -170,19 +180,28 @@ GlopWindow::GlopWindow()
   title_(kDefaultTitle), icon_(0),
   is_vsync_requested_(false), is_vsync_setting_current_(false),
   is_in_focus_(false), is_minimized_(false), recreated_this_frame_(false),
-  windowed_x_(-1), windowed_y_(-1), is_resolving_ping_(false),
-  focus_stack_(1, (FocusFrame*)0),
-  frame_(new TableauFrame()) {
+  windowed_x_(-1), windowed_y_(-1), is_resolving_ping_(false)
+#ifndef GLOP_LEAN_AND_MEAN
+  , focus_stack_(1, (FocusFrame*)0),
+  frame_(new TableauFrame())
+#endif
+{
+  #ifndef GLOP_LEAN_AND_MEAN
   frame_->window_ = this;
+  #endif
   input_ = new Input(this);
 }
 
 // Deletes a GlopWindow object - this will only happen on program exit.
 GlopWindow::~GlopWindow() {
   Destroy();
+  #ifndef GLOP_LEAN_AND_MEAN
   delete frame_;
+  #endif
   delete input_;
 }
+
+#ifndef GLOP_LEAN_AND_MEAN
 
 void GlopWindow::SetFocusPredecessor(FocusFrame *base, FocusFrame *predecessor) {
   ASSERT(base != predecessor && base->layer_ == predecessor->layer_);
@@ -230,6 +249,9 @@ void GlopWindow::PopFocus() {
   UpdateFramesInFocus(0, focus_stack_[focus_stack_.size() - 1], false);
 }
 
+#endif // GLOP_LEAN_AND_MEAN
+
+
 // Handle all logic for this window for a single frame. Returns the number of ticks spent on calls
 // to SwapBuffers. This allows us to track the time between SwapBuffer calls and thus sleep through
 // most of a vertical refresh instead of blocking on a SwapBuffer call when vertical syncing is
@@ -254,14 +276,18 @@ int GlopWindow::Think(int dt) {
     if (width_ != width || height_ != height)
       Os::SetWindowSize(os_data_, width_, height_);
     glViewport(0, 0, width_, height_);
+    #ifndef GLOP_LEAN_AND_MEAN
     frame_->OnWindowResize(width_, height_);
+    #endif // GLOP_LEAN_AND_MEAN
   }
 
   // Update frame focus resulting from the window going in or out of focus
   bool focus_changed;
   Os::GetWindowFocusState(os_data_, &is_in_focus_, &focus_changed);
+  #ifndef GLOP_LEAN_AND_MEAN
   if (GetFocusFrame() != 0 && focus_changed)
     UpdateFramesInFocus();
+  #endif // GLOP_LEAN_AND_MEAN
 
   // Track window position and size
   is_minimized_ = Os::IsWindowMinimized(os_data_);
@@ -270,7 +296,9 @@ int GlopWindow::Think(int dt) {
 
   // Allow frames to think - intentionally done before KeyEvents. This makes it easier to use
   // VirtualKeys.
+  #ifndef GLOP_LEAN_AND_MEAN
   frame_->Think(dt);
+  #endif // GLOP_LEAN_AND_MEAN
 
   // Perform input logic, and reset all input key presses if the window has gone out of focus
   // (either naturally or it has been destroyed). If we do not do this, we might miss a key up
@@ -278,6 +306,7 @@ int GlopWindow::Think(int dt) {
   input_->Think(recreated_this_frame_ || !is_in_focus_ || focus_changed, dt);
   recreated_this_frame_ = false;
 
+  #ifndef GLOP_LEAN_AND_MEAN
   // Resize and position our content frames. We do this before resolving pings since both size and
   // position information might be necessary to correctly do this. Examples: size is needed to ping
   // the bottom-right corner of a frame, and position is needed to ping a child frame.
@@ -297,6 +326,7 @@ int GlopWindow::Think(int dt) {
     }
   }
   is_resolving_ping_ = false;
+  #endif // GLOP_LEAN_AND_MEAN
 
   // Render
   int swap_buffer_time = 0;
@@ -314,7 +344,10 @@ int GlopWindow::Think(int dt) {
     glScalef(2.0f / width_, -2.0f / height_, 1.0f);
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
+    #ifndef GLOP_LEAN_AND_MEAN
     frame_->Render();
+    #endif // GLOP_LEAN_AND_MEAN
+    if (thinlayer_) thinlayer_->Render();
     int old_time = system()->GetTime();
     Os::SwapBuffers(os_data_);
     swap_buffer_time = system()->GetTime() - old_time;
@@ -342,6 +375,7 @@ void GlopWindow::ChooseValidSize(int width, int height, int *new_width, int *new
   *new_height = int(mean / sqrt_ar + 0.5);
 }
 
+#ifndef GLOP_LEAN_AND_MEAN
 // Unregisters all pings a frame has created. A frame does this when it is deleted.
 // See GlopFrameBase.h.
 void GlopWindow::UnregisterAllPings(GlopFrame *frame) {
@@ -381,9 +415,11 @@ void GlopWindow::PropogatePing(GlopFrame::Ping *ping) {
   }
   delete ping;
 }
+#endif // GLOP_LEAN_AND_MEAN
 
 // Updates focus for the current layer based on a new key event.
 void GlopWindow::OnKeyEvent(const KeyEvent &event) {
+  #ifndef GLOP_LEAN_AND_MEAN
   int layer = int(focus_stack_.size()) - 1;
   FocusFrame *focus_frame = focus_stack_[layer], *frame;
   if (focus_frame == 0)
@@ -457,8 +493,10 @@ void GlopWindow::OnKeyEvent(const KeyEvent &event) {
     DemandFocus(new_ff, true);
     SendKeyEventToFrame(new_ff, event, true);
   }
+  #endif // GLOP_LEAN_AND_MEAN
 }
 
+#ifndef GLOP_LEAN_AND_MEAN
 // Adds or removes a FocusFrame to the topmost focus layer. This includes setting focus, and
 // updating the FocusFrame links. If we are registering a frame, its layer is returned.
 int GlopWindow::RegisterFocusFrame(FocusFrame *frame) {
@@ -613,3 +651,4 @@ bool GlopWindow::SendKeyEventToFrame(FocusFrame *frame, const KeyEvent &event, b
   }
   return false;
 }
+#endif // GLOP_LEAN_AND_MEAN

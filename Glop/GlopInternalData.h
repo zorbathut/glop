@@ -9,6 +9,8 @@ class DisplayList;
 class DisplayLists;
 class Texture;
 
+#ifndef GLOP_LEAN_AND_MEAN
+
 // FreeTypeLibrary class definition. This initializes and returns a FreeType interface on demand.
 class FreeTypeLibrary {
  public:
@@ -17,6 +19,8 @@ class FreeTypeLibrary {
  private:
   static void *library_;
 };
+
+#endif // GLOP_LEAN_AND_MEAN
 
 // GlDataManager class definition. Stores all OpenGl data that is tied to a specific window. When
 // the data needs to be reset because of a window being created or deleted, it is done through

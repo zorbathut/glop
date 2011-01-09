@@ -23,6 +23,8 @@
 #ifndef GLOP_GLOP_FRAME_STYLE_H__
 #define GLOP_GLOP_FRAME_STYLE_H__
 
+#ifndef GLOP_LEAN_AND_MEAN
+
 // Includes
 #include "Base.h"
 #include "Color.h"
@@ -632,5 +634,7 @@ void ClearFrameStyle();
 // called automatically at program start with font == 0. Views owned by global views are not
 // deleted automatically unless they, too, are global views.
 void InitDefaultFrameStyle(Font *font);
+
+#endif // GLOP_LEAN_AND_MEAN
 
 #endif // GLOP_GLOP_FRAME_STYLE_H__

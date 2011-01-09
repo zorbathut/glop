@@ -18,6 +18,7 @@ using namespace std;
 class GlopWindow;
 class Image;
 class Input;
+class ThinLayer;
 struct KeyEvent;
 struct OsWindowData;
 
@@ -130,6 +131,8 @@ class GlopWindow {
   // any icon, 0 is returned.
   const Image *GetIcon() {return icon_;}
   
+  #ifndef GLOP_LEAN_AND_MEAN
+  
   // Frame accessors
   // ===============
   //
@@ -174,6 +177,10 @@ class GlopWindow {
   FocusFrame *GetFocusFrame() {return focus_stack_[focus_stack_.size()-1];}
   void PushFocus();
   void PopFocus();
+  
+  #endif // GLOP_LEAN_AND_MEAN
+  
+  void SetThinLayer(ThinLayer *thinlayer) { thinlayer_ = thinlayer; }
 
  private:
   // Interface to System
@@ -182,11 +189,13 @@ class GlopWindow {
   ~GlopWindow();
   int Think(int dt);
  
+  #ifndef GLOP_LEAN_AND_MEAN
   // Interface to GlopFrame
   friend class GlopFrame;
   static void UnregisterAllPings(GlopFrame *frame);
   static void RegisterPing(GlopFrame::Ping *ping);
   static void PropogatePing(GlopFrame::Ping *ping);
+  #endif // GLOP_LEAN_AND_MEAN
 
   // Interface to Input
   friend class Input;
@@ -194,6 +203,8 @@ class GlopWindow {
 
   // Resizing
   void ChooseValidSize(int width, int height, int *new_width, int *new_height);
+
+  #ifndef GLOP_LEAN_AND_MEAN
 
   // Focus utilities to be used by FocusFrame - see GlopFrameBase.h
   friend class FocusFrame;
@@ -208,6 +219,8 @@ class GlopWindow {
   FocusFrame *GetNextPossibleFocusFrame(FocusFrame *frame);
   FocusFrame *GetPrevPossibleFocusFrame(FocusFrame *frame);
   bool SendKeyEventToFrame(FocusFrame *frame, const KeyEvent &event, bool gained_focus);
+  
+  #endif // GLOP_LEAN_AND_MEAN
   
   // Configuration data
   OsWindowData *os_data_;           // OS handle on this window - needed for all OS calls
@@ -228,10 +241,13 @@ class GlopWindow {
 
   // Content data
   bool is_resolving_ping_;
+  #ifndef GLOP_LEAN_AND_MEAN
   static List<GlopFrame::Ping*> ping_list_;
   vector<FocusFrame*> focus_stack_;
   TableauFrame *frame_;
+  #endif // GLOP_LEAN_AND_MEAN
   Input *input_;
+  ThinLayer *thinlayer_;
   DISALLOW_EVIL_CONSTRUCTORS(GlopWindow);
 };
 

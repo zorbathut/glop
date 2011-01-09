@@ -8,6 +8,8 @@
 #include <map>
 using namespace std;
 
+#ifndef GLOP_LEAN_AND_MEAN
+
 // FontOutline
 // ===========
 
@@ -651,3 +653,5 @@ int ShadowFont::GetShadowDy(const FontBitmap *bitmap) const {
   float temp = bitmap->GetAscent() * shadow_dy_;
   return (temp < 0? int(temp-1) : int(temp+1));
 }
+
+#endif // GLOP_LEAN_AND_MEAN
