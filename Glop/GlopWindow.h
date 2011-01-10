@@ -94,6 +94,9 @@ class GlopWindow {
       is_vsync_setting_current_ = false;
     }
   }
+  
+  // Locks or releases the mouse cursor to this window.
+  void LockMouseCursor(bool is_locked);
 
   // Window accessors
   // ================
@@ -126,7 +129,7 @@ class GlopWindow {
 
   // Returns the current title of the window.
   const string &GetTitle() const {return title_;}
-
+  
   // Returns the image icon that the user requested for this window. If the user has not requested
   // any icon, 0 is returned.
   const Image *GetIcon() {return icon_;}

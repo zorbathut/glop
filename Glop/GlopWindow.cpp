@@ -124,6 +124,13 @@ void GlopWindow::SetTitle(const string &title) {
   title_ = title;
 }
 
+void GlopWindow::LockMouseCursor(bool is_locked) {
+  if (is_locked)
+    Os::LockMouseCursor(os_data_);
+  else
+    Os::LockMouseCursor(NULL);
+}
+
 #ifndef GLOP_LEAN_AND_MEAN
 
 // Frame accessors

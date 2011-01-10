@@ -345,11 +345,6 @@ void Input::ShowMouseCursor(bool is_visible) {
   UpdateOsCursorVisibility();
 }
 
-void Input::LockMouseCursor(bool is_locked) {
-  is_cursor_locked_ = is_locked;
-  Os::LockMouseCursor(is_locked);
-}
-
 const GlopKey &Input::GetKeyPress(bool accept_clicks, bool accept_modifiers, bool accept_motion) {
   for (int i = 0; i < (int)pressed_keys_frame_.size(); i++) {
     const GlopKey &key = pressed_keys_frame_[i];

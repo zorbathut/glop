@@ -117,25 +117,21 @@ const GlopKey kDIToGlopKeyIndex[] = {0,
 // Globals
 static LARGE_INTEGER gTimerFrequency;
 static map<HWND, OsWindowData*> gWindowMap;
-static bool gLocked = false;
+static OsWindowData *gLocked;
   
 HWND get_first_handle() {
   ASSERT(gWindowMap.size());
   return gWindowMap.begin()->first;
 }
-OsWindowData *get_first_window() {
-  ASSERT(gWindowMap.size());
-  return gWindowMap.begin()->second;
-}
 
-void LockCursorNow() {
+void LockCursorNow(OsWindowData *window) {
   RECT rect;
-  GetWindowRect(get_first_handle(), &rect);
+  GetWindowRect(window->window_handle, &rect);
   if(/*ClientAreaOnly && !FullScreen*/ true) {
     RECT crect; //client rect
     RECT arect; //adjusted rect
 
-    GetClientRect(get_first_handle(), &crect);
+    GetClientRect(window->window_handle, &crect);
     arect = crect;
     AdjustWindowRectEx(&arect, WS_CAPTION | WS_BORDER, FALSE, 0);
 
@@ -430,8 +426,8 @@ LRESULT CALLBACK HandleMessage(HWND window_handle, UINT message, WPARAM wparam, 
       // and then the WM_SIZE event fixes the full-screen problem.
       if (!os_window->is_in_focus && os_window->is_full_screen)
         ShowWindow(os_window->window_handle, SW_MINIMIZE);
-      if (os_window->is_in_focus && gLocked)
-        LockCursorNow();
+      if (os_window->is_in_focus && gLocked == os_window)
+        LockCursorNow(os_window);
       if (!os_window->is_in_focus)
         UnlockCursorNow();
       break;
@@ -784,14 +780,14 @@ void Os::ShowMouseCursor(bool is_shown) {
   ShowCursor(is_shown);
 }
 
-void Os::LockMouseCursor(bool locked) {
+void Os::LockMouseCursor(OsWindowData *locked) {
   gLocked = locked;
   if (!locked) {
     UnlockCursorNow();
   } else {
-    if (get_first_window()->is_in_focus)
+    if (locked->is_in_focus)
     {
-      LockCursorNow();
+      LockCursorNow(locked);
     }
   }
 }

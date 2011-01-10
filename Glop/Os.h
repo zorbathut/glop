@@ -171,7 +171,7 @@ class Os {
   static void ShowMouseCursor(bool is_shown);
 
   // Locks the mouse cursor to a window.
-  static void LockMouseCursor(bool locked);
+  static void LockMouseCursor(OsWindowData *window);
   
   // Updates the given window so that its joystick information is completely up to date (i.e.,
   // if a user plugs in a joystick, RefreshJoysticks should update data based on the change). This

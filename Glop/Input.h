@@ -514,10 +514,6 @@ class Input {
   // will still be visible outside the window or if the window is not in focus.
   void ShowMouseCursor(bool is_visible);
   bool IsMouseCursorShown() const {return is_cursor_visible_;}
-  
-  // Locks or releases the mouse cursor.
-  void LockMouseCursor(bool is_locked);
-  bool IsMouseCursorLocked() const {return is_cursor_locked_;}
 
   // Frame key status
   // ================
@@ -659,8 +655,6 @@ class Input {
                                                   //  last created mouse motion events.
   bool is_cursor_visible_, os_is_cursor_visible_; // Has the user set the cursor to be shown? And
                                                   //  have we told the Os to actually show it?
-  bool is_cursor_locked_, os_is_cursor_locked_;   // Has the user set the cursor to be locked? And
-                                                  //  have we told the Os to actually lock it?
   int num_joysticks_;                             // The number of joysticks we have detected
   int joystick_refresh_time_;                     // The length of time since we last did a
                                                   //  joystick refresh. Used to prevent doing
