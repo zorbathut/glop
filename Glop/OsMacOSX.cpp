@@ -33,6 +33,8 @@ static HIPoint mouse_location;
 static HIPoint mouse_delta;
 static map<int,int> glop_key_map;
 
+static OsWindowData* gLocked;
+
 const GlopKey kKeyGUI = 0;
 const GlopKey kKeyPadClear = 0;
 const GlopKey kKeyHelp = 0;
@@ -653,6 +655,43 @@ void Os::Init() {
 
 void Os::ShutDown() {
   // Booya! :-)
+}
+
+/*static void ClampPos(HIPoint *mouse_location) {
+  printf("%f, %f startpos\n", mouse_location->x, mouse_location->y);
+  if(mouse_location->x < gLocked->bounds.left)
+    mouse_location->x = gLocked->bounds.left;
+  if(mouse_location->x > gLocked->bounds.right)
+    mouse_location->x = gLocked->bounds.right;
+  if(mouse_location->y < gLocked->bounds.top)
+    mouse_location->y = gLocked->bounds.top;
+  if(mouse_location->y > gLocked->bounds.bottom)
+    mouse_location->y = gLocked->bounds.bottom;
+  printf("%f, %f endpos\n", mouse_location->x, mouse_location->y);
+}*/
+void Os::LockMouseCursor(OsWindowData *window) {
+  /*window = NULL;
+  gLocked = window;
+  if (window && IsWindowActive(window->window))
+  {
+    ClampPos(&mouse_location);
+    CGWarpMouseCursorPosition(mouse_location);
+  }*/
+  
+  // FUCK YOU OSX
+  // Work on this later
+  /* CGAssociateMouseAndMouseCursorPosition(0);
+  CGSetLocalEventsSuppressionInterval(0.0001);
+  SetMouseCoalescingEnabled(FALSE, NULL);
+  CGSetLocalEventsFilterDuringSupressionState(
+                                                  kCGEventFilterMaskPermitAllEvents,
+                                                  kCGEventSupressionStateSupressionInterval);
+   CGSetLocalEventsFilterDuringSupressionState(
+                                                  (kCGEventFilterMaskPermitLocalKeyboardEvents |
+                                                  kCGEventFilterMaskPermitSystemDefinedEvents),
+                                                  kCGEventSupressionStateRemoteMouseDrag);
+  CGGetLastMouseDelta(&dx, &dy);
+      CGWarpMouseCursorPosition*/
 }
 
 void Os::Think() {
