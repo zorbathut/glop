@@ -40,13 +40,38 @@ struct OsWindowData {
     glXDestroyContext(display, context);
     XDestroyIC(inputcontext);
     XDestroyWindow(display, window);
+    in_focus = true;
+    focus_changed = false;
   }
   
   Window window;
   GLXContext context;
   XIC inputcontext;
+  
+  bool in_focus;
+  bool focus_changed;
 };
 
+static OsWindowData *gLocked;
+
+void LockCursorNow(OsWindowData *window) {
+  XGrabPointer(display, window->window, True, 0, GrabModeAsync, GrabModeAsync, window->window, None, CurrentTime);
+}
+void UnlockCursorNow() {
+  XUngrabPointer(display, CurrentTime);
+}
+
+void Os::LockMouseCursor(OsWindowData *locked) {
+  gLocked = locked;
+  if (!locked) {
+    UnlockCursorNow();
+  } else {
+    if (locked->in_focus)
+    {
+      LockCursorNow(locked);
+    }
+  }
+}
 
 void Os::Init() {
   display = XOpenDisplay(NULL);
@@ -305,10 +330,17 @@ void Os::Think() {
       
       case FocusIn:
         XSetICFocus(data->inputcontext);
+        data->in_focus = true;
+        data->focus_changed = true;
+        if(gLocked == data)
+          LockCursorNow(data);
         break;
       
       case FocusOut:
         XUnsetICFocus(data->inputcontext);
+        data->in_focus = false;
+        data->focus_changed = true;
+        UnlockCursorNow();
         break;
       
       case DestroyNotify:
@@ -463,8 +495,9 @@ bool Os::IsWindowMinimized(const OsWindowData* data) {
 }
 
 void Os::GetWindowFocusState(OsWindowData* data, bool* is_in_focus, bool* focus_changed) {
-  *is_in_focus = true;
-  *focus_changed = false;
+  *is_in_focus = data->in_focus;
+  *focus_changed = data->focus_changed;
+  data->focus_changed = false;
 }
 
 void Os::GetWindowPosition(const OsWindowData* data, int* x, int* y) {
