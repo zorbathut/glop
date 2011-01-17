@@ -8,8 +8,10 @@
 // Class declarations
 class Color;
 class GlopWindow;
-class SoundManager;
 class System;
+#ifndef GLOP_LEAN_AND_MEAN
+class SoundManager;
+#endif // GLOP_LEAN_AND_MEAN
 
 // Globals
 System *system();
@@ -75,9 +77,11 @@ class System {
   // Sound
   // =====
 
+  #ifndef GLOP_LEAN_AND_MEAN
   // Returns the sound manager for this Glop program. This can also be gotten via the
   // sound_manager() global function (see Sound.h).
   SoundManager *sound_manager() {return sound_manager_;}
+  #endif // GLOP_LEAN_AND_MEAN
 
   // File system
   // ===========
@@ -98,7 +102,9 @@ private:
   
   // General data
   GlopWindow *window_;
+  #ifndef GLOP_LEAN_AND_MEAN
   SoundManager *sound_manager_;
+  #endif // GLOP_LEAN_AND_MEAN
   int frame_count_;
   int refresh_rate_query_delay_, refresh_rate_;
   int vsync_time_;             // Time spent waiting for vsync last frame

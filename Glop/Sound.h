@@ -3,6 +3,8 @@
 #ifndef GLOP_SOUND_H__
 #define GLOP_SOUND_H__
 
+#ifndef GLOP_LEAN_AND_MEAN
+
 #ifdef IPHONE // TODO: remove this horrible horrible hack
 #include "Sound_Iphone.h"
 #else
@@ -88,5 +90,7 @@ class SoundManager {
 };
 
 #endif // horrible horrible hackery
+
+#endif // GLOP_LEAN_AND_MEAN
 
 #endif // GLOP_SOUND_H__

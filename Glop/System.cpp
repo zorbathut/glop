@@ -87,7 +87,9 @@ int System::Think() {
 
   // Perform all subsystem logic
   Os::Think();
+  #ifndef GLOP_LEAN_AND_MEAN
   sound_manager_->Think();
+  #endif // GLOP_LEAN_AND_MEAN
   vsync_time_ = window_->Think(dt);
 
   // Update our frame and time counts
@@ -162,7 +164,9 @@ vector<string> System::ListSubdirectories(const string &directory) {
 
 System::System()
 : window_(new GlopWindow()),
+#ifndef GLOP_LEAN_AND_MEAN
   sound_manager_(new SoundManager()),
+#endif // GLOP_LEAN_AND_MEAN
   frame_count_(0),
   refresh_rate_query_delay_(0),
   refresh_rate_(0),
@@ -177,7 +181,9 @@ System::System()
 }
 
 System::~System() {
+  #ifndef GLOP_LEAN_AND_MEAN
   delete sound_manager_;
+  #endif // GLOP_LEAN_AND_MEAN
   delete window_;
   #ifndef GLOP_LEAN_AND_MEAN
   if (free_type_library_ != 0)

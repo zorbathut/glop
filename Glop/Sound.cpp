@@ -4,6 +4,8 @@
 #include "System.h"
 #include "fmod/fmod.h"
 
+#ifndef GLOP_LEAN_AND_MEAN
+
 // Globals
 static SoundManager *gSoundManager = 0;
 SoundManager *sound_manager() {return system()->sound_manager();}
@@ -192,3 +194,6 @@ void SoundManager::StopAllSources() {
     }
   }
 }
+
+#endif // GLOP_LEAN_AND_MEAN
+
