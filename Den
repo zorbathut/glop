@@ -19,6 +19,8 @@ local deploy_paths = {}
 
 local fmodex_path
 
+ursa.token.rule{"pwd", nil, function () return ursa.system{"pwd"}:gsub("/cygdrive/c", "c:") end}
+
 do
   if params and params.platform then
     ursa.token.rule{"os_name", "!" .. params.platform, function () return params.platform end}
@@ -83,11 +85,11 @@ do
     local_os = "iphone_sim"
     
     ursa.token.rule{"CC", nil, function () return "/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/bin/g++" end}
-    ursa.token.rule{"CXXFLAGS_BASE", nil, function () return "-D__IPHONE_OS_VERSION_MIN_REQUIRED=30000 -arch i386 -isysroot /Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator3.0.sdk -mmacosx-version-min=10.5 -DIPHONE -IGlop" end}
+    ursa.token.rule{"CXXFLAGS_BASE", nil, function () return "-D__IPHONE_OS_VERSION_MIN_REQUIRED=30000 -arch i386 -m32 -isysroot /Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator3.0.sdk -mmacosx-version-min=10.5 -DIPHONE -IGlop" end}
     
     ursa.token.rule{"LIBCC", nil, function () return "/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/bin/gcc" end}
-    ursa.token.rule{"LIBCFLAGS_BASE", nil, function () return "-arch i386 -isysroot /Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator3.0.sdk -mmacosx-version-min=10.5" end}
-    ursa.token.rule{"LIBLDFLAGS_BASE", nil, function () return "-arch i386 -isysroot /Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator3.0.sdk -mmacosx-version-min=10.5" end}
+    ursa.token.rule{"LIBCFLAGS_BASE", nil, function () return "-arch i386 -m32 -isysroot /Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator3.0.sdk -mmacosx-version-min=10.5" end}
+    ursa.token.rule{"LIBLDFLAGS_BASE", nil, function () return "-arch i386 -m32 -isysroot /Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator3.0.sdk -mmacosx-version-min=10.5" end}
     
     --ursa.token.rule{"LDFLAGS", nil, function () return "-arch i386 -isysroot /Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator3.0.sdk -mmacosx-version-min=10.5 -framework Foundation -framework UIKit -framework OpenGLES -framework QuartzCore -framework AVFoundation -ljpeg6b -lfreetype235 -lpng -lz" end}
     
@@ -120,10 +122,10 @@ do
   deploy_paths.lib = release_prefix .. "/lib/" .. deploy_paths.lib_name
 end
 
-ursa.token.rule{"CXXFLAGS", {"#CXXFLAGS_BASE", (params.minimal and "!minimal" or "!full")}, function () return ursa.token{"CXXFLAGS_BASE"} .. " -Ibuild/" .. local_os .. "/libs_complete/include -IGlop -I. -g" .. (params.minimal and " -DGLOP_LEAN_AND_MEAN" or "") end}
+ursa.token.rule{"CXXFLAGS", {"#CXXFLAGS_BASE", (params.minimal and "!minimal" or "!full")}, function () return ursa.token{"CXXFLAGS_BASE"} .. " -Ibuild/" .. local_os .. "/libs_release/include -IGlop -I. -g" .. (params.minimal and " -DGLOP_LEAN_AND_MEAN" or "") end}
 
-ursa.token.rule{"LIBCFLAGS", "#LIBCFLAGS_BASE", function () return ursa.token{"LIBCFLAGS_BASE"} .. " -I../../libs_complete/include" end}
-ursa.token.rule{"LIBLDFLAGS", "#LIBLDFLAGS_BASE", function () return ursa.token{"LIBLDFLAGS_BASE"} .. " -L../../libs_complete/lib" end}
+ursa.token.rule{"LIBCFLAGS", "#LIBCFLAGS_BASE", function () return ursa.token{"LIBCFLAGS_BASE"} .. " -I" .. ursa.token{"pwd"} .. "/build/" .. local_os .. "/libs_release/include" end}
+ursa.token.rule{"LIBLDFLAGS", "#LIBLDFLAGS_BASE", function () return ursa.token{"LIBLDFLAGS_BASE"} .. " -L" .. ursa.token{"pwd"} .. "/build/" .. local_os .. "/libs_release/lib" end}
 
 local final_libs = {}
 
@@ -145,9 +147,9 @@ do
   local lib = ursa.rule{build_prefix .. "/libs/zlib/libz.a", {makefile, zlib_files}, ('cd %s/libs/zlib && make -j5'):format(build_prefix)}
   
   -- now we copy shit to the right place
-  final_libs.zlib = ursa.rule{build_prefix .. "/libs_complete/lib/libz.a", lib, ursa.util.copy{}}
-  table.insert(zlib, ursa.rule{build_prefix .. "/libs_complete/include/zlib.h", build_prefix .. "/libs/zlib/zlib.h", ursa.util.copy{}})
-  table.insert(zlib, ursa.rule{build_prefix .. "/libs_complete/include/zconf.h", build_prefix .. "/libs/zlib/zconf.h", ursa.util.copy{}})
+  final_libs.zlib = ursa.rule{build_prefix .. "/libs_release/lib/libz.a", lib, ursa.util.copy{}}
+  table.insert(zlib, ursa.rule{build_prefix .. "/libs_release/include/zlib.h", build_prefix .. "/libs/zlib/zlib.h", ursa.util.copy{}})
+  table.insert(zlib, ursa.rule{build_prefix .. "/libs_release/include/zconf.h", build_prefix .. "/libs/zlib/zconf.h", ursa.util.copy{}})
 end
 
 -- libpng next
@@ -167,9 +169,9 @@ do
   local lib = ursa.rule{build_prefix .. "/libs/libpng/.libs/libpng14.a", {makefile, libpng_files}, ('cd %s/libs/libpng && make -j5'):format(build_prefix)}
   
   -- now we copy shit to the right place
-  final_libs.libpng = ursa.rule{build_prefix .. "/libs_complete/lib/libpng.a", lib, ursa.util.copy{}}
-  table.insert(libpng, ursa.rule{build_prefix .. "/libs_complete/include/png.h", build_prefix .. "/libs/libpng/png.h", ursa.util.copy{}})
-  table.insert(libpng, ursa.rule{build_prefix .. "/libs_complete/include/pngconf.h", build_prefix .. "/libs/libpng/pngconf.h", ursa.util.copy{}})
+  final_libs.libpng = ursa.rule{build_prefix .. "/libs_release/lib/libpng.a", lib, ursa.util.copy{}}
+  table.insert(libpng, ursa.rule{build_prefix .. "/libs_release/include/png.h", build_prefix .. "/libs/libpng/png.h", ursa.util.copy{}})
+  table.insert(libpng, ursa.rule{build_prefix .. "/libs_release/include/pngconf.h", build_prefix .. "/libs/libpng/pngconf.h", ursa.util.copy{}})
 end
 
 -- libjpeg next . . . ish
@@ -188,10 +190,10 @@ do
   local lib = ursa.rule{build_prefix .. "/libs/libjpeg/.libs/libjpeg.a", {makefile, libjpeg_files}, ('cd %s/libs/libjpeg && make clean && make -j5'):format(build_prefix)}
   
   -- now we copy shit to the right place
-  final_libs.libjpeg = ursa.rule{build_prefix .. "/libs_complete/lib/libjpeg.a", lib, ursa.util.copy{}}
-  table.insert(libjpeg, ursa.rule{build_prefix .. "/libs_complete/include/jpeglib/jpeglib.h", build_prefix .. "/libs/libjpeg/jpeglib.h", ursa.util.copy{}})
-  table.insert(libjpeg, ursa.rule{build_prefix .. "/libs_complete/include/jpeglib/jconfig.h", build_prefix .. "/libs/libjpeg/jconfig.h", ursa.util.copy{}})
-  table.insert(libjpeg, ursa.rule{build_prefix .. "/libs_complete/include/jpeglib/jmorecfg.h", build_prefix .. "/libs/libjpeg/jmorecfg.h", ursa.util.copy{}})
+  final_libs.libjpeg = ursa.rule{build_prefix .. "/libs_release/lib/libjpeg.a", lib, ursa.util.copy{}}
+  table.insert(libjpeg, ursa.rule{build_prefix .. "/libs_release/include/jpeglib/jpeglib.h", build_prefix .. "/libs/libjpeg/jpeglib.h", ursa.util.copy{}})
+  table.insert(libjpeg, ursa.rule{build_prefix .. "/libs_release/include/jpeglib/jconfig.h", build_prefix .. "/libs/libjpeg/jconfig.h", ursa.util.copy{}})
+  table.insert(libjpeg, ursa.rule{build_prefix .. "/libs_release/include/jpeglib/jmorecfg.h", build_prefix .. "/libs/libjpeg/jmorecfg.h", ursa.util.copy{}})
 end
 
 -- and freetype last, whatever last means
@@ -211,7 +213,7 @@ do
     end
     
     if file:match("^include.*") then
-      table.insert(libfreetype, ursa.rule{build_prefix .. "/libs_complete/include/" .. file:match("include/(.*)"), libfreetype_dir .. "/" .. file, ursa.util.copy{}})
+      table.insert(libfreetype, ursa.rule{build_prefix .. "/libs_release/include/" .. file:match("include/(.*)"), libfreetype_dir .. "/" .. file, ursa.util.copy{}})
     end
   end
   
@@ -220,7 +222,7 @@ do
   local lib = ursa.rule{build_prefix .. "/libs/libfreetype/objs/.libs/libfreetype.a", {makefile, libfreetype_files}, ('cd %s/libs/libfreetype && make -j5'):format(build_prefix)}
   
   -- now we copy shit to the right place
-  final_libs.libfreetype = ursa.rule{build_prefix .. "/libs_complete/lib/libfreetype.a", lib, ursa.util.copy{}}
+  final_libs.libfreetype = ursa.rule{build_prefix .. "/libs_release/lib/libfreetype.a", lib, ursa.util.copy{}}
 end
 
 -- we have our "core libraries"
@@ -231,7 +233,7 @@ do
   ursa.token.rule{"core files", nil, ("(cd %s && find . -type f | sed s*\\\\./**) || true"):format(core_dir)}  -- we are assuming this isn't changing
   local libjpeg_files = {}
   for file in ursa.token{"core files"}:gmatch("([^\n]+)") do
-    table.insert(core, ursa.rule{build_prefix .. "/libs_complete/" .. file, core_dir .. "/" .. file, ursa.util.copy{}})
+    table.insert(core, ursa.rule{build_prefix .. "/libs_release/" .. file, core_dir .. "/" .. file, ursa.util.copy{}})
   end
 end
 
@@ -294,11 +296,11 @@ end
 outlibs.glop = ursa.rule{deploy_paths.lib, {objects, (fmodex_path or {})}, ursa.util.system_template{"rm -f $TARGET && ar rcs $TARGET $SOURCES"}}
 
 -- include sublibrary headers. this is kind of nasty right now because we're using find to, well, find them. this would be very bad if we weren't using all libraries reliably, but right now we are, so this is okay (sorta)
-ursa.token.rule{"release_lib_headers", libs, ("cd %s/libs_complete/include && find . -type f | sed s*\\\\./**"):format(build_prefix)}
+ursa.token.rule{"release_lib_headers", libs, ("cd %s/libs_release/include && find . -type f | sed s*\\\\./**"):format(build_prefix)}
 ursa.token.rule{"release_lib_headers_copy", "#release_lib_headers", function ()
   local rlhc = {}
   for k in ursa.token{"release_lib_headers"}:gmatch("[^\n]+") do
-    table.insert(rlhc, ursa.rule{release_prefix .. "/include/" .. k, build_prefix .. "/libs_complete/include/" .. k, ursa.util.copy{}})
+    table.insert(rlhc, ursa.rule{release_prefix .. "/include/" .. k, build_prefix .. "/libs_release/include/" .. k, ursa.util.copy{}})
   end
   return rlhc
 end, always_rebuild = true}
