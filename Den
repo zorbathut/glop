@@ -19,6 +19,9 @@ local deploy_paths = {}
 
 local fmodex_path
 
+local optflags = "-O2"
+if params and params.optflags then optflags = params.optflags end
+
 ursa.token.rule{"pwd", nil, function () return ursa.system{"pwd"}:gsub("/cygdrive/c", "c:") end}
 
 do
@@ -264,7 +267,7 @@ for _, file in ipairs(glop_filenames) do
   local depend = "Glop/" .. file .. " dependencies"
   
   ursa.token.rule{depend, {libs, ursa.util.token_deferred{depend, default = cpp}}, function () return make_dependencies(cpp) end}
-  table.insert(objects, ursa.rule{o, ursa.util.token_deferred{depend}, ursa.util.system_template{("#CC -O2 #CXXFLAGS -o %s -c %s"):format(o, cpp)}})
+  table.insert(objects, ursa.rule{o, ursa.util.token_deferred{depend}, ursa.util.system_template{("#CC %s #CXXFLAGS -o %s -c %s"):format(optflags, o, cpp)}})
 end
 for _, file in ipairs(glop_filenames_objcpp) do
   local cpp = "Glop/" .. file .. ".mm"
@@ -272,7 +275,7 @@ for _, file in ipairs(glop_filenames_objcpp) do
   local depend = "Glop/" .. file .. " dependencies"
   
   ursa.token.rule{depend, {libs, ursa.util.token_deferred{depend, default = cpp}}, function () return make_dependencies(cpp) end}
-  table.insert(objects, ursa.rule{o, ursa.util.token_deferred{depend}, ursa.util.system_template{("#CC -O2 #CXXFLAGS -o %s -c %s"):format(o, cpp)}})
+  table.insert(objects, ursa.rule{o, ursa.util.token_deferred{depend}, ursa.util.system_template{("#CC %s #CXXFLAGS -o %s -c %s"):format(optflags, o, cpp)}})
 end
 
 local lib = nil
