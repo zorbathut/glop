@@ -29,7 +29,6 @@ Image::Image(int width, int height, int bpp)
 
 Image::Image(unsigned char *data, int width, int height, int bpp)
 : data_(0), width_(width), height_(height), bpp_(bpp) {
-  LOGF("making img %d %d %d", width, height, bpp);
   // Store the values
   ASSERT(bpp_ > 0 && bpp_ <= 32 && bpp%8 == 0);
   internal_width_ = NextPow2(width);
