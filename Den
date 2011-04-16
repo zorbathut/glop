@@ -180,7 +180,7 @@ end
 -- libjpeg next . . . ish
 local libjpeg = {} -- filled with everything needed to consider "libjpeg" to be functional
 do
-  local libjpeg_dir = "Glop/third_party/jpeg-8a"
+  local libjpeg_dir = "Glop/third_party/jpeg-8c"
   
   ursa.token.rule{"libjpeg files", nil, ("cd %s && find . -type f | sed s*\\\\./**"):format(libjpeg_dir)}  -- we are assuming this isn't changing
   local libjpeg_files = {}
